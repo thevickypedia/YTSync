@@ -14,6 +14,10 @@ from typing import Dict, List
 
 import requests
 
+from yt_dlp.utils import DownloadError
+
+from ytm2jf.youtube import queue_download
+
 from ytm2jf.config import env
 from ytm2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
 from ytm2jf.logger import LOGGER
@@ -40,7 +44,7 @@ def intro() -> str:
     Returns:
         str:
     """
-    return "\nTo start, send a link to YT music playlist.\n"
+    return "\nTo start, send a link to YT music playlist in the following format:\n\n- /id: <playlist id>\n- /url: <playlist url>\n"
 
 
 def _make_request(
@@ -352,7 +356,7 @@ def process_text(chat: Chat, data_class: Text) -> None:
         send_message(chat_id=chat.id, response="Un-processable payload")
         return
     data_class.text = data_class.text.replace("override", "").replace("OVERRIDE", "")
-    text_lower = data_class.text.lower()
+    text_lower = data_class.text.lower().lstrip("/")
     if word_match(
         phrase=text_lower,
         match_list=(
@@ -382,11 +386,12 @@ def process_text(chat: Chat, data_class: Text) -> None:
     if text_lower == "help":
         send_message(
             chat_id=chat.id,
-            response="Help message here",
+            response="Use '/id' or '/url' followed by the identifier.",
         )
         return
     if text_lower == "test":
         reply_to(chat, f"Test message received at - {datetime.now().strftime('%c')}")
+        return
     executor(data_class.text, chat)
 
 
@@ -398,13 +403,27 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
-    from yt_dlp.utils import DownloadError
-
-    from ytm2jf.youtube import queue_download
-
-    # TODO: Differentiate playlist id and playlist url with a /url and /id in the bot
+    kwargs = {}
+    if command.startswith("/id"):
+        if playlist_id := command.replace("/id", "").strip():
+            kwargs["playlist_id"] = playlist_id
+        else:
+            reply_to(chat, "Invalid entry, a playlist id is required followed by /id")
+            return
+    elif command.startswith("/url"):
+        if playlist_url := command.replace("/url", "").strip():
+            kwargs["playlist_url"] = playlist_url
+        else:
+            reply_to(chat, "Invalid entry, a playlist id is required followed by /id")
+            return
+    else:
+        process_response(
+            f"Invalid command received: {command}\n\nEither use '/id' or '/url' followed by the identifier.",
+            chat
+        )
+        return
     try:
-        name = queue_download(command)
+        name = queue_download(**kwargs)
         response = f"Download queued for {name!r}"
     except (ValueError, AssertionError, DownloadError) as error:
         response = error.__str__()
