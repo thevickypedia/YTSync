@@ -7,4 +7,4 @@ FORMATTER = logging.Formatter(
 )
 HANDLER.setFormatter(fmt=FORMATTER)
 LOGGER.addHandler(hdlr=HANDLER)
-LOGGER.setLevel(level=logging.DEBUG)
+LOGGER.setLevel(level=logging.INFO)

@@ -19,8 +19,6 @@ from ytm2jf.logger import LOGGER
 from ytm2jf.version import __version__
 
 BOT_ENDPOINT = "/ytbot"
-MAX_FAILED_CONNECTIONS = 10
-EXPONENTIAL_BACKOFF_FACTOR = 3
 
 
 def two_factor(headers: Dict[str, str]) -> bool:
@@ -127,7 +125,7 @@ def run():
         LOGGER.info("Polling for incoming messages...")
         while True:
             try:
-                time.sleep(1)
+                time.sleep(env.poll_interval)
                 if offset_id := poll_for_messages(offset):
                     offset = offset_id
             except BotWebhookConflict as error:
@@ -143,11 +141,11 @@ def run():
                     continue
                 LOGGER.error(error)
                 failed_connections += 1
-                if failed_connections > MAX_FAILED_CONNECTIONS:
+                if failed_connections > env.max_retries:
                     LOGGER.critical(
                         "ATTENTION::Couldn't recover from connection error. Restarting current process."
                     )
-                    delay = failed_connections * EXPONENTIAL_BACKOFF_FACTOR
+                    delay = failed_connections * env.backoff_factor
                     LOGGER.info("Restarting in %d seconds.", delay)
             except Exception as error:
                 LOGGER.critical("ATTENTION: %s", error)

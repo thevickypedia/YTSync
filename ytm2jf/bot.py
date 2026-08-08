@@ -13,16 +13,14 @@ from enum import StrEnum
 from typing import Dict, List
 
 import requests
-
 from yt_dlp.utils import DownloadError
-
-from ytm2jf.youtube import queue_download
 
 from ytm2jf.config import env
 from ytm2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
 from ytm2jf.logger import LOGGER
 from ytm2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
 from ytm2jf.word_match import word_match
+from ytm2jf.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
 
@@ -44,7 +42,10 @@ def intro() -> str:
     Returns:
         str:
     """
-    return "\nTo start, send a link to YT music playlist in the following format:\n\n- /id: <playlist id>\n- /url: <playlist url>\n"
+    return (
+        "\nTo start, send a link to YT music playlist in the following format:\n\n"
+        "- /id: <playlist id>\n- /url: <playlist url>\n"
+    )
 
 
 def _make_request(
@@ -419,7 +420,7 @@ def executor(command: str, chat: Chat) -> None:
     else:
         process_response(
             f"Invalid command received: {command}\n\nEither use '/id' or '/url' followed by the identifier.",
-            chat
+            chat,
         )
         return
     try:
