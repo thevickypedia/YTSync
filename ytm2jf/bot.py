@@ -8,6 +8,7 @@
 import secrets
 import sys
 import time
+from enum import StrEnum
 from typing import Dict, List
 
 import requests
@@ -21,6 +22,17 @@ from ytm2jf.word_match import word_match
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
 
 
+class RequestMethods(StrEnum):
+    """Allowed request methods.
+
+    >>> RequestMethods
+
+    """
+
+    GET = "GET"
+    POST = "POST"
+
+
 def intro() -> str:
     """Returns a welcome message as a string.
 
@@ -30,7 +42,12 @@ def intro() -> str:
     return "\nTo start, send a link to YT music playlist.\n"
 
 
-def _make_request(url: str, payload: dict, files: dict = None) -> requests.Response:
+def _make_request(
+    url: str,
+    payload: dict,
+    files: dict = None,
+    method: RequestMethods = RequestMethods.POST,
+) -> requests.Response:
     """Makes a post request with a ``connect timeout`` of 5 seconds and ``read timeout`` of 60.
 
     Args:
@@ -42,7 +59,12 @@ def _make_request(url: str, payload: dict, files: dict = None) -> requests.Respo
         Response:
         Response class.
     """
-    response = requests.post(url=url, data=payload, files=files, timeout=(2, 3))
+    if method == RequestMethods.GET:
+        response = requests.get(url=url, data=payload, files=files, timeout=(2, 3))
+    elif method == RequestMethods.POST:
+        response = requests.post(url=url, data=payload, files=files, timeout=(2, 3))
+    else:
+        raise ValueError("Invalid request method received: '%s'", method)
     if not response.ok:
         LOGGER.debug(payload)
         LOGGER.debug(files)
@@ -130,29 +152,36 @@ def poll_for_messages(offset: int) -> None | int:
         Swaps ``offset`` value during every iteration to avoid reprocessing messages.
     """
     response = _make_request(
-        url=BASE_URL + "/getUpdates", payload={"offset": offset, "timeout": 60}
+        url=BASE_URL + "/getUpdates",
+        payload={"offset": offset, "timeout": 60},
+        method=RequestMethods.GET,
     )
     if response.ok:
-        if results := response.json().get("result"):
-            for result in results:
-                if payload := result.get("message"):
-                    process_request(payload)
-                else:
-                    LOGGER.error("Received empty payload!!")
-                return result["update_id"] + 1
-        return None
+        results = response.json().get("result", [])
+        if not results:
+            return None
+
+        last_update_id = offset
+        for result in results:
+            if payload := result.get("message"):
+                process_request(payload)
+            else:
+                LOGGER.error("Received empty payload!!")
+            last_update_id = result["update_id"]
+
+        return last_update_id + 1
+
+    # Handle errors
+    error_data = response.json()
+    err_desc = error_data.get("description", "")
+
     if response.status_code == 409:
-        err_desc = response.json().get("description")
-        # If it has come to this, then webhook has already failed
-        if err_desc == (
-            "Conflict: can't use getUpdates method while webhook is active; "
-            "use deleteWebhook to delete the webhook first"
-        ):
+        if "webhook" in err_desc.lower():
             raise BotWebhookConflict(err_desc)
         raise BotInUse(err_desc)
     if response.status_code == 401:
-        raise BotTokenInvalid(response.json())
-    raise ConnectionError(response.json())
+        raise BotTokenInvalid(error_data)
+    raise ConnectionError(error_data)
 
 
 def process_request(payload: Dict[str, int | dict]) -> None:
@@ -315,10 +344,6 @@ def process_text(chat: Chat, data_class: Text) -> None:
     Args:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Text object.
-
-    See Also:
-        - | Requesting files and secrets are considered as special requests, so they cannot be combined with
-          | other requests using 'and' or 'also'
     """
     if data_class.text:
         data_class.text = data_class.text.strip()
@@ -350,17 +375,6 @@ def process_text(chat: Chat, data_class: Text) -> None:
             intro(),
         )
         return
-    if data_class.text.startswith("/"):
-        # Auto-complete can be setup using "/" commands so ignore if "_" is present
-        if "_" not in data_class.text:
-            reply_to(
-                chat,
-                "*Deprecation Notice*\n\nSlash commands ('/') have been deprecated. Please use "
-                "commands directly instead.",
-            )
-        data_class.text = (
-            data_class.text.lstrip("/").replace("jarvis", "").replace("_", " ").strip()
-        )
     if text_lower == "start":
         send_message(chat.id, intro())
         return
@@ -369,8 +383,6 @@ def process_text(chat: Chat, data_class: Text) -> None:
             chat_id=chat.id,
             response="Help message here",
         )
-        return
-    if not data_class.text:
         return
     executor(data_class.text, chat)
 
@@ -383,7 +395,7 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
-    response = ""  # TODO: Add download status or follow queued process
+    response = command  # TODO: Change response to a valid one
     LOGGER.info("Response: %s", response)
     process_response(response, chat)
 
@@ -392,7 +404,7 @@ def process_response(response: str, chat: Chat) -> None:
     """Processes the response via Telegram API.
 
     Args:
-        response: Response from Jarvis.
+        response: Response from YTM2JF.
         chat: Required section of the payload as Chat object.
     """
     send_message(chat.id, response, None)

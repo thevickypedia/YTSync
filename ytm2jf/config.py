@@ -24,8 +24,8 @@ class EnvConfig(PydanticEnvConfig):
 
     # Telegram config
     bot_token: str
-    bot_chat_ids: List[int] = []
-    bot_users: List[str] = []
+    bot_chat_ids: List[int]
+    bot_users: List[str]
 
     # Telegram Webhook specific
     bot_webhook: HttpUrl | None = None

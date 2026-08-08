@@ -1,15 +1,26 @@
 import json
 import secrets
+import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict
 
-from ytm2jf.bot import process_request, poll_for_messages
+import requests.exceptions
+
+from ytm2jf.bot import poll_for_messages, process_request
 from ytm2jf.config import env
+from ytm2jf.exceptions import (
+    BotInUse,
+    BotTokenInvalid,
+    BotWebhookConflict,
+    EgressErrors,
+)
 from ytm2jf.logger import LOGGER
 from ytm2jf.version import __version__
 
 BOT_ENDPOINT = "/ytbot"
+MAX_FAILED_CONNECTIONS = 10
+EXPONENTIAL_BACKOFF_FACTOR = 3
 
 
 def two_factor(headers: Dict[str, str]) -> bool:
@@ -112,9 +123,36 @@ def run():
     """Start the Jarvis API server."""
     if not env.bot_webhook:
         offset = 0
+        failed_connections = 0
         while True:
-            poll_for_messages(offset)
-            offset += 1
+            try:
+                time.sleep(1)
+                LOGGER.info("Polling for offset: %d", offset)
+                if offset_id := poll_for_messages(offset):
+                    offset = offset_id
+            except BotWebhookConflict as error:
+                # At this point, its be safe to remove the dead webhook
+                LOGGER.error(error)
+            except BotInUse as error:
+                LOGGER.error(error)
+            except BotTokenInvalid as error:
+                LOGGER.error("ATTENTION: %s", error)
+            except EgressErrors as error:
+                # ReadTimeout is just saying that there were no messages to read within the time specified
+                if isinstance(error, requests.exceptions.ReadTimeout):
+                    continue
+                LOGGER.error(error)
+                failed_connections += 1
+                if failed_connections > MAX_FAILED_CONNECTIONS:
+                    LOGGER.critical(
+                        "ATTENTION::Couldn't recover from connection error. Restarting current process."
+                    )
+                    delay = failed_connections * EXPONENTIAL_BACKOFF_FACTOR
+                    LOGGER.info("Restarting in %d seconds.", delay)
+            except Exception as error:
+                LOGGER.critical("ATTENTION: %s", error)
+            except KeyboardInterrupt:
+                return
 
     server = ThreadingHTTPServer(
         (env.host, env.port),
