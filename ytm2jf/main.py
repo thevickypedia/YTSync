@@ -17,6 +17,7 @@ from ytm2jf.exceptions import (
 )
 from ytm2jf.logger import LOGGER
 from ytm2jf.version import __version__
+from ytm2jf.youtube import controllers
 
 BOT_ENDPOINT = "/ytbot"
 
@@ -117,6 +118,13 @@ class TelegramWebhookHandler(BaseHTTPRequestHandler):
         )
 
 
+def shutdown():
+    """Shuts down all the threads and gracefully terminates the processes."""
+    for controller in controllers:
+        controller.transfer_pool.shutdown(wait=True)
+        controller.process.join()
+
+
 def run():
     """Start the Jarvis API server."""
     if not env.bot_webhook:
@@ -152,9 +160,6 @@ def run():
             except KeyboardInterrupt:
                 return
 
-    # TODO: Switch to fastapi - swagger with auth
-    #   API should always run regardless of the state of telegram (as a backup measure)
-    #   Northstar: Build a UI with login form
     server = ThreadingHTTPServer(
         (env.host, env.port),
         TelegramWebhookHandler,

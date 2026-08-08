@@ -1,9 +1,10 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
-from threading import Thread
-from typing import Any, Dict
+from multiprocessing import Process
+from typing import Any, Dict, List
 
 import yt_dlp
+from pydantic import BaseModel
 from yt_dlp.utils import DownloadError
 
 from ytm2jf.logger import LOGGER
@@ -13,7 +14,23 @@ transfer_pool = ThreadPoolExecutor(max_workers=3)
 rsync = Rsync()
 
 
-def queue_download(playlist_url: str = None, playlist_id: str = None) -> str:
+class Controller(BaseModel):
+    """State controller for processes and transfer pools.
+
+    >>> Controller
+
+    """
+
+    process: Process
+    transfer_pool: ThreadPoolExecutor
+
+
+controllers = List[Controller] = []
+
+
+def queue_download(
+    playlist_url: str = None, playlist_id: str = None, chat_id: int = None
+) -> str:
     """Queue the download using thread pool.
 
     Args:
@@ -49,75 +66,83 @@ def queue_download(playlist_url: str = None, playlist_id: str = None) -> str:
     assert playlist_name, "Failed to extract the playlist's title"
     os.makedirs(playlist_name, exist_ok=True)
 
-    # TODO: Async start task instead of threads
-    thread = Thread(
-        target=download_playlist,
+    downloader = DownloadProcessor(chat_id)
+    process = Process(
+        target=downloader.download_playlist,
         args=(
             playlist_name,
             playlist_url,
         ),
     )
-    thread.start()
+    process.start()
+    controllers.append(Controller(process=process, transfer_pool=transfer_pool))
 
     return playlist_name
 
 
-def transfer_file(filepath: str) -> None:
-    """Initiates the file transfer, once the download has completed."""
-    try:
-        LOGGER.info(f"Transferring: {filepath}")
-        # TODO: Run it with async - and a callback to notify
-        rsync.run(filepath)
-        LOGGER.info(f"Transfer complete: {filepath}")
-    except Exception as error:
-        LOGGER.error(f"Transfer failed for {filepath}: {error}")
+class DownloadProcessor:
+    """Download processor.
 
+    >>> DownloadProcessor
 
-def postprocess_hook(data: Dict[str, Any]) -> None:
-    """Checks if file is ready to transfer, and adds it to the threadpool when ready."""
-    if data["status"] != "finished":
-        return
-    info = data["info_dict"]
-    filepath = info.get("filepath")
-    if not filepath:
-        LOGGER.warning("No filepath found even after finishing")
-        return
-    filepath = filepath.strip()
-    if filepath.endswith(".webm"):
-        LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
-        return
-    LOGGER.info(f"Ready to transfer: {filepath}")
-    transfer_pool.submit(transfer_file, filepath)
-    # TODO: During shutdown
-    # transfer_pool.shutdown(wait=True)
-
-
-def download_playlist(name: str, url: str) -> str:
-    """Downloads the given playlist.
-
-    Args:
-        name: Name of the playlist.
-        url: URL for the playlist.
     """
-    options = {
-        "logger": LOGGER,
-        "format": "bestaudio/best",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "0",
-            }
-        ],
-        "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
-    }
-    if rsync.is_enabled:
-        options["postprocessor_hooks"] = [postprocess_hook]
-    # TODO: Fail with notifications
-    # TODO: Artist, Genre, Year, Title, Name - All music metadata missing
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            ydl.download([url])
-    except DownloadError as error:
-        LOGGER.error(error)
-        return
+
+    def __init__(self, chat_id: int = None):
+        """Instantiates the download processor."""
+        self.chat_id = chat_id
+
+    def transfer_file(self, filepath: str) -> None:
+        """Initiates the file transfer, once the download has completed."""
+        try:
+            LOGGER.info(f"Transferring: {filepath}")
+            # TODO: Run it with async - and a callback to notify
+            rsync.run(filepath)
+            LOGGER.info(f"Transfer complete: {filepath}")
+        except Exception as error:
+            LOGGER.error(f"Transfer failed for {filepath}: {error}")
+
+    def postprocess_hook(self, data: Dict[str, Any]) -> None:
+        """Checks if file is ready to transfer, and adds it to the threadpool when ready."""
+        if data["status"] != "finished":
+            return
+        info = data["info_dict"]
+        filepath = info.get("filepath")
+        if not filepath:
+            LOGGER.warning("No filepath found even after finishing")
+            return
+        filepath = filepath.strip()
+        if filepath.endswith(".webm"):
+            LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
+            return
+        LOGGER.info(f"Ready to transfer: {filepath}")
+        transfer_pool.submit(self.transfer_file, filepath)
+
+    def download_playlist(self, name: str, url: str) -> str:
+        """Downloads the given playlist.
+
+        Args:
+            name: Name of the playlist.
+            url: URL for the playlist.
+        """
+        options = {
+            "logger": LOGGER,
+            "format": "bestaudio/best",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "0",
+                }
+            ],
+            "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
+        }
+        if rsync.is_enabled:
+            options["postprocessor_hooks"] = [self.postprocess_hook]
+        # TODO: Fail with notifications
+        # TODO: Artist, Genre, Year, Title, Name - All music metadata missing
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                ydl.download([url])
+        except DownloadError as error:
+            LOGGER.error(error)
+            return
