@@ -4,7 +4,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Dict
 
-from ytm2jf.bot import process_request
+from ytm2jf.bot import process_request, poll_for_messages
 from ytm2jf.config import env
 from ytm2jf.logger import LOGGER
 from ytm2jf.version import __version__
@@ -110,6 +110,12 @@ class TelegramWebhookHandler(BaseHTTPRequestHandler):
 
 def run():
     """Start the Jarvis API server."""
+    if not env.bot_webhook:
+        offset = 0
+        while True:
+            poll_for_messages(offset)
+            offset += 1
+
     server = ThreadingHTTPServer(
         (env.host, env.port),
         TelegramWebhookHandler,
@@ -125,7 +131,3 @@ def run():
         LOGGER.info("Shutting down API server.")
         server.shutdown()
         server.server_close()
-
-
-if __name__ == "__main__":
-    run()

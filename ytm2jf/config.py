@@ -23,9 +23,10 @@ class EnvConfig(PydanticEnvConfig):
     port: PositiveInt = 4483
 
     # Telegram config
-    bot_token: str | None = None
-    bot_chat_ids: List[int] = Field(default_factory=list)
-    bot_users: List[str] = Field(default_factory=list)
+    bot_token: str
+    bot_chat_ids: List[int] = []
+    bot_users: List[str] = []
+
     # Telegram Webhook specific
     bot_webhook: HttpUrl | None = None
     bot_webhook_ip: IPv4Address | None = None

@@ -19,7 +19,6 @@ from ytm2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, V
 from ytm2jf.word_match import word_match
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
-FILE_CONTENT_URL = f"https://api.telegram.org/file/bot{env.bot_token}/" + "{file_path}"
 
 
 def intro() -> str:
