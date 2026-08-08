@@ -1,4 +1,4 @@
-requests
 pydantic
 pydantic-settings
+requests
 vaultAPI-client
