@@ -415,7 +415,7 @@ def executor(command: str, chat: Chat) -> None:
         if playlist_url := command.replace("/url", "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
-            reply_to(chat, "Invalid entry, a playlist id is required followed by /id")
+            reply_to(chat, "Invalid entry, a playlist url is required followed by /url")
             return
     else:
         process_response(

@@ -21,11 +21,14 @@ class Controller(BaseModel):
 
     """
 
+    name: str
     process: Process
     transfer_pool: ThreadPoolExecutor
 
+    class Config:
+        arbitrary_types_allowed = True
 
-controllers = List[Controller] = []
+controllers: List[Controller] = []
 
 
 def queue_download(
@@ -75,7 +78,7 @@ def queue_download(
         ),
     )
     process.start()
-    controllers.append(Controller(process=process, transfer_pool=transfer_pool))
+    controllers.append(Controller(name=playlist_name, process=process, transfer_pool=transfer_pool))
 
     return playlist_name
 

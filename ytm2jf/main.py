@@ -120,9 +120,12 @@ class TelegramWebhookHandler(BaseHTTPRequestHandler):
 
 def shutdown():
     """Shuts down all the threads and gracefully terminates the processes."""
+    LOGGER.info("Shutting down...")
     for controller in controllers:
+        LOGGER.info("Shutting down controller for: %s", controller.name)
         controller.transfer_pool.shutdown(wait=True)
         controller.process.join()
+    exit(1)
 
 
 def run():
@@ -139,10 +142,13 @@ def run():
             except BotWebhookConflict as error:
                 # At this point, its be safe to remove the dead webhook
                 LOGGER.error(error)
+                shutdown()
             except BotInUse as error:
                 LOGGER.error(error)
+                shutdown()
             except BotTokenInvalid as error:
                 LOGGER.error("ATTENTION: %s", error)
+                shutdown()
             except EgressErrors as error:
                 # ReadTimeout is just saying that there were no messages to read within the time specified
                 if isinstance(error, requests.exceptions.ReadTimeout):
@@ -156,9 +162,10 @@ def run():
                     delay = failed_connections * env.backoff_factor
                     LOGGER.info("Restarting in %d seconds.", delay)
             except Exception as error:
+                shutdown()
                 LOGGER.critical("ATTENTION: %s", error)
             except KeyboardInterrupt:
-                return
+                shutdown()
 
     server = ThreadingHTTPServer(
         (env.host, env.port),
