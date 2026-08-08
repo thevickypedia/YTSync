@@ -2,3 +2,4 @@ pydantic
 pydantic-settings
 requests
 vaultAPI-client
+yt-dlp

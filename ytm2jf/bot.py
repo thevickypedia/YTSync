@@ -8,6 +8,7 @@
 import secrets
 import sys
 import time
+from datetime import datetime
 from enum import StrEnum
 from typing import Dict, List
 
@@ -384,6 +385,8 @@ def process_text(chat: Chat, data_class: Text) -> None:
             response="Help message here",
         )
         return
+    if text_lower == "test":
+        reply_to(chat, f"Test message received at - {datetime.now().strftime('%c')}")
     executor(data_class.text, chat)
 
 
@@ -395,7 +398,16 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
-    response = command  # TODO: Change response to a valid one
+    from yt_dlp.utils import DownloadError
+
+    from ytm2jf.youtube import queue_download
+
+    # TODO: Differentiate playlist id and playlist url with a /url and /id in the bot
+    try:
+        name = queue_download(command)
+        response = f"Download queued for {name!r}"
+    except (ValueError, AssertionError, DownloadError) as error:
+        response = error.__str__()
     LOGGER.info("Response: %s", response)
     process_response(response, chat)
 

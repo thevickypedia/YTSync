@@ -124,10 +124,10 @@ def run():
     if not env.bot_webhook:
         offset = 0
         failed_connections = 0
+        LOGGER.info("Polling for incoming messages...")
         while True:
             try:
                 time.sleep(1)
-                LOGGER.info("Polling for offset: %d", offset)
                 if offset_id := poll_for_messages(offset):
                     offset = offset_id
             except BotWebhookConflict as error:
@@ -154,6 +154,9 @@ def run():
             except KeyboardInterrupt:
                 return
 
+    # TODO: Switch to fastapi - swagger with auth
+    #   API should always run regardless of the state of telegram (as a backup measure)
+    #   Northstar: Build a UI with login form
     server = ThreadingHTTPServer(
         (env.host, env.port),
         TelegramWebhookHandler,
