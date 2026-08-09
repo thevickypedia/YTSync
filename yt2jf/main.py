@@ -72,6 +72,7 @@ def start():
         host=env.host,
         port=env.port,
         app=f"{module_name.parent.stem}.main:app",
+        workers=1,
     )
     if env.log_config:
         kwargs["log_config"] = env.log_config
