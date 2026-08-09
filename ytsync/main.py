@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import pathlib
 from contextlib import asynccontextmanager
@@ -9,16 +8,15 @@ from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
 from ytsync.config import env
-from ytsync.poll import run_polling, shutdown_event
+from ytsync.poll import shutdown_event, start_polling, stop_polling
 from ytsync.routes import (
-    ACTIVE_TASKS,
     api_delete_webhook,
     api_get_webhook,
     api_set_webhook,
     telegram_webhook,
 )
-from ytsync.webhook import get_webhook
 from ytsync.version import __version__
+from ytsync.webhook import get_webhook
 
 LOGGER = logging.getLogger("uvicorn.default")
 
@@ -42,14 +40,10 @@ async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
     # noinspection HttpUrlsUsage
     LOGGER.info("Hosting at http://%s:%s", env.host, env.port)
-    bg_task = None
     if not webhook_is_available():
-        LOGGER.info("Polling for incoming messages...")
-        bg_task = asyncio.create_task(run_polling())
-        ACTIVE_TASKS["poll"] = bg_task
+        start_polling()
     yield
-    if bg_task:
-        bg_task.cancel()
+    await stop_polling()
     shutdown_event()
     LOGGER.info("Shutting down API server.")
 

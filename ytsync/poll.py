@@ -1,14 +1,21 @@
 import asyncio
 import logging
+from typing import Dict
 
 import requests.exceptions
 
 from ytsync.bot import poll_for_messages
 from ytsync.config import env
-from ytsync.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict, EgressErrors
+from ytsync.exceptions import (
+    BotInUse,
+    BotTokenInvalid,
+    BotWebhookConflict,
+    EgressErrors,
+)
 from ytsync.youtube import controllers, process_pool
 
 LOGGER = logging.getLogger("uvicorn.default")
+ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
 
 def shutdown_event():
@@ -22,6 +29,28 @@ def shutdown_event():
             LOGGER.error("Controller failed for %s: %s", controller.name, exc)
         else:
             LOGGER.info("Controller completed for %s: %s", controller.name, result)
+
+
+async def stop_polling() -> None:
+    """Stop polling for incoming messages."""
+    task = ACTIVE_TASKS.pop("poll", None)
+    if task and not task.done():
+        LOGGER.info("Stopping long poll")
+        task.cancel("polling stopped")
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
+def start_polling() -> None:
+    """Start polling for incoming messages."""
+    task = ACTIVE_TASKS.get("poll")
+    if task and not task.done():
+        LOGGER.warning("Polling task already running")
+        return
+    LOGGER.info("Polling for incoming messages...")
+    ACTIVE_TASKS["poll"] = asyncio.create_task(run_polling())
 
 
 async def run_polling():

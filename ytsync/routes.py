@@ -4,7 +4,6 @@ import secrets
 from http import HTTPStatus
 from ipaddress import IPv4Address
 from json.decoder import JSONDecodeError
-from typing import Dict
 
 import requests
 from fastapi import Depends, Request
@@ -14,12 +13,12 @@ from pydantic import BaseModel, HttpUrl
 
 from ytsync.bot import process_request
 from ytsync.config import env
-from ytsync.poll import run_polling
+from ytsync.poll import start_polling, stop_polling
 from ytsync.webhook import delete_webhook, get_webhook, set_webhook
 
 LOGGER = logging.getLogger("uvicorn.default")
 SECURITY = HTTPBearer(description="Enter your telegram username")
-ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
+POLL_LOCK = asyncio.Lock()
 
 
 def two_factor(request: Request) -> bool:
@@ -112,10 +111,8 @@ async def api_set_webhook(
         ):
             env.bot_webhook = body.webhook
             env.bot_secret = body.secret_token
-            task = ACTIVE_TASKS.get("poll")
-            if task and not task.done():
-                task.cancel("webhook has been set")
-                ACTIVE_TASKS.pop("poll")
+            async with POLL_LOCK:
+                await stop_polling()
             raise HTTPException(
                 status_code=HTTPStatus.OK.real,
             )
@@ -154,12 +151,9 @@ async def api_delete_webhook(
         )
     try:
         response = delete_webhook()
-        task = ACTIVE_TASKS.get("poll")
-        if task and task.done():
-            task.cancel("Webhook has been deleted; re-creating...")
-        LOGGER.info("Polling for incoming messages...")
-        bg_task = asyncio.create_task(run_polling())
-        ACTIVE_TASKS["poll"] = bg_task
+        async with POLL_LOCK:
+            await stop_polling()
+            start_polling()
         return response
     except requests.RequestException as error:
         LOGGER.error(error)
