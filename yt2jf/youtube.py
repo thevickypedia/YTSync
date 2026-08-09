@@ -122,26 +122,27 @@ def download_playlist(name: str, url: str) -> str:
         name: Name of the playlist.
         url: URL for the playlist.
     """
-    options = {
-        "logger": LOGGER,
-        "format": "bestaudio/best",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "0",
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-            {
-                "key": "EmbedThumbnail",
-            },
-        ],
-        "writethumbnail": True,
-        "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
-    }
-    if rsync.is_enabled:
-        options["postprocessor_hooks"] = [postprocess_hook]
-    with yt_dlp.YoutubeDL(options) as ydl:
-        ydl.download([url])
+    try:
+        options = {
+            "logger": LOGGER,
+            "format": "bestaudio/best",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": "0",
+                },
+                {"key": "FFmpegMetadata"},
+                {"key": "EmbedThumbnail"},
+            ],
+            "writethumbnail": True,
+            "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
+        }
+        if rsync.is_enabled:
+            options["postprocessor_hooks"] = [postprocess_hook]
+        with yt_dlp.YoutubeDL(options) as ydl:
+            ydl.download([url])
+        return name
+    except Exception as exc:
+        # Don't let an un-pickleable exception cross the process boundary.
+        raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
