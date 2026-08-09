@@ -1,2 +1,2 @@
-# YTM2JF
-YouTube music to Finamp [OR] JellyFin
+# YT2JF
+YouTube to JellyFin

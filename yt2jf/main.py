@@ -7,17 +7,12 @@ from typing import Dict
 
 import requests.exceptions
 
-from ytm2jf.bot import poll_for_messages, process_request
-from ytm2jf.config import env
-from ytm2jf.exceptions import (
-    BotInUse,
-    BotTokenInvalid,
-    BotWebhookConflict,
-    EgressErrors,
-)
-from ytm2jf.logger import LOGGER
-from ytm2jf.version import __version__
-from ytm2jf.youtube import controllers
+from yt2jf.bot import poll_for_messages, process_request
+from yt2jf.config import env
+from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict, EgressErrors
+from yt2jf.logger import LOGGER
+from yt2jf.version import __version__
+from yt2jf.youtube import controllers
 
 BOT_ENDPOINT = "/ytbot"
 

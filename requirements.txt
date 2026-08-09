@@ -1,5 +1,5 @@
-pydantic
-pydantic-settings
-requests
+pydantic==2.13.*
+pydantic-settings==2.15.*
+requests==2.34.*
 vaultAPI-client
 yt-dlp

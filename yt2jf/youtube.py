@@ -6,8 +6,8 @@ from typing import Any, Callable, Dict, List
 import yt_dlp
 from pydantic import BaseModel
 
-from ytm2jf.logger import LOGGER
-from ytm2jf.transfer import Rsync
+from yt2jf.logger import LOGGER
+from yt2jf.transfer import Rsync
 
 thread_pool = ThreadPoolExecutor(max_workers=3)
 process_pool = ProcessPoolExecutor(max_workers=1)

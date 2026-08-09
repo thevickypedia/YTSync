@@ -5,7 +5,7 @@ from typing import List
 
 from pydantic import Field, FilePath, HttpUrl, PositiveFloat, PositiveInt
 
-from ytm2jf.pydantic_config import PydanticEnvConfig
+from yt2jf.pydantic_config import PydanticEnvConfig
 
 SECRETS_PATH = (
     os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
@@ -48,7 +48,7 @@ class EnvConfig(PydanticEnvConfig):
     class Config:
         """Environment variables configuration."""
 
-        vault_table = "ytm2jf"
+        vault_table = "yt2jf"
         env_file = SECRETS_PATH
         extra = "ignore"
 

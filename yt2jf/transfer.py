@@ -3,8 +3,8 @@ import shlex
 import subprocess
 import time
 
-from ytm2jf.config import env
-from ytm2jf.logger import LOGGER
+from yt2jf.config import env
+from yt2jf.logger import LOGGER
 
 
 class Rsync:

@@ -15,12 +15,12 @@ from typing import Dict, List
 import requests
 from yt_dlp.utils import DownloadError
 
-from ytm2jf.config import env
-from ytm2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
-from ytm2jf.logger import LOGGER
-from ytm2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
-from ytm2jf.word_match import word_match
-from ytm2jf.youtube import queue_download
+from yt2jf.config import env
+from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
+from yt2jf.logger import LOGGER
+from yt2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
+from yt2jf.word_match import word_match
+from yt2jf.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
 
@@ -436,7 +436,7 @@ def process_response(response: str, chat: Chat) -> None:
     """Processes the response via Telegram API.
 
     Args:
-        response: Response from YTM2JF.
+        response: Response from yt2jf.
         chat: Required section of the payload as Chat object.
     """
     send_message(chat.id, response, None)
