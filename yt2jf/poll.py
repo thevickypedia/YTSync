@@ -6,18 +6,22 @@ import requests.exceptions
 from yt2jf.bot import poll_for_messages
 from yt2jf.config import env
 from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict, EgressErrors
-from yt2jf.youtube import controllers
+from yt2jf.youtube import controllers, process_pool
 
 LOGGER = logging.getLogger("uvicorn.default")
 
 
 def shutdown_event():
     """Shuts down all the threads and gracefully terminates the processes."""
+    process_pool.shutdown(wait=True)
     for controller in controllers:
         LOGGER.info("Shutting down controller for: %s", controller.name)
-        # TODO: Fix this
-        controller.transfer_pool.shutdown(wait=True)
-        controller.process_pool.shutdown(wait=True)
+        try:
+            result = controller.future.result()
+        except Exception as exc:
+            LOGGER.error("Controller failed for %s: %s", controller.name, exc)
+        else:
+            LOGGER.info("Controller completed for %s: %s", controller.name, result)
 
 
 async def run_polling():
