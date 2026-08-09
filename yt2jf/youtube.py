@@ -7,11 +7,12 @@ from typing import Any, Callable, Dict, List
 import yt_dlp
 from pydantic import BaseModel
 
+from yt2jf.config import env
 from yt2jf.transfer import Rsync
 
 LOGGER = logging.getLogger("uvicorn.default")
-thread_pool = ThreadPoolExecutor(max_workers=3)
-process_pool = ProcessPoolExecutor(max_workers=1)
+thread_pool = ThreadPoolExecutor(max_workers=env.max_transfers)
+process_pool = ProcessPoolExecutor(max_workers=env.max_listeners)
 rsync = Rsync()
 
 
@@ -68,18 +69,7 @@ def queue_download(
     else:
         raise ValueError("Either 'playlist_url' [OR] 'playlist_id' is required!!")
 
-    options = {
-        "format": "bestaudio/best",
-        "outtmpl": "%(playlist_title)s/%(title)s.%(ext)s",
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "0",
-            }
-        ],
-    }
-    with yt_dlp.YoutubeDL(options) as ydl:
+    with yt_dlp.YoutubeDL() as ydl:
         info = ydl.extract_info(playlist_url, download=False, process=False)
 
     playlist_name = info.get("title")
