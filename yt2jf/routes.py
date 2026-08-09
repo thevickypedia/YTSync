@@ -10,10 +10,11 @@ import requests
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import HttpUrl, BaseModel
+from pydantic import BaseModel, HttpUrl
 
 from yt2jf.bot import process_request
 from yt2jf.config import env
+from yt2jf.poll import run_polling
 from yt2jf.webhook import delete_webhook, get_webhook, set_webhook
 
 LOGGER = logging.getLogger("uvicorn.default")
@@ -85,6 +86,8 @@ async def telegram_webhook(request: Request):
 
 
 class Payload(BaseModel):
+    """Request payload for POST webhook endpoint."""
+
     webhook: HttpUrl
     secret_token: str
     webhook_ip: IPv4Address | None = None
@@ -104,7 +107,11 @@ async def api_set_webhook(
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST.real,
             )
-        if set_webhook(webhook=body.webhook, secret_token=body.secret_token, webhook_ip=body.webhook_ip):
+        if set_webhook(
+            webhook=str(body.webhook),
+            secret_token=body.secret_token,
+            webhook_ip=body.webhook_ip,
+        ):
             env.bot_webhook = body.webhook
             env.bot_secret = body.secret_token
             task = ACTIVE_TASKS["poll"]
@@ -147,7 +154,12 @@ async def api_delete_webhook(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
     try:
-        return delete_webhook()
+        response = delete_webhook()
+        if not ACTIVE_TASKS.get("poll"):
+            LOGGER.info("Polling for incoming messages...")
+            bg_task = asyncio.create_task(run_polling())
+            ACTIVE_TASKS["poll"] = bg_task
+        return response
     except requests.RequestException as error:
         LOGGER.error(error)
         raise HTTPException(
