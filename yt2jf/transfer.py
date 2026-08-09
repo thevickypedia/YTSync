@@ -48,7 +48,7 @@ class Rsync:
         cmd = [
             "rsync",
             "-avz",  # <- enable archive mode
-            "--relative",  # <-- maintain relative path in the remote server
+            "--mkpath",  # <-- create required parent directories
             "--partial",  # <- keep partially transferred files if a transfer is interrupted
             "-e",  # <- specify remote shell program; followed by ssh
             "ssh -o StrictHostKeyChecking=no",
