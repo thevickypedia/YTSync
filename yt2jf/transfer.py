@@ -80,6 +80,7 @@ class Rsync:
                         f"❌ Failed to sync {filepath} after {env.max_retries} attempts."
                     )
                     LOGGER.error(f"   Final Error: {result.stderr.strip()}")
+                    raise RuntimeError(f"Transfer Error: {result.stderr.strip()}") from None
             except Exception as e:
                 attempt += 1
                 if attempt < env.max_retries:
@@ -94,3 +95,4 @@ class Rsync:
                         f"❌ Failed to sync {filepath} after {env.max_retries} attempts due to exception."
                     )
                     LOGGER.error(f"   Final Error: {e}")
+                    raise RuntimeError(f"Transfer Error [{type(e).__name__}]: {e}") from None
