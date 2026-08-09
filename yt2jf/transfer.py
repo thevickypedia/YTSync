@@ -41,16 +41,17 @@ class Rsync:
         relative_path = os.path.relpath(filepath, local_root)
         remote_location = (
             f"{self.remote_user}@{self.remote_host}:"
-            f"{shlex.quote(os.path.join(self.remote_path, relative_path))}"
+            f"{os.path.join(self.remote_path, relative_path)}"
         )
         LOGGER.info("Syncing: '%s' -> '%s'", filepath, remote_location)
 
         cmd = [
             "rsync",
-            "-avz",  # <- enable archive mode
-            "--mkpath",  # <-- create required parent directories
-            "--partial",  # <- keep partially transferred files if a transfer is interrupted
-            "-e",  # <- specify remote shell program; followed by ssh
+            "-avzi",
+            "--protect-args",
+            "--mkpath",
+            "--partial",
+            "-e",
             "ssh -o StrictHostKeyChecking=no",
             filepath,
             remote_location,

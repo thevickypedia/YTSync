@@ -101,7 +101,7 @@ def transfer_file(filepath: str) -> None:
 
 def postprocess_hook(filepath: str) -> None:
     filepath = filepath.strip()
-    if filepath.endswith(".webm"):
+    if filepath.endswith(".webm") or filepath.endswith(".part"):
         LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
         return
     LOGGER.info("Ready to transfer: %s", filepath)
