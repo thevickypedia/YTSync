@@ -2,7 +2,7 @@ import functools
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, NoReturn
+from typing import Callable, List, NoReturn
 
 import yt_dlp
 from pydantic import BaseModel
@@ -94,7 +94,9 @@ def transfer_file(filepath: str) -> None:
     """Initiates the file transfer, once the download has completed."""
     LOGGER.info(f"Transferring: {filepath}")
     rsync.run(filepath)
-    LOGGER.info(f"Transfer complete: {filepath}")
+    if env.delete_after_sync:
+        LOGGER.info("Transfer complete; deleting: %s", filepath)
+        os.remove(filepath)
 
 
 def postprocess_hook(filepath: str) -> None:
