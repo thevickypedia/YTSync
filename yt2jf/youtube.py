@@ -97,20 +97,12 @@ def transfer_file(filepath: str) -> None:
     LOGGER.info(f"Transfer complete: {filepath}")
 
 
-def postprocess_hook(data: Dict[str, Any]) -> None:
-    """Checks if file is ready to transfer, and adds it to the threadpool when ready."""
-    if data["status"] != "finished":
-        return
-    info = data["info_dict"]
-    filepath = info.get("filepath")
-    if not filepath:
-        LOGGER.warning("No filepath found even after finishing")
-        return
+def postprocess_hook(filepath: str) -> None:
     filepath = filepath.strip()
     if filepath.endswith(".webm"):
         LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
         return
-    LOGGER.info(f"Ready to transfer: {filepath}")
+    LOGGER.info("Ready to transfer: %s", filepath)
     thread_pool.submit(transfer_file, filepath)
 
 
@@ -140,7 +132,7 @@ def download_playlist(name: str, url: str) -> None | NoReturn:
             "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
         }
         if rsync.is_enabled:
-            options["postprocessor_hooks"] = [postprocess_hook]
+            options["post_hooks"] = [postprocess_hook]
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([url])
     except Exception as exc:
