@@ -35,7 +35,7 @@ jobs:
       - name: Set Environment Variables
         run: |
           # Convert repository and repository_name to lowercase
-          repository="${{ github.repository || 'thevickypedia/YTSync' }}" 
+          repository="${{ github.repository || 'thevickypedia/YTSync' }}"
           repository_name="${{ github.repository.name || 'YTSync' }}"
           echo "repository=${repository,,}" >> $GITHUB_ENV  # Convert to lowercase
           echo "repository_name=${repository_name,,}" >> $GITHUB_ENV  # Convert to lowercase
