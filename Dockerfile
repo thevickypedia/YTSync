@@ -16,7 +16,8 @@ RUN apt-get update && \
         unzip \
         git \
         ffmpeg \
-        rsync && \
+        rsync \
+        openssh-client && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Deno
@@ -32,7 +33,8 @@ RUN python --version && \
     deno --version && \
     ffmpeg -version && \
     ffprobe -version && \
-    rsync --version
+    rsync --version && \
+    ssh -V
 
 # Application files
 ADD LICENSE /app
@@ -57,5 +59,7 @@ RUN /app/venv/bin/uv pip install \
 
 # Make venv the default Python
 ENV PATH="/app/venv/bin:${PATH}"
+
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
 
 ENTRYPOINT ["python", "entrypoint.py"]
