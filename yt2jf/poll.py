@@ -28,18 +28,6 @@ async def run_polling():
             await asyncio.sleep(env.poll_interval)
             if offset_id := poll_for_messages(offset):
                 offset = offset_id
-        except BotWebhookConflict as error:
-            LOGGER.error(error)
-            shutdown_event()
-            break
-        except BotInUse as error:
-            LOGGER.error(error)
-            shutdown_event()
-            break
-        except BotTokenInvalid as error:
-            LOGGER.error("ATTENTION: %s", error)
-            shutdown_event()
-            break
         except EgressErrors as error:
             if isinstance(error, requests.exceptions.ReadTimeout):
                 continue
@@ -52,13 +40,17 @@ async def run_polling():
                 delay = failed_connections * env.backoff_factor
                 LOGGER.info("Restarting in %d seconds.", delay)
                 await asyncio.sleep(delay)  # Simple backoff wait
-        except asyncio.CancelledError:
-            LOGGER.info("Shutting down all threads and gracefully terminated.")
-            shutdown_event()
-        except Exception as error:
-            shutdown_event()
-            LOGGER.critical("ATTENTION: %s", error)
-            break
-        except KeyboardInterrupt:
+        except (
+            asyncio.CancelledError,
+            BotWebhookConflict,
+            BotInUse,
+            BotTokenInvalid,
+            KeyboardInterrupt,
+            Exception,
+        ) as error:
+            if isinstance(error, asyncio.CancelledError):
+                LOGGER.info("Shutting down all threads and gracefully terminated.")
+            else:
+                LOGGER.error(error)
             shutdown_event()
             break
