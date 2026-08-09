@@ -3,10 +3,10 @@ import logging
 
 import requests.exceptions
 
-from yt2jf.bot import poll_for_messages
-from yt2jf.config import env
-from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict, EgressErrors
-from yt2jf.youtube import controllers, process_pool
+from ytsync.bot import poll_for_messages
+from ytsync.config import env
+from ytsync.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict, EgressErrors
+from ytsync.youtube import controllers, process_pool
 
 LOGGER = logging.getLogger("uvicorn.default")
 

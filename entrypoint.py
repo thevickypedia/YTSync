@@ -9,7 +9,7 @@ db_filename = lambda key, default: os.environ.get(key) or os.environ.get(key.upp
 logs_dir = pathlib.Path(__file__).parent / "logs"
 data_dir = pathlib.Path(__file__).parent / "data"
 
-DEFAULT_LOG_FILENAME: str = datetime.now().strftime(str(logs_dir / "yt2jf_%d-%m-%Y.log"))
+DEFAULT_LOG_FILENAME: str = datetime.now().strftime(str(logs_dir / "ytsync_%d-%m-%Y.log"))
 data_dir.mkdir(parents=True, exist_ok=True)
 logs_dir.mkdir(parents=True, exist_ok=True)
 
@@ -81,6 +81,6 @@ os.environ["log_config"] = json.dumps(log_config)
 
 
 if __name__ == "__main__":
-    import yt2jf
+    import ytsync
 
-    yt2jf.start()
+    ytsync.start()

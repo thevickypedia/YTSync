@@ -7,16 +7,16 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
-from yt2jf.config import env
-from yt2jf.poll import run_polling, shutdown_event
-from yt2jf.routes import (
+from ytsync.config import env
+from ytsync.poll import run_polling, shutdown_event
+from ytsync.routes import (
     ACTIVE_TASKS,
     api_delete_webhook,
     api_get_webhook,
     api_set_webhook,
     telegram_webhook,
 )
-from yt2jf.version import __version__
+from ytsync.version import __version__
 
 LOGGER = logging.getLogger("uvicorn.default")
 
@@ -62,7 +62,7 @@ routes = [
     ),
 ]
 
-app = FastAPI(title="YT2JF", version=__version__, lifespan=lifespan, routes=routes)
+app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=routes)
 
 
 def start():

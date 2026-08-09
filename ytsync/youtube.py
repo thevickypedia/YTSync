@@ -8,8 +8,8 @@ from typing import Any, Callable, Dict, List
 import yt_dlp
 from pydantic import BaseModel
 
-from yt2jf.config import env
-from yt2jf.transfer import Rsync
+from ytsync.config import env
+from ytsync.transfer import Rsync
 
 LOGGER = logging.getLogger("uvicorn.default")
 process_pool = ProcessPoolExecutor(max_workers=env.max_listeners)

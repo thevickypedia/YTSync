@@ -42,7 +42,7 @@ ADD README.md /app
 ADD requirements.txt /app
 ADD log_config.yml /app
 ADD entrypoint.py /app
-ADD yt2jf /app/yt2jf
+ADD ytsync /app/ytsync
 
 RUN ls -ltrh /app
 

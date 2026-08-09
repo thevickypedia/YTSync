@@ -15,11 +15,11 @@ requires-python = ">=3.10"
 
 [tool.setuptools]
 packages = [
-    "yt2jf"
+    "ytsync"
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "yt2jf.version.__version__"}
+version = {attr = "ytsync.version.__version__"}
 dependencies = { file = ["requirements.txt"] }
 
 [project.optional-dependencies]

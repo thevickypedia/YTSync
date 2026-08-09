@@ -5,9 +5,9 @@ from typing import Dict
 import requests
 from pydantic import HttpUrl
 
-from yt2jf.bot import BASE_URL
-from yt2jf.config import env
-from yt2jf.exceptions import EgressErrors
+from ytsync.bot import BASE_URL
+from ytsync.config import env
+from ytsync.exceptions import EgressErrors
 
 LOGGER = logging.getLogger("uvicorn.default")
 

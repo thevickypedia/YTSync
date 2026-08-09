@@ -17,7 +17,7 @@ from pydantic import (
     PositiveInt,
 )
 
-from yt2jf.pydantic_config import PydanticEnvConfig
+from ytsync.pydantic_config import PydanticEnvConfig
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
@@ -68,7 +68,7 @@ class EnvConfig(PydanticEnvConfig):
     class Config:
         """Environment variables configuration."""
 
-        vault_table = "yt2jf"
+        vault_table = "ytsync"
         env_file = SECRETS_PATH
         extra = "ignore"
 

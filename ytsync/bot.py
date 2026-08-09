@@ -16,11 +16,11 @@ from typing import Dict, List
 import requests
 from yt_dlp.utils import DownloadError
 
-from yt2jf.config import env
-from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
-from yt2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
-from yt2jf.word_match import word_match
-from yt2jf.youtube import queue_download
+from ytsync.config import env
+from ytsync.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
+from ytsync.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
+from ytsync.word_match import word_match
+from ytsync.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
 LOGGER = logging.getLogger("uvicorn.default")
@@ -430,7 +430,7 @@ def process_response(response: str, chat: Chat) -> None:
     """Processes the response via Telegram API.
 
     Args:
-        response: Response from yt2jf.
+        response: Response from ytsync.
         chat: Required section of the payload as Chat object.
     """
     send_message(chat.id, response, None)

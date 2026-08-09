@@ -3,7 +3,7 @@ import os
 import subprocess
 import time
 
-from yt2jf.config import env
+from ytsync.config import env
 
 LOGGER = logging.getLogger("uvicorn.default")
 

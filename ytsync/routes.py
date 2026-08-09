@@ -12,10 +12,10 @@ from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, HttpUrl
 
-from yt2jf.bot import process_request
-from yt2jf.config import env
-from yt2jf.poll import run_polling
-from yt2jf.webhook import delete_webhook, get_webhook, set_webhook
+from ytsync.bot import process_request
+from ytsync.config import env
+from ytsync.poll import run_polling
+from ytsync.webhook import delete_webhook, get_webhook, set_webhook
 
 LOGGER = logging.getLogger("uvicorn.default")
 SECURITY = HTTPBearer(description="Enter your telegram username")
