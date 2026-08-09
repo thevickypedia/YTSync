@@ -1,0 +1,94 @@
+name: Docker Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        type: string
+        description: 'Tag name for the release (e.g., 1.0.1)'
+        required: true
+      latest:
+        type: boolean
+        description: 'Tag image as latest'
+        required: false
+        default: true
+
+  workflow_call:
+    inputs:
+      tag_name:
+        type: string
+        description: 'Tag name for the release (e.g., 1.0.1)'
+        required: true
+      latest:
+        type: boolean
+        description: 'Tag image as latest'
+        required: false
+        default: true
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        run: |
+          # Convert repository and repository_name to lowercase
+          repository="${{ github.repository || 'thevickypedia/YTSync' }}" 
+          repository_name="${{ github.repository.name || 'YTSync' }}"
+          echo "repository=${repository,,}" >> $GITHUB_ENV  # Convert to lowercase
+          echo "repository_name=${repository_name,,}" >> $GITHUB_ENV  # Convert to lowercase
+
+          # Set repository description
+          echo "repository_description=${{ github.event.repository.description || 'Sync your YouTube content to a remote server - ondemand' }}" >> $GITHUB_ENV
+
+          # Handle tag_name: remove 'v' prefix if exists
+          tag_name="${{ inputs.tag_name || github.event.inputs.tag_name }}"
+          tag_name="${tag_name//^v/}"  # Remove 'v' prefix if present
+          echo "tag_name=${tag_name}" >> $GITHUB_ENV
+
+          # Set tags for Docker image
+          if [ "${{ inputs.latest || github.event.inputs.latest }}" = "true" ]; then
+            tags="${repository,,}:latest"
+            if [ -n "${tag_name}" ] && [ "${tag_name}" != "latest" ]; then
+              tags+=",${repository,,}:${tag_name}"
+            fi
+          else
+            tags="${repository,,}:${tag_name}"
+          fi
+          echo "Docker image will be published with tags: ${tags}"
+          echo "dockertags=${tags}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.dockertags }}
+          build-args: |
+            VERSION=${{ env.tag_name || 'latest' }}
+
+      - name: Update description
+        uses: thevickypedia/describe-docker@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          summary: "${{ env.repository_description }}"
+          repository: "${{ env.repository_name }}"
+          filename: "README.md"

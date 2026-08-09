@@ -1,0 +1,28 @@
+########################################################################################################################
+#                                  Use this docker-compose file as a sample.                                           #
+########################################################################################################################
+services:
+  app:
+    image: thevickypedia/ytsync
+    container_name: ytsync
+    network_mode: bridge
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      # Run 'chmod -R 755 ./data' before initiating the container
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
+      - ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro
+    env_file:
+      - .env
+    ports:
+      # host_port:container_port
+      - "4321:4321"
+    deploy:
+      # 'reservations' key is supported only in swarm mode
+      resources:
+        limits:
+          cpus: '1'
+          memory: 200M

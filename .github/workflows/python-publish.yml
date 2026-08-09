@@ -1,0 +1,58 @@
+name: Pypi Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "**/version.py"
+
+jobs:
+  pre-commit:
+    runs-on: thevickypedia-default
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          pip install pre-commit
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          pre-commit run --all-files
+        shell: bash
+
+  pypi-publisher:
+    needs: pre-commit
+    runs-on: thevickypedia-default
+    outputs:
+      version: ${{ steps.publish.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: thevickypedia/pypi-publisher@v5
+        id: publish
+        env:
+          token: ${{ secrets.PYPI_TOKEN }}
+
+  release:
+    needs: pypi-publisher
+    uses: ./.github/workflows/release.yml
+    with:
+      project_version: ${{ needs.pypi-publisher.outputs.version }}
+    secrets: inherit
+
+  docker-build-publish:
+    needs:
+      - pypi-publisher
+    uses: ./.github/workflows/docker.yml
+    with:
+      tag_name: ${{ needs.pypi-publisher.outputs.version }}
+    secrets: inherit
+
+  release-notes:
+    needs:
+      - release
+      - pypi-publisher
+    if: ${{ needs.release.outputs.release_exists == 'false' }}
+    uses: ./.github/workflows/notes.yml
+    with:
+      project_version: ${{ needs.pypi-publisher.outputs.version }}
+    secrets: inherit
