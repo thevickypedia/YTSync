@@ -118,9 +118,11 @@ def download_playlist(name: str, url: str) -> None | NoReturn:
     destination = env.data_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
     try:
+        # TODO: What if it is one song and that failed? -> 'ignoreerrors'
         options = {
             "logger": LOGGER,
             "format": "bestaudio/best",
+            "ignoreerrors": True,
             "postprocessors": [
                 {
                     "key": "FFmpegExtractAudio",
