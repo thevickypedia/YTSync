@@ -37,20 +37,17 @@ class Rsync:
         """Syncs a file to remote server with exponential backoff retry logic."""
         LOGGER.info(f"📁 Syncing: {filepath}")
 
-        if parent := os.path.dirname(filepath):
-            remote_dir = os.path.join(self.remote_path, parent)
-            remote_location = (
-                f"{self.remote_user}@{self.remote_host}:{shlex.quote(remote_dir)}"
-            )
-        else:
-            remote_location = (
-                f"{self.remote_user}@{self.remote_host}:{self.remote_path}"
-            )
+        parent = os.path.dirname(filepath)
+        remote_dir = os.path.join(self.remote_path, parent)
+        remote_location = (
+            f"{self.remote_user}@{self.remote_host}:{shlex.quote(remote_dir)}/"
+        )
         LOGGER.info("Chosen remote location: %s", remote_location)
 
         cmd = [
             "rsync",
             "-avz",  # <- enable archive mode
+            "--relative",  # <-- maintain relative path in the remote server
             "--partial",  # <- keep partially transferred files if a transfer is interrupted
             "-e",  # <- specify remote shell program; followed by ssh
             "ssh -o StrictHostKeyChecking=no",

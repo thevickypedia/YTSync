@@ -124,7 +124,7 @@ def shutdown():
     for controller in controllers:
         LOGGER.info("Shutting down controller for: %s", controller.name)
         controller.transfer_pool.shutdown(wait=True)
-        controller.process.join()
+        controller.process_pool.shutdown(wait=True)
     exit(1)
 
 

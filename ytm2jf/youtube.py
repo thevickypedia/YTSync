@@ -1,16 +1,16 @@
+import functools
 import os
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Process
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List
 
 import yt_dlp
 from pydantic import BaseModel
-from yt_dlp.utils import DownloadError
 
 from ytm2jf.logger import LOGGER
 from ytm2jf.transfer import Rsync
 
-transfer_pool = ThreadPoolExecutor(max_workers=3)
+thread_pool = ThreadPoolExecutor(max_workers=3)
+process_pool = ProcessPoolExecutor(max_workers=1)
 rsync = Rsync()
 
 
@@ -22,7 +22,7 @@ class Controller(BaseModel):
     """
 
     name: str
-    process: Process
+    process_pool: ProcessPoolExecutor
     transfer_pool: ThreadPoolExecutor
 
     class Config:
@@ -32,6 +32,19 @@ class Controller(BaseModel):
 
 
 controllers: List[Controller] = []
+
+
+def future_callback(future, callback: Callable, chat_id: int, name: str):
+    """Process tracker."""
+    if error := future.exception():
+        callback(
+            chat_id=chat_id,
+            response=f"Transfer failed for {name}\n\n{error}",
+        )
+        LOGGER.error(f"Task failed with result: {error}")
+    else:
+        callback(chat_id=chat_id, response=f"Transfer complete: {name}")
+        LOGGER.info(f"Task completed with result: {future.result()}")
 
 
 def queue_download(
@@ -72,93 +85,65 @@ def queue_download(
     assert playlist_name, "Failed to extract the playlist's title"
     os.makedirs(playlist_name, exist_ok=True)
 
-    downloader = DownloadProcessor(chat_id, callback)
-    process = Process(
-        target=downloader.download_playlist,
-        args=(
-            playlist_name,
-            playlist_url,
-        ),
+    future = process_pool.submit(download_playlist, playlist_name, playlist_url)
+    wrapped_callback = functools.partial(
+        future_callback, callback=callback, chat_id=chat_id, name=playlist_name
     )
-    process.start()
+    future.add_done_callback(wrapped_callback)
+
     controllers.append(
-        Controller(name=playlist_name, process=process, transfer_pool=transfer_pool)
+        Controller(
+            name=playlist_name, process_pool=process_pool, transfer_pool=thread_pool
+        )
     )
 
     return playlist_name
 
 
-class DownloadProcessor:
-    """Download processor.
+def transfer_file(filepath: str) -> None:
+    """Initiates the file transfer, once the download has completed."""
+    LOGGER.info(f"Transferring: {filepath}")
+    rsync.run(filepath)
+    LOGGER.info(f"Transfer complete: {filepath}")
 
-    >>> DownloadProcessor
 
+def postprocess_hook(data: Dict[str, Any]) -> None:
+    """Checks if file is ready to transfer, and adds it to the threadpool when ready."""
+    if data["status"] != "finished":
+        return
+    info = data["info_dict"]
+    filepath = info.get("filepath")
+    if not filepath:
+        LOGGER.warning("No filepath found even after finishing")
+        return
+    filepath = filepath.strip()
+    if filepath.endswith(".webm"):
+        LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
+        return
+    LOGGER.info(f"Ready to transfer: {filepath}")
+    thread_pool.submit(transfer_file, filepath)
+
+
+def download_playlist(name: str, url: str) -> str:
+    """Downloads the given playlist.
+
+    Args:
+        name: Name of the playlist.
+        url: URL for the playlist.
     """
-
-    def __init__(self, chat_id: int, callback: Callable):
-        """Instantiates the download processor."""
-        self.chat_id = chat_id
-        self.callback = callback
-
-    def transfer_file(self, filepath: str) -> None:
-        """Initiates the file transfer, once the download has completed."""
-        try:
-            LOGGER.info(f"Transferring: {filepath}")
-            # TODO: Run it with async - and a callback to notify
-            rsync.run(filepath)
-            LOGGER.info(f"Transfer complete: {filepath}")
-            self.callback(
-                chat_id=self.chat_id, response=f"Transfer complete: {filepath}"
-            )
-        except Exception as error:
-            LOGGER.error(f"Transfer failed for {filepath}: {error}")
-            self.callback(
-                chat_id=self.chat_id,
-                response=f"Transfer failed for {filepath}\n\n{error}",
-            )
-
-    def postprocess_hook(self, data: Dict[str, Any]) -> None:
-        """Checks if file is ready to transfer, and adds it to the threadpool when ready."""
-        if data["status"] != "finished":
-            return
-        info = data["info_dict"]
-        filepath = info.get("filepath")
-        if not filepath:
-            LOGGER.warning("No filepath found even after finishing")
-            return
-        filepath = filepath.strip()
-        if filepath.endswith(".webm"):
-            LOGGER.debug("Transient download complete; awaiting final - %s", filepath)
-            return
-        LOGGER.info(f"Ready to transfer: {filepath}")
-        transfer_pool.submit(self.transfer_file, filepath)
-
-    def download_playlist(self, name: str, url: str) -> str:
-        """Downloads the given playlist.
-
-        Args:
-            name: Name of the playlist.
-            url: URL for the playlist.
-        """
-        options = {
-            "logger": LOGGER,
-            "format": "bestaudio/best",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "0",
-                }
-            ],
-            "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
-        }
-        if rsync.is_enabled:
-            options["postprocessor_hooks"] = [self.postprocess_hook]
-        # TODO: Fail with notifications
-        # TODO: Artist, Genre, Year, Title, Name - All music metadata missing
-        try:
-            with yt_dlp.YoutubeDL(options) as ydl:
-                ydl.download([url])
-        except DownloadError as error:
-            LOGGER.error(error)
-            return
+    options = {
+        "logger": LOGGER,
+        "format": "bestaudio/best",
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "0",
+            }
+        ],
+        "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
+    }
+    if rsync.is_enabled:
+        options["postprocessor_hooks"] = [postprocess_hook]
+    with yt_dlp.YoutubeDL(options) as ydl:
+        ydl.download([url])

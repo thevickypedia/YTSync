@@ -4,3 +4,8 @@ __pycache__/
 *.env
 *.mp3
 *.mp4
+*.jpg
+*.jpeg
+*.png
+*.webm
+*.webp
