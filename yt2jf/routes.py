@@ -10,7 +10,7 @@ import requests
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import HttpUrl
+from pydantic import HttpUrl, BaseModel
 
 from yt2jf.bot import process_request
 from yt2jf.config import env
@@ -84,23 +84,29 @@ async def telegram_webhook(request: Request):
         )
 
 
+class Payload(BaseModel):
+    webhook: HttpUrl
+    secret_token: str
+    webhook_ip: IPv4Address | None = None
+
+
 async def api_set_webhook(
-    webhook: HttpUrl,
-    webhook_ip: IPv4Address | None = None,
+    body: Payload,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to POST a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
+    if not secrets.compare_digest(apikey.credentials, env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
-    if webhook:
-        if not webhook.scheme == "https":
+    if body.webhook:
+        if not body.webhook.scheme == "https":
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST.real,
             )
-        if set_webhook(webhook=webhook, webhook_ip=webhook_ip):
-            env.bot_webhook = webhook
+        if set_webhook(webhook=body.webhook, secret_token=body.secret_token, webhook_ip=body.webhook_ip):
+            env.bot_webhook = body.webhook
+            env.bot_secret = body.secret_token
             task = ACTIVE_TASKS["poll"]
             if not task.done():
                 task.cancel("webhook has been set")
@@ -119,7 +125,7 @@ async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to GET a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
+    if not secrets.compare_digest(apikey.credentials, env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
@@ -136,7 +142,7 @@ async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to DELETE a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
+    if not secrets.compare_digest(apikey.credentials, env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )

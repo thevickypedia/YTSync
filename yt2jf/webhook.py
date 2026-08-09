@@ -44,6 +44,7 @@ def delete_webhook() -> Dict[str, str] | None:
 
 def set_webhook(
     webhook: HttpUrl | str,
+    secret_token: str,
     webhook_ip: IPv4Address | None = None,
 ) -> bool | None:
     """Set webhook.
@@ -52,7 +53,7 @@ def set_webhook(
         https://core.telegram.org/bots/api#setwebhook
     """
     put_info = f"{BASE_URL}/setWebhook"
-    payload = dict(url=webhook, secret_token=env.bot_secret)
+    payload = dict(url=webhook, secret_token=secret_token)
     if webhook_ip:
         payload["ip_address"] = webhook_ip.__str__()
     LOGGER.debug(payload)
