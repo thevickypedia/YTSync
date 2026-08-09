@@ -6,6 +6,7 @@ from ipaddress import IPv4Address
 from json.decoder import JSONDecodeError
 from typing import Dict
 
+import requests
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,7 +14,7 @@ from pydantic import HttpUrl
 
 from yt2jf.bot import process_request
 from yt2jf.config import env
-from yt2jf.webhook import set_webhook
+from yt2jf.webhook import delete_webhook, get_webhook, set_webhook
 
 LOGGER = logging.getLogger("uvicorn.default")
 SECURITY = HTTPBearer(description="Enter your telegram username")
@@ -88,9 +89,8 @@ async def api_set_webhook(
     webhook_ip: IPv4Address | None = None,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to set a webhook."""
-    bot_username = apikey.credentials
-    if bot_username not in env.bot_users:
+    """API endpoint to POST a webhook."""
+    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
@@ -113,3 +113,37 @@ async def api_set_webhook(
     raise HTTPException(
         status_code=HTTPStatus.BAD_REQUEST.real,
     )
+
+
+async def api_get_webhook(
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to GET a webhook."""
+    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+    try:
+        return get_webhook()
+    except requests.RequestException as error:
+        LOGGER.error(error)
+        raise HTTPException(
+            status_code=HTTPStatus.EXPECTATION_FAILED.real,
+        )
+
+
+async def api_delete_webhook(
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to DELETE a webhook."""
+    if not secrets.compare_digest(apikey.credentials, env.bot_secret):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+    try:
+        return delete_webhook()
+    except requests.RequestException as error:
+        LOGGER.error(error)
+        raise HTTPException(
+            status_code=HTTPStatus.EXPECTATION_FAILED.real,
+        )

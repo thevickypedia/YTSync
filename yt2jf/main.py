@@ -9,7 +9,13 @@ from fastapi.routing import APIRoute
 
 from yt2jf.config import env
 from yt2jf.poll import run_polling, shutdown_event
-from yt2jf.routes import ACTIVE_TASKS, api_set_webhook, telegram_webhook
+from yt2jf.routes import (
+    ACTIVE_TASKS,
+    api_delete_webhook,
+    api_get_webhook,
+    api_set_webhook,
+    telegram_webhook,
+)
 from yt2jf.version import __version__
 
 LOGGER = logging.getLogger("uvicorn.default")
@@ -40,9 +46,19 @@ routes = [
         include_in_schema=False,
     ),
     APIRoute(
-        endpoint=api_set_webhook,
+        endpoint=api_get_webhook,
         methods=["GET"],
+        path="/get-webhook",
+    ),
+    APIRoute(
+        endpoint=api_set_webhook,
+        methods=["POST"],
         path="/set-webhook",
+    ),
+    APIRoute(
+        endpoint=api_delete_webhook,
+        methods=["DELETE"],
+        path="/delete-webhook",
     ),
 ]
 
