@@ -1,7 +1,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import yt_dlp
 from pydantic import BaseModel
@@ -26,13 +26,16 @@ class Controller(BaseModel):
     transfer_pool: ThreadPoolExecutor
 
     class Config:
+        """Allow arbitrary types."""
+
         arbitrary_types_allowed = True
+
 
 controllers: List[Controller] = []
 
 
 def queue_download(
-    playlist_url: str = None, playlist_id: str = None, chat_id: int = None
+    chat_id: int, callback: Callable, playlist_url: str = None, playlist_id: str = None
 ) -> str:
     """Queue the download using thread pool.
 
@@ -69,7 +72,7 @@ def queue_download(
     assert playlist_name, "Failed to extract the playlist's title"
     os.makedirs(playlist_name, exist_ok=True)
 
-    downloader = DownloadProcessor(chat_id)
+    downloader = DownloadProcessor(chat_id, callback)
     process = Process(
         target=downloader.download_playlist,
         args=(
@@ -78,7 +81,9 @@ def queue_download(
         ),
     )
     process.start()
-    controllers.append(Controller(name=playlist_name, process=process, transfer_pool=transfer_pool))
+    controllers.append(
+        Controller(name=playlist_name, process=process, transfer_pool=transfer_pool)
+    )
 
     return playlist_name
 
@@ -90,9 +95,10 @@ class DownloadProcessor:
 
     """
 
-    def __init__(self, chat_id: int = None):
+    def __init__(self, chat_id: int, callback: Callable):
         """Instantiates the download processor."""
         self.chat_id = chat_id
+        self.callback = callback
 
     def transfer_file(self, filepath: str) -> None:
         """Initiates the file transfer, once the download has completed."""
@@ -101,8 +107,15 @@ class DownloadProcessor:
             # TODO: Run it with async - and a callback to notify
             rsync.run(filepath)
             LOGGER.info(f"Transfer complete: {filepath}")
+            self.callback(
+                chat_id=self.chat_id, response=f"Transfer complete: {filepath}"
+            )
         except Exception as error:
             LOGGER.error(f"Transfer failed for {filepath}: {error}")
+            self.callback(
+                chat_id=self.chat_id,
+                response=f"Transfer failed for {filepath}\n\n{error}",
+            )
 
     def postprocess_hook(self, data: Dict[str, Any]) -> None:
         """Checks if file is ready to transfer, and adds it to the threadpool when ready."""

@@ -404,7 +404,7 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
-    kwargs = dict(chat_id=chat.id)
+    kwargs = dict(chat_id=chat.id, callback=send_message)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
