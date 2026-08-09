@@ -117,6 +117,7 @@ async def api_set_webhook(
             task = ACTIVE_TASKS["poll"]
             if not task.done():
                 task.cancel("webhook has been set")
+                ACTIVE_TASKS.pop("poll")
             raise HTTPException(
                 status_code=HTTPStatus.OK.real,
             )
