@@ -1,10 +1,12 @@
+import logging
 import os
 import shlex
 import subprocess
 import time
 
 from yt2jf.config import env
-from yt2jf.logger import LOGGER
+
+LOGGER = logging.getLogger("uvicorn.default")
 
 
 class Rsync:

@@ -1,7 +1,7 @@
 import os
 import socket
 from ipaddress import IPv4Address
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic import Field, FilePath, HttpUrl, PositiveFloat, PositiveInt
 
@@ -21,6 +21,7 @@ class EnvConfig(PydanticEnvConfig):
 
     host: str = socket.gethostbyname("localhost")
     port: PositiveInt = 4483
+    log_config: FilePath | Dict[str, Any] | None = None
 
     # Applies to both rsync and telegram polling
     max_retries: PositiveInt | PositiveFloat = Field(10, le=30, ge=1)

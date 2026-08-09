@@ -5,6 +5,7 @@
 
 """
 
+import logging
 import secrets
 import sys
 import time
@@ -17,12 +18,12 @@ from yt_dlp.utils import DownloadError
 
 from yt2jf.config import env
 from yt2jf.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
-from yt2jf.logger import LOGGER
 from yt2jf.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
 from yt2jf.word_match import word_match
 from yt2jf.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
+LOGGER = logging.getLogger("uvicorn.default")
 
 
 class RequestMethods(StrEnum):

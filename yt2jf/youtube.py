@@ -1,4 +1,5 @@
 import functools
+import logging
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List
@@ -6,9 +7,9 @@ from typing import Any, Callable, Dict, List
 import yt_dlp
 from pydantic import BaseModel
 
-from yt2jf.logger import LOGGER
 from yt2jf.transfer import Rsync
 
+LOGGER = logging.getLogger("uvicorn.default")
 thread_pool = ThreadPoolExecutor(max_workers=3)
 process_pool = ProcessPoolExecutor(max_workers=1)
 rsync = Rsync()

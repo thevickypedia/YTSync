@@ -1,5 +1,7 @@
+fastapi==0.141.*
 pydantic==2.13.*
 pydantic-settings==2.15.*
 requests==2.34.*
+uvicorn==0.52.*
 vaultAPI-client
 yt-dlp
