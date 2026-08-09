@@ -139,8 +139,15 @@ def download_playlist(name: str, url: str) -> str:
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": "mp3",
                 "preferredquality": "0",
-            }
+            },
+            {
+                "key": "FFmpegMetadata",
+            },
+            {
+                "key": "EmbedThumbnail",
+            },
         ],
+        "writethumbnail": True,
         "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
     }
     if rsync.is_enabled:
