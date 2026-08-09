@@ -14,7 +14,9 @@ RUN apt-get update && \
         python3-venv \
         python-is-python3 \
         unzip \
-        git && \
+        git \
+        ffmpeg \
+        rsync && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Deno
@@ -27,7 +29,10 @@ ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 RUN python --version && \
     pip3 --version && \
     curl --version && \
-    deno --version
+    deno --version && \
+    ffmpeg -version && \
+    ffprobe -version && \
+    rsync --version
 
 # Application files
 ADD LICENSE /app
