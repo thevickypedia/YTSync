@@ -65,7 +65,7 @@ routes = [
 app = FastAPI(title="YT2JF", version=__version__, lifespan=lifespan, routes=routes)
 
 
-def run():
+def start():
     """Start the Jarvis API server using Uvicorn."""
     module_name = pathlib.Path(__file__)
     kwargs = dict(
