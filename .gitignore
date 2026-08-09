@@ -1,5 +1,6 @@
 .idea/
 venv/
+logs/
 __pycache__/
 
 .DS_Store
@@ -11,3 +12,5 @@ __pycache__/
 *.png
 *.webm
 *.webp
+*.log
+*.json
