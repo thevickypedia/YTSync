@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ytsync.config import env
 from ytsync.transfer import Rsync
+from ytsync.settings import Chat
 
 LOGGER = logging.getLogger("uvicorn.default")
 process_pool = ProcessPoolExecutor(max_workers=env.max_listeners)
@@ -38,13 +39,13 @@ controllers: List[Controller] = []
 def process_callback(
     future: Future,
     callback: Callable,
-    chat_id: int,
+    chat: Chat,
     name: str,
 ):
     """Called when the playlist process finishes."""
     if error := future.exception():
         callback(
-            chat_id=chat_id,
+            chat=chat,
             response=f"Transfer failed for {name}\n\n{error}",
         )
         LOGGER.error("Process failed for %s: %s", name, error)
@@ -53,7 +54,7 @@ def process_callback(
     runtime, successful, failed = future.result()
 
     callback(
-        chat_id=chat_id,
+        chat=chat,
         response=(
             f"Transfer complete: {name}\n\n"
             f"Runtime: {runtime:.2f}s\n"
@@ -73,7 +74,7 @@ def process_callback(
 
 
 def queue_download(
-    chat_id: int,
+    chat: Chat,
     callback: Callable,
     playlist_url: str = None,
     playlist_id: str = None,
@@ -81,7 +82,7 @@ def queue_download(
     """Queue a playlist download in the process pool.
 
     Args:
-        chat_id: Chat ID to respond to.
+        chat: Chat object to construct reply message.
         callback: Callback function call to send a notification.
         playlist_url: Full url for the playlist.
         playlist_id: Playlist identifier.
@@ -116,7 +117,7 @@ def queue_download(
     wrapped_callback = functools.partial(
         process_callback,
         callback=callback,
-        chat_id=chat_id,
+        chat=chat,
         name=playlist_name,
     )
 

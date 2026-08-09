@@ -397,8 +397,12 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
-    # TODO: Replace with reply_to
-    kwargs = dict(chat_id=chat.id, callback=send_message)
+    # TODO:
+    #   Take multiple URLs with multiprocessing
+    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
+    #   JellyFin - playlists different directories in env vars
+    #   Playlist tracker - Telegram /track input
+    kwargs = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
