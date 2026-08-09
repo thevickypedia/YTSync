@@ -3,6 +3,7 @@ import logging
 import pathlib
 from contextlib import asynccontextmanager
 
+import requests
 import uvicorn
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
@@ -16,9 +17,24 @@ from ytsync.routes import (
     api_set_webhook,
     telegram_webhook,
 )
+from ytsync.webhook import get_webhook
 from ytsync.version import __version__
 
 LOGGER = logging.getLogger("uvicorn.default")
+
+
+def webhook_is_available() -> bool:
+    """Check if there is an existing webhook.
+
+    Returns:
+        bool:
+        Returns a boolean flag to indicate webhook availability.
+    """
+    try:
+        return bool(get_webhook().get("result", {}).get("url"))
+    except requests.RequestException as error:
+        LOGGER.warning(error)
+        return False
 
 
 @asynccontextmanager
@@ -27,7 +43,7 @@ async def lifespan(_: FastAPI):
     # noinspection HttpUrlsUsage
     LOGGER.info("Hosting at http://%s:%s", env.host, env.port)
     bg_task = None
-    if not env.bot_webhook:
+    if not webhook_is_available():
         LOGGER.info("Polling for incoming messages...")
         bg_task = asyncio.create_task(run_polling())
         ACTIVE_TASKS["poll"] = bg_task

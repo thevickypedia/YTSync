@@ -112,8 +112,8 @@ async def api_set_webhook(
         ):
             env.bot_webhook = body.webhook
             env.bot_secret = body.secret_token
-            task = ACTIVE_TASKS["poll"]
-            if not task.done():
+            task = ACTIVE_TASKS.get("poll")
+            if task and not task.done():
                 task.cancel("webhook has been set")
                 ACTIVE_TASKS.pop("poll")
             raise HTTPException(
@@ -154,10 +154,12 @@ async def api_delete_webhook(
         )
     try:
         response = delete_webhook()
-        if not ACTIVE_TASKS.get("poll"):
-            LOGGER.info("Polling for incoming messages...")
-            bg_task = asyncio.create_task(run_polling())
-            ACTIVE_TASKS["poll"] = bg_task
+        task = ACTIVE_TASKS.get("poll")
+        if task and task.done():
+            task.cancel("Webhook has been deleted; re-creating...")
+        LOGGER.info("Polling for incoming messages...")
+        bg_task = asyncio.create_task(run_polling())
+        ACTIVE_TASKS["poll"] = bg_task
         return response
     except requests.RequestException as error:
         LOGGER.error(error)
