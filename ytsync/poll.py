@@ -84,5 +84,4 @@ async def run_polling():
                 LOGGER.info("Shutting down all threads and gracefully terminated.")
             else:
                 LOGGER.error(error)
-            shutdown_event()
             break
