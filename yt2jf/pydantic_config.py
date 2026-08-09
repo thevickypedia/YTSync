@@ -46,9 +46,7 @@ def extract_secret(name: str, field: FieldInfo, secrets: Dict[str, Any]) -> Any 
     return None
 
 
-def normalize_vault_secrets(
-    settings_cls: Type[BaseSettings], secrets: Dict[str, Any]
-) -> Dict[str, Any]:
+def normalize_vault_secrets(settings_cls: Type[BaseSettings], secrets: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize the vault secrets.
 
     Args:
@@ -85,9 +83,7 @@ class VaultSettings(PydanticBaseSettingsSource):
         # noinspection PyTypedDict
         self.table = self.config["vault_table"]
 
-    def get_field_value(
-        self, field: FieldInfo, field_name: str
-    ) -> Tuple[Any, str, bool]:
+    def get_field_value(self, field: FieldInfo, field_name: str) -> Tuple[Any, str, bool]:
         """Get the value for the given field.
 
         Args:
@@ -115,9 +111,7 @@ class VaultSettings(PydanticBaseSettingsSource):
         if self.table not in vault_client.list_tables():
             return {}
 
-        return normalize_vault_secrets(
-            self.settings_cls, vault_client.get_table(self.table)
-        )
+        return normalize_vault_secrets(self.settings_cls, vault_client.get_table(self.table))
 
 
 class PydanticEnvConfig(BaseSettings):

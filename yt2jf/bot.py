@@ -254,12 +254,8 @@ def authenticate(chat: Chat) -> bool:
         )
         return False
     if chat.id not in env.bot_chat_ids or not username_is_valid(username=chat.username):
-        LOGGER.error(
-            "Unauthorized chatID [%d] or userName [%s]", chat.id, chat.username
-        )
-        send_message(
-            chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})"
-        )
+        LOGGER.error("Unauthorized chatID [%d] or userName [%s]", chat.id, chat.username)
+        send_message(chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})")
         return False
     return True
 
@@ -328,9 +324,7 @@ def process_voice(chat: Chat, data_class: Voice) -> None:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Voice object.
     """
-    reply_to(
-        chat, "Audio inputs are not supported at the moment. Please try text input."
-    )
+    reply_to(chat, "Audio inputs are not supported at the moment. Please try text input.")
 
 
 def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
@@ -340,9 +334,7 @@ def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Document object.
     """
-    reply_to(
-        chat, "Document inputs are not supported at the moment. Please try text input."
-    )
+    reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
 def process_text(chat: Chat, data_class: Text) -> None:
@@ -405,6 +397,7 @@ def executor(command: str, chat: Chat) -> None:
         chat: Required section of the payload as Chat object.
     """
     LOGGER.info("Request: %s", command)
+    # TODO: Replace with reply_to
     kwargs = dict(chat_id=chat.id, callback=send_message)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():

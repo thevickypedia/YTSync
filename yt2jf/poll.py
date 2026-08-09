@@ -15,6 +15,7 @@ def shutdown_event():
     """Shuts down all the threads and gracefully terminates the processes."""
     for controller in controllers:
         LOGGER.info("Shutting down controller for: %s", controller.name)
+        # TODO: Fix this
         controller.transfer_pool.shutdown(wait=True)
         controller.process_pool.shutdown(wait=True)
 
@@ -34,9 +35,7 @@ async def run_polling():
             LOGGER.error(error)
             failed_connections += 1
             if failed_connections > env.max_retries:
-                LOGGER.critical(
-                    "ATTENTION::Couldn't recover from connection error. Restarting current process."
-                )
+                LOGGER.critical("ATTENTION::Couldn't recover from connection error. Restarting current process.")
                 delay = failed_connections * env.backoff_factor
                 LOGGER.info("Restarting in %d seconds.", delay)
                 await asyncio.sleep(delay)  # Simple backoff wait

@@ -64,8 +64,16 @@ else:
         },
         "loggers": {
             "uvicorn": {"propagate": True, "level": log_level, "handlers": ["default"]},
-            "uvicorn.error": {"propagate": True, "level": log_level, "handlers": ["error"]},
-            "uvicorn.access": {"propagate": True, "level": log_level, "handlers": ["access"]},
+            "uvicorn.error": {
+                "propagate": True,
+                "level": log_level,
+                "handlers": ["error"],
+            },
+            "uvicorn.access": {
+                "propagate": True,
+                "level": log_level,
+                "handlers": ["access"],
+            },
         },
     }
 

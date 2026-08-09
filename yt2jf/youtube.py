@@ -245,6 +245,7 @@ def download_playlist(name: str, url: str) -> tuple[float, int, int]:
         if rsync.is_enabled:
 
             def hook(filepath: str) -> None:
+                """Function to create a post process hook to initiate rsync in the background."""
                 postprocess_hook(
                     filepath=filepath,
                     transfer_pool=transfer_pool,

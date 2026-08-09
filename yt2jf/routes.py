@@ -72,9 +72,7 @@ async def telegram_webhook(request: Request):
     if not two_factor(request):
         LOGGER.error("Request received from a non-webhook source")
         LOGGER.error(response)
-        raise HTTPException(
-            status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase
-        )
+        raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
     if payload := response.get("message"):
         LOGGER.debug(response)
         process_request(payload)

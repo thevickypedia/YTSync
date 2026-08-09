@@ -7,13 +7,19 @@ from ipaddress import IPv4Address
 from multiprocessing import current_process
 from typing import Any, Dict, List
 
-from pydantic import Field, FilePath, HttpUrl, PositiveFloat, PositiveInt, NewPath, DirectoryPath
+from pydantic import (
+    DirectoryPath,
+    Field,
+    FilePath,
+    HttpUrl,
+    NewPath,
+    PositiveFloat,
+    PositiveInt,
+)
 
 from yt2jf.pydantic_config import PydanticEnvConfig
 
-SECRETS_PATH = (
-    os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
-)
+SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 
@@ -69,11 +75,6 @@ class EnvConfig(PydanticEnvConfig):
 
 env = EnvConfig()
 
-if (
-    not all((env.remote_host, env.remote_path, env.remote_user))
-    and current_process().name == "MainProcess"
-):
-    warnings.warn(
-        "No remote connections have been setup, all downloaded media will be stored locally."
-    )
+if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":
+    warnings.warn("No remote connections have been setup, all downloaded media will be stored locally.")
 env.data_dir.mkdir(exist_ok=True)

@@ -1,6 +1,5 @@
 import logging
 import os
-import shlex
 import subprocess
 import time
 
@@ -21,9 +20,7 @@ class Rsync:
         self.remote_host = env.remote_host
         self.remote_user = env.remote_user
         self.remote_path = env.remote_path
-        self.is_enabled = all(
-            (self.remote_host, self.remote_user, self.remote_path, self._is_installed())
-        )
+        self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, self._is_installed()))
 
     def _is_installed(self) -> bool:
         """Returns a boolean flag to indicate the rsync installation status."""
@@ -39,10 +36,7 @@ class Rsync:
         """Syncs a file to remote server with exponential backoff retry logic."""
         local_root = str(env.data_dir)
         relative_path = os.path.relpath(filepath, local_root)
-        remote_location = (
-            f"{self.remote_user}@{self.remote_host}:"
-            f"{os.path.join(self.remote_path, relative_path)}"
-        )
+        remote_location = f"{self.remote_user}@{self.remote_host}:" f"{os.path.join(self.remote_path, relative_path)}"
         LOGGER.info("Syncing: '%s' -> '%s'", filepath, remote_location)
 
         cmd = [
@@ -71,15 +65,11 @@ class Rsync:
                 if attempt < env.max_retries:
                     # Calculate exponential backoff: 3s, 6s, 12s, 24s...
                     delay = env.backoff_factor * (2 ** (attempt - 1))
-                    LOGGER.warning(
-                        f"⚠️  Sync failed (Attempt {attempt}/{env.max_retries}). Retrying in {delay}s..."
-                    )
+                    LOGGER.warning(f"⚠️  Sync failed (Attempt {attempt}/{env.max_retries}). Retrying in {delay}s...")
                     LOGGER.warning(f"   Error: {result.stderr.strip()}")
                     time.sleep(delay)
                 else:
-                    LOGGER.error(
-                        f"❌ Failed to sync {filepath} after {env.max_retries} attempts."
-                    )
+                    LOGGER.error(f"❌ Failed to sync {filepath} after {env.max_retries} attempts.")
                     LOGGER.error(f"   Final Error: {result.stderr.strip()}")
                     raise RuntimeError(f"Transfer Error: {result.stderr.strip()}") from None
             except Exception as e:
@@ -92,8 +82,6 @@ class Rsync:
                     LOGGER.warning(f"   Error: {e}")
                     time.sleep(delay)
                 else:
-                    LOGGER.error(
-                        f"❌ Failed to sync {filepath} after {env.max_retries} attempts due to exception."
-                    )
+                    LOGGER.error(f"❌ Failed to sync {filepath} after {env.max_retries} attempts due to exception.")
                     LOGGER.error(f"   Final Error: {e}")
                     raise RuntimeError(f"Transfer Error [{type(e).__name__}]: {e}") from None
