@@ -2,7 +2,7 @@ import functools
 import logging
 import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, NoReturn
 
 import yt_dlp
 from pydantic import BaseModel
@@ -74,7 +74,6 @@ def queue_download(
 
     playlist_name = info.get("title")
     assert playlist_name, "Failed to extract the playlist's title"
-    os.makedirs(playlist_name, exist_ok=True)
 
     future = process_pool.submit(download_playlist, playlist_name, playlist_url)
     wrapped_callback = functools.partial(
@@ -115,13 +114,15 @@ def postprocess_hook(data: Dict[str, Any]) -> None:
     thread_pool.submit(transfer_file, filepath)
 
 
-def download_playlist(name: str, url: str) -> str:
+def download_playlist(name: str, url: str) -> None | NoReturn:
     """Downloads the given playlist.
 
     Args:
         name: Name of the playlist.
         url: URL for the playlist.
     """
+    destination = env.data_dir.joinpath(name)
+    destination.mkdir(exist_ok=True)
     try:
         options = {
             "logger": LOGGER,
@@ -136,13 +137,12 @@ def download_playlist(name: str, url: str) -> str:
                 {"key": "EmbedThumbnail"},
             ],
             "writethumbnail": True,
-            "outtmpl": os.path.join(name, "%(title)s.%(ext)s"),
+            "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
         }
         if rsync.is_enabled:
             options["postprocessor_hooks"] = [postprocess_hook]
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([url])
-        return name
     except Exception as exc:
         # Don't let an un-pickleable exception cross the process boundary.
         raise RuntimeError(f"{type(exc).__name__}: {exc}") from None

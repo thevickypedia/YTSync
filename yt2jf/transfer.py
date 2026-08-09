@@ -37,14 +37,13 @@ class Rsync:
 
     def run(self, filepath) -> None:
         """Syncs a file to remote server with exponential backoff retry logic."""
-        LOGGER.info(f"📁 Syncing: {filepath}")
-
-        parent = os.path.dirname(filepath)
-        remote_dir = os.path.join(self.remote_path, parent)
+        local_root = str(env.data_dir)
+        relative_path = os.path.relpath(filepath, local_root)
         remote_location = (
-            f"{self.remote_user}@{self.remote_host}:{shlex.quote(remote_dir)}/"
+            f"{self.remote_user}@{self.remote_host}:"
+            f"{shlex.quote(os.path.join(self.remote_path, relative_path))}"
         )
-        LOGGER.info("Chosen remote location: %s", remote_location)
+        LOGGER.info("Syncing: '%s' -> '%s'", filepath, remote_location)
 
         cmd = [
             "rsync",

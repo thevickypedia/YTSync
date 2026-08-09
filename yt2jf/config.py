@@ -1,12 +1,13 @@
 import math
 import os
+import pathlib
 import socket
 import warnings
 from ipaddress import IPv4Address
 from multiprocessing import current_process
 from typing import Any, Dict, List
 
-from pydantic import Field, FilePath, HttpUrl, PositiveFloat, PositiveInt
+from pydantic import Field, FilePath, HttpUrl, PositiveFloat, PositiveInt, NewPath, DirectoryPath
 
 from yt2jf.pydantic_config import PydanticEnvConfig
 
@@ -35,6 +36,9 @@ class EnvConfig(PydanticEnvConfig):
     # Concurrency
     max_listeners: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
     max_transfers: PositiveInt = Field(LOGICAL_CORES, le=LOGICAL_CORES * 2, ge=1)
+
+    # Data
+    data_dir: NewPath | DirectoryPath = pathlib.Path("data")
 
     # Telegram config
     bot_token: str
@@ -72,3 +76,4 @@ if (
     warnings.warn(
         "No remote connections have been setup, all downloaded media will be stored locally."
     )
+env.data_dir.mkdir(exist_ok=True)
