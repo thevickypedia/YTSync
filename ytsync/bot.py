@@ -11,6 +11,8 @@ import sys
 import time
 from datetime import datetime
 from enum import StrEnum
+from multiprocessing.context import TimeoutError as ThreadTimeoutError
+from multiprocessing.pool import ThreadPool
 from typing import Dict, List
 
 import requests
@@ -374,7 +376,8 @@ def executor(command: str, chat: Chat) -> None:
     """
     LOGGER.info("Request: %s", command)
     # TODO:
-    #   Take multiple URLs with multiprocessing
+    #   Implement a queued system for messages
+    #   Take multiple URLs with multiprocessing (timeout * # of URLs)
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
     #   JellyFin - playlists different directories in env vars
     #   Playlist tracker - Telegram /track input
@@ -400,9 +403,16 @@ def executor(command: str, chat: Chat) -> None:
         )
         return
     try:
-        name = queue_download(**kwargs)
+        pool = ThreadPool(processes=1).apply_async(queue_download, kwds=kwargs)
+        name = pool.get(timeout=10)
         response = f"Download queued for {name!r}"
-    except (ValueError, AssertionError, DownloadError) as error:
-        response = error.__str__()
+    except (ThreadTimeoutError, ValueError, AssertionError, DownloadError) as error:
+        if isinstance(error, ThreadTimeoutError):
+            LOGGER.warning("Request timed out")
+            response = (
+                "Failed to retrieve metadata within 10s - please try to a different '/id' or '/url' for this content"
+            )
+        else:
+            response = error.__str__()
     LOGGER.info("Response: %s", response)
     reply_to(chat, response)
