@@ -46,7 +46,7 @@ def process_callback(
     if error := future.exception():
         callback(
             chat=chat,
-            response=f"Transfer failed for {name}\n\n{error}",
+            response=f"Download failed for {name}\n\n{error}",
         )
         LOGGER.error("Process failed for %s: %s", name, error)
         return
@@ -56,33 +56,22 @@ def process_callback(
     runtime = result["runtime"]
     downloaded = result["downloaded"]
     download_failed = result["download_failed"]
-    transferred = result["transferred"]
-    transfer_failed = result["transfer_failed"]
+
+    response = (
+        f"Download complete: {name}\n\n"
+        f"Runtime: {runtime:.2f}s\n"
+        f"Successful downloads: {downloaded}\n"
+        f"Failed downloads: {download_failed}"
+    )
+
+    if "transferred" in result:
+        response += (
+            f"\n\n" f"Transfers:\n" f"  Successful: {result['transferred']}\n" f"  Failed: {result['transfer_failed']}"
+        )
 
     callback(
         chat=chat,
-        response=(
-            f"Transfer complete: {name}\n\n"
-            f"Runtime: {runtime:.2f}s\n\n"
-            f"Downloads:\n"
-            f"  Successful: {downloaded}\n"
-            f"  Failed: {download_failed}\n\n"
-            f"Transfers:\n"
-            f"  Successful: {transferred}\n"
-            f"  Failed: {transfer_failed}"
-        ),
-    )
-
-    LOGGER.info(
-        "Process completed for %s in %.2fs "
-        "(downloads: successful=%d, failed=%d; "
-        "transfers: successful=%d, failed=%d)",
-        name,
-        runtime,
-        downloaded,
-        download_failed,
-        transferred,
-        transfer_failed,
+        response=response,
     )
 
 
@@ -223,16 +212,23 @@ def download_playlist(
     """Downloads a playlist and returns download/transfer statistics."""
     destination = env.data_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
-    transfer_pool = ThreadPoolExecutor(
-        max_workers=env.max_transfers,
-        thread_name_prefix=f"transfer-{name}",
-    )
+
     stats: Dict[str, int] = {
         "downloaded": 0,
         "download_failed": 0,
-        "transferred": 0,
-        "transfer_failed": 0,
     }
+    transfer_pool = None
+    if rsync.is_enabled:
+        transfer_pool = ThreadPoolExecutor(
+            max_workers=env.max_transfers,
+            thread_name_prefix=f"transfer-{name}",
+        )
+        stats.update(
+            {
+                "transferred": 0,
+                "transfer_failed": 0,
+            }
+        )
     start = time.time()
     try:
         options: Dict[str, Any] = {
@@ -254,17 +250,12 @@ def download_playlist(
             ],
             "writethumbnail": True,
             "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
-            "progress_hooks": [
-                functools.partial(
-                    download_progress_hook,
-                    stats=stats,
-                )
-            ],
         }
         if rsync.is_enabled:
 
             def hook(filepath: str) -> None:
                 """Function to create a post process hook to initiate rsync in the background."""
+                # noinspection bad-argument-type
                 postprocess_hook(
                     filepath=filepath,
                     transfer_pool=transfer_pool,
@@ -272,6 +263,12 @@ def download_playlist(
                 )
 
             options["post_hooks"] = [hook]
+            options["progress_hooks"] = [
+                functools.partial(
+                    download_progress_hook,
+                    stats=stats,
+                )
+            ]
 
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([url])
@@ -279,17 +276,18 @@ def download_playlist(
         raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
 
     finally:
-        LOGGER.info(
-            "Waiting for transfers for %s",
-            name,
-        )
-        transfer_pool.shutdown(wait=True)
-        LOGGER.info(
-            "All transfers completed for %s " "(successful=%d, failed=%d)",
-            name,
-            stats["transferred"],
-            stats["transfer_failed"],
-        )
+        if transfer_pool is not None:
+            LOGGER.info(
+                "Waiting for transfers for %s",
+                name,
+            )
+            transfer_pool.shutdown(wait=True)
+            LOGGER.info(
+                "All transfers completed for %s " "(successful=%d, failed=%d)",
+                name,
+                stats["transferred"],
+                stats["transfer_failed"],
+            )
 
     return {
         "runtime": time.time() - start,
