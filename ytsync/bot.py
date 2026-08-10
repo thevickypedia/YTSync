@@ -19,7 +19,6 @@ from yt_dlp.utils import DownloadError
 from ytsync.config import env
 from ytsync.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
 from ytsync.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
-from ytsync.word_match import word_match
 from ytsync.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
@@ -351,29 +350,6 @@ def process_text(chat: Chat, data_class: Text) -> None:
         return
     data_class.text = data_class.text.replace("override", "").replace("OVERRIDE", "")
     text_lower = data_class.text.lower().lstrip("/")
-    if word_match(
-        phrase=text_lower,
-        match_list=(
-            "hey",
-            "hola",
-            "what's up",
-            "ssup",
-            "whats up",
-            "hello",
-            "hi",
-            "howdy",
-            "hey",
-            "chao",
-            "hiya",
-            "aloha",
-        ),
-        strict=True,
-    ):
-        reply_to(
-            chat,
-            intro(),
-        )
-        return
     if text_lower == "start":
         send_message(chat.id, intro())
         return
@@ -418,9 +394,9 @@ def executor(command: str, chat: Chat) -> None:
             reply_to(chat, "Invalid entry, a playlist url is required followed by /url")
             return
     else:
-        process_response(
-            f"Invalid command received: {command}\n\nEither use '/id' or '/url' followed by the identifier.",
-            chat,
+        send_message(
+            chat_id=chat.id,
+            response=f"Invalid command received: {command}\n\nEither use '/id' or '/url' followed by the identifier.",
         )
         return
     try:
@@ -429,14 +405,4 @@ def executor(command: str, chat: Chat) -> None:
     except (ValueError, AssertionError, DownloadError) as error:
         response = error.__str__()
     LOGGER.info("Response: %s", response)
-    process_response(response, chat)
-
-
-def process_response(response: str, chat: Chat) -> None:
-    """Processes the response via Telegram API.
-
-    Args:
-        response: Response from ytsync.
-        chat: Required section of the payload as Chat object.
-    """
-    send_message(chat.id, response, None)
+    reply_to(chat, response)
