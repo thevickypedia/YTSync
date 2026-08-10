@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import requests
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.routing import APIRoute
 
 from ytsync.config import env
@@ -48,11 +49,22 @@ async def lifespan(_: FastAPI):
     LOGGER.info("Shutting down API server.")
 
 
+async def docs_redirect() -> RedirectResponse:
+    """Redirect the root path to the ``/docs`` page."""
+    return RedirectResponse("/docs")
+
+
 routes = [
     APIRoute(
         endpoint=telegram_webhook,
         methods=["POST"],
-        path=env.bot_endpoint,  # No enum
+        path=env.bot_endpoint,
+        include_in_schema=False,
+    ),
+    APIRoute(
+        endpoint=docs_redirect,
+        methods=["GET"],
+        path="/",
         include_in_schema=False,
     ),
     APIRoute(
