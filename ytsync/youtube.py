@@ -51,25 +51,38 @@ def process_callback(
         LOGGER.error("Process failed for %s: %s", name, error)
         return
 
-    runtime, successful, failed = future.result()
+    result = future.result()
+
+    runtime = result["runtime"]
+    downloaded = result["downloaded"]
+    download_failed = result["download_failed"]
+    transferred = result["transferred"]
+    transfer_failed = result["transfer_failed"]
 
     callback(
         chat=chat,
         response=(
             f"Transfer complete: {name}\n\n"
-            f"Runtime: {runtime:.2f}s\n"
-            f"Successful transfers: {successful}\n"
-            f"Failed transfers: {failed}\n"
-            f"Total transfers: {successful + failed}"
+            f"Runtime: {runtime:.2f}s\n\n"
+            f"Downloads:\n"
+            f"  Successful: {downloaded}\n"
+            f"  Failed: {download_failed}\n\n"
+            f"Transfers:\n"
+            f"  Successful: {transferred}\n"
+            f"  Failed: {transfer_failed}"
         ),
     )
 
     LOGGER.info(
-        "Process completed for %s in %.2fs " "(successful=%d, failed=%d)",
+        "Process completed for %s in %.2fs "
+        "(downloads: successful=%d, failed=%d; "
+        "transfers: successful=%d, failed=%d)",
         name,
         runtime,
-        successful,
-        failed,
+        downloaded,
+        download_failed,
+        transferred,
+        transfer_failed,
     )
 
 
@@ -79,18 +92,7 @@ def queue_download(
     playlist_url: str = None,
     playlist_id: str = None,
 ) -> str:
-    """Queue a playlist download in the process pool.
-
-    Args:
-        chat: Chat object to construct reply message.
-        callback: Callback function call to send a notification.
-        playlist_url: Full url for the playlist.
-        playlist_id: Playlist identifier.
-
-    Returns:
-        str:
-        Returns the playlist name as a string.
-    """
+    """Queue a playlist download in the process pool."""
     if playlist_url:
         LOGGER.debug("Playlist URL: %s", playlist_url)
     elif playlist_id:
@@ -154,22 +156,22 @@ def transfer_callback(
     try:
         future.result()
     except Exception as exc:
-        stats["failed"] += 1
+        stats["transfer_failed"] += 1
         LOGGER.exception(
             "Transfer failed for %s: %s",
             filepath,
             exc,
         )
     else:
-        stats["successful"] += 1
+        stats["transferred"] += 1
         LOGGER.info(
-            "Transfer thread completed: %s",
+            "Transfer completed: %s",
             filepath,
         )
     LOGGER.debug(
         "Transfers: successful=%d failed=%d",
-        stats["successful"],
-        stats["failed"],
+        stats["transferred"],
+        stats["transfer_failed"],
     )
 
 
@@ -191,7 +193,6 @@ def postprocess_hook(
         transfer_file,
         filepath,
     )
-    stats["submitted"] += 1
     future.add_done_callback(
         functools.partial(
             transfer_callback,
@@ -201,15 +202,25 @@ def postprocess_hook(
     )
 
 
-def download_playlist(name: str, url: str) -> tuple[float, int, int]:
-    """Downloads a playlist.
+def download_progress_hook(
+    data: Dict[str, Any],
+    stats: Dict[str, int],
+) -> None:
+    """Track yt-dlp download completion."""
+    if data.get("status") == "finished":
+        stats["downloaded"] += 1
 
-    Returns:
-        tuple:
-            runtime,
-            successful transfers,
-            failed transfers
-    """
+        LOGGER.info(
+            "Download completed: %s",
+            data.get("filename"),
+        )
+
+
+def download_playlist(
+    name: str,
+    url: str,
+) -> Dict[str, Any]:
+    """Downloads a playlist and returns download/transfer statistics."""
     destination = env.data_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
     transfer_pool = ThreadPoolExecutor(
@@ -217,9 +228,10 @@ def download_playlist(name: str, url: str) -> tuple[float, int, int]:
         thread_name_prefix=f"transfer-{name}",
     )
     stats: Dict[str, int] = {
-        "submitted": 0,
-        "successful": 0,
-        "failed": 0,
+        "downloaded": 0,
+        "download_failed": 0,
+        "transferred": 0,
+        "transfer_failed": 0,
     }
     start = time.time()
     try:
@@ -242,6 +254,12 @@ def download_playlist(name: str, url: str) -> tuple[float, int, int]:
             ],
             "writethumbnail": True,
             "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
+            "progress_hooks": [
+                functools.partial(
+                    download_progress_hook,
+                    stats=stats,
+                )
+            ],
         }
         if rsync.is_enabled:
 
@@ -259,22 +277,21 @@ def download_playlist(name: str, url: str) -> tuple[float, int, int]:
             ydl.download([url])
     except Exception as exc:
         raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
+
     finally:
         LOGGER.info(
-            "Waiting for %d transfer(s) for %s",
-            stats["submitted"],
+            "Waiting for transfers for %s",
             name,
         )
         transfer_pool.shutdown(wait=True)
         LOGGER.info(
             "All transfers completed for %s " "(successful=%d, failed=%d)",
             name,
-            stats["successful"],
-            stats["failed"],
+            stats["transferred"],
+            stats["transfer_failed"],
         )
-    runtime = time.time() - start
-    return (
-        runtime,
-        stats["successful"],
-        stats["failed"],
-    )
+
+    return {
+        "runtime": time.time() - start,
+        **stats,
+    }
