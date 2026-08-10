@@ -5,7 +5,7 @@ import time
 
 from ytsync.config import env
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 
 
 class Rsync:

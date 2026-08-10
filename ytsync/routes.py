@@ -16,7 +16,7 @@ from ytsync.config import env
 from ytsync.poll import start_polling, stop_polling
 from ytsync.webhook import delete_webhook, get_webhook, set_webhook
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(description="Enter your telegram username")
 POLL_LOCK = asyncio.Lock()
 

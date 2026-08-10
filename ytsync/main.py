@@ -18,7 +18,7 @@ from ytsync.routes import (
 from ytsync.version import __version__
 from ytsync.webhook import get_webhook
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 
 
 def webhook_is_available() -> bool:

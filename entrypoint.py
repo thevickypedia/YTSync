@@ -63,14 +63,23 @@ else:
             },
         },
         "loggers": {
-            "uvicorn": {"propagate": True, "level": log_level, "handlers": ["default"]},
+            "ytsync": {
+                "propagate": False,
+                "level": log_level,
+                "handlers": ["default"],
+            },
+            "uvicorn": {
+                "propagate": False,
+                "level": log_level,
+                "handlers": ["default"],
+            },
             "uvicorn.error": {
-                "propagate": True,
+                "propagate": False,
                 "level": log_level,
                 "handlers": ["error"],
             },
             "uvicorn.access": {
-                "propagate": True,
+                "propagate": False,
                 "level": log_level,
                 "handlers": ["access"],
             },

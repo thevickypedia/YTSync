@@ -23,7 +23,7 @@ from ytsync.word_match import word_match
 from ytsync.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 
 
 class RequestMethods(StrEnum):
@@ -402,6 +402,8 @@ def executor(command: str, chat: Chat) -> None:
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
     #   JellyFin - playlists different directories in env vars
     #   Playlist tracker - Telegram /track input
+    #   Write unit tests and code coverage pipeline
+    #   Full E2E testing for webhook + polling solution - must be always reachable
     kwargs = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():

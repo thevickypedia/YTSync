@@ -14,7 +14,7 @@ from ytsync.exceptions import (
 )
 from ytsync.youtube import controllers, process_pool
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
 

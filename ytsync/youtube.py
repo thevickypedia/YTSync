@@ -12,7 +12,7 @@ from ytsync.config import env
 from ytsync.settings import Chat
 from ytsync.transfer import Rsync
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 process_pool = ProcessPoolExecutor(max_workers=env.max_listeners)
 rsync = Rsync()
 

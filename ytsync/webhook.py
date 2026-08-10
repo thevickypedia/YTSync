@@ -9,7 +9,7 @@ from ytsync.bot import BASE_URL
 from ytsync.config import env
 from ytsync.exceptions import EgressErrors
 
-LOGGER = logging.getLogger("uvicorn.default")
+LOGGER = logging.getLogger("ytsync")
 
 
 def get_webhook() -> Dict[str, str] | None:
