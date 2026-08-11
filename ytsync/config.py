@@ -40,8 +40,7 @@ class EnvConfig(PydanticEnvConfig):
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
 
     # Concurrency
-    max_listeners: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
-    max_transfers: PositiveInt = Field(LOGICAL_CORES, le=LOGICAL_CORES * 2, ge=1)
+    max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
 
     # Data
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")

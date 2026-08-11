@@ -5,14 +5,13 @@
 
 """
 
+import asyncio
 import logging
 import secrets
 import sys
 import time
 from datetime import datetime
 from enum import StrEnum
-from multiprocessing.context import TimeoutError as ThreadTimeoutError
-from multiprocessing.pool import ThreadPool
 from typing import Dict, List
 
 import requests
@@ -144,7 +143,7 @@ def send_message(
     return result
 
 
-def poll_for_messages(offset: int) -> None | int:
+async def poll_for_messages(offset: int) -> None | int:
     """Polls ``api.telegram.org`` for new messages.
 
     Args:
@@ -172,7 +171,7 @@ def poll_for_messages(offset: int) -> None | int:
         last_update_id = offset
         for result in results:
             if payload := result.get("message"):
-                process_request(payload)
+                await process_request(payload)
             else:
                 LOGGER.error("Received empty payload!!")
             last_update_id = result["update_id"]
@@ -192,7 +191,7 @@ def poll_for_messages(offset: int) -> None | int:
     raise ConnectionError(error_data)
 
 
-def process_request(payload: Dict[str, int | dict]) -> None:
+async def process_request(payload: Dict[str, int | dict]) -> None:
     """Processes the request via Telegram messages.
 
     Args:
@@ -200,36 +199,36 @@ def process_request(payload: Dict[str, int | dict]) -> None:
     """
     LOGGER.debug(payload)
     chat = Chat(**{**payload, **payload["chat"], **payload["from"]})
-    if not authenticate(chat):
+    if not await authenticate(chat):
         LOGGER.warning(payload)
         return
-    if not verify_timeout(chat):
+    if not await verify_timeout(chat):
         LOGGER.warning(payload)
         return
     if payload.get("text"):
         chat.message_type = "text"
-        process_text(chat, Text(**payload))
+        await process_text(chat, Text(**payload))
     elif payload.get("voice"):
         chat.message_type = "voice"
-        process_voice(chat, Voice(**payload["voice"]))
+        await process_voice(chat, Voice(**payload["voice"]))
     elif payload.get("document"):
         chat.message_type = "document"
-        process_document(chat, Document(**payload["document"]))
+        await process_document(chat, Document(**payload["document"]))
     elif payload.get("video"):
         chat.message_type = "video"
-        process_video(chat, Video(**payload["video"]))
+        await process_video(chat, Video(**payload["video"]))
     elif payload.get("audio"):
         chat.message_type = "audio"
-        process_audio(chat, Audio(**payload["audio"]))
+        await process_audio(chat, Audio(**payload["audio"]))
     elif payload.get("photo"):
         # Matches for compressed images
         chat.message_type = "photo"
-        process_photo(chat, [PhotoFragment(**d) for d in payload["photo"]])
+        await process_photo(chat, [PhotoFragment(**d) for d in payload["photo"]])
     else:
         reply_to(chat, "Payload type is not allowed.")
 
 
-def username_is_valid(username: str) -> bool:
+async def username_is_valid(username: str) -> bool:
     """Compares username and returns True if username is allowed."""
     for user in env.bot_users:
         if secrets.compare_digest(user, username):
@@ -237,7 +236,7 @@ def username_is_valid(username: str) -> bool:
     return False
 
 
-def authenticate(chat: Chat) -> bool:
+async def authenticate(chat: Chat) -> bool:
     """Authenticates the user with ``userId`` and ``userName``.
 
     Args:
@@ -261,7 +260,7 @@ def authenticate(chat: Chat) -> bool:
     return True
 
 
-def verify_timeout(chat: Chat) -> bool:
+async def verify_timeout(chat: Chat) -> bool:
     """Verifies whether the message was received in the past 60 seconds.
 
     Args:
@@ -283,7 +282,7 @@ def verify_timeout(chat: Chat) -> bool:
     return False
 
 
-def process_photo(chat: Chat, data_class: List[PhotoFragment]) -> None:
+async def process_photo(chat: Chat, data_class: List[PhotoFragment]) -> None:
     """Processes a photo input.
 
     Args:
@@ -298,27 +297,27 @@ def process_photo(chat: Chat, data_class: List[PhotoFragment]) -> None:
     )
 
 
-def process_audio(chat: Chat, data_class: Audio) -> None:
+async def process_audio(chat: Chat, data_class: Audio) -> None:
     """Processes an audio input.
 
     Args:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Voice object.
     """
-    process_document(chat, data_class)
+    await process_document(chat, data_class)
 
 
-def process_video(chat: Chat, data_class: Video) -> None:
+async def process_video(chat: Chat, data_class: Video) -> None:
     """Processes a video input.
 
     Args:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Voice object.
     """
-    process_document(chat, data_class)
+    await process_document(chat, data_class)
 
 
-def process_voice(chat: Chat, data_class: Voice) -> None:
+async def process_voice(chat: Chat, data_class: Voice) -> None:
     """Processes the audio file in payload received after checking for authentication.
 
     Args:
@@ -328,7 +327,7 @@ def process_voice(chat: Chat, data_class: Voice) -> None:
     reply_to(chat, "Audio inputs are not supported at the moment. Please try text input.")
 
 
-def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
+async def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
     """Processes the document in payload received after checking for authentication.
 
     Args:
@@ -338,7 +337,7 @@ def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
     reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
-def process_text(chat: Chat, data_class: Text) -> None:
+async def process_text(chat: Chat, data_class: Text) -> None:
     """Processes the text in payload received after checking for authentication.
 
     Args:
@@ -364,10 +363,10 @@ def process_text(chat: Chat, data_class: Text) -> None:
     if text_lower == "test":
         reply_to(chat, f"Test message received at - {datetime.now().strftime('%c')}")
         return
-    executor(data_class.text, chat)
+    await executor(data_class.text, chat)
 
 
-def executor(command: str, chat: Chat) -> None:
+async def executor(command: str, chat: Chat) -> None:
     """Executes the command via offline communicator.
 
     Args:
@@ -403,11 +402,11 @@ def executor(command: str, chat: Chat) -> None:
         )
         return
     try:
-        pool = ThreadPool(processes=1).apply_async(queue_download, kwds=kwargs)
-        name = pool.get(timeout=10)
+        # TODO: No log messages are printed within queue
+        name = await asyncio.wait_for(queue_download(**kwargs), timeout=10)
         response = f"Download queued for {name!r}"
-    except (ThreadTimeoutError, ValueError, AssertionError, DownloadError) as error:
-        if isinstance(error, ThreadTimeoutError):
+    except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
+        if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")
             response = (
                 "Failed to retrieve metadata within 10s - please try to a different '/id' or '/url' for this content"

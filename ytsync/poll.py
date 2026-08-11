@@ -60,7 +60,7 @@ async def run_polling():
     while True:
         try:
             await asyncio.sleep(env.poll_interval)
-            if offset_id := poll_for_messages(offset):
+            if offset_id := await poll_for_messages(offset):
                 offset = offset_id
         except EgressErrors as error:
             if isinstance(error, requests.exceptions.ReadTimeout):

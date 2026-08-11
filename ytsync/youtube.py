@@ -13,7 +13,7 @@ from ytsync.settings import Chat
 from ytsync.transfer import Rsync
 
 LOGGER = logging.getLogger("ytsync")
-process_pool = ProcessPoolExecutor(max_workers=env.max_listeners)
+process_pool = ProcessPoolExecutor(max_workers=1)
 rsync = Rsync()
 
 
@@ -75,7 +75,7 @@ def process_callback(
     )
 
 
-def queue_download(
+async def queue_download(
     chat: Chat,
     callback: Callable,
     playlist_url: str = None,
