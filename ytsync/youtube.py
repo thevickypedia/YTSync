@@ -1,6 +1,7 @@
 import functools
 import logging
 import os
+import pathlib
 import time
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List
@@ -75,6 +76,12 @@ def process_callback(
     )
 
 
+def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
+    """Extract filename for a potential entry."""
+    # TODO: Set as env var (if validation is available in yt_dlp) [OR] top-level env var - hardcoded
+    return pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath("%(title)s.%(ext)s")))).with_suffix(".mp3").name
+
+
 async def queue_download(
     chat: Chat,
     callback: Callable,
@@ -99,11 +106,52 @@ async def queue_download(
     playlist_name = info.get("title")
     assert playlist_name, "Failed to extract the playlist's title"
 
-    future = process_pool.submit(
-        download_playlist,
-        playlist_name,
-        playlist_url,
-    )
+    destination = env.data_dir.joinpath(playlist_name)
+    destination.mkdir(exist_ok=True)
+
+    # TODO: Keep this feature behind an env var flag
+    # TODO: Figure out why logs go missing within this block
+    if rsync.is_enabled:
+        LOGGER.info("Info: %s", info)
+        LOGGER.info("Entries: %s", info.get("entries"))
+        if info.get("entries"):
+            urls = []
+            for entry in info["entries"]:
+                if not entry or not entry.get("url"):
+                    LOGGER.warning("Invalid entry found: %s", entry or "None")
+                    print(f"Invalid entry found: {entry or 'None'}")
+                    continue
+                try:
+                    filename = get_filename(ydl, entry, destination)
+                except Exception as error:
+                    print(error)
+                    LOGGER.error(error)
+                    continue
+                LOGGER.info("Processed filename: %s", filename)
+                print(f"Processed filename: {filename}")
+                local_path = destination.joinpath(filename)
+                # TODO: Individual checks will start a new shell - this is EXPENSIVE
+                #   Either do threads or check all files in one SSH session
+                if rsync.remote_file_exists(local_path):
+                    LOGGER.info("'%s' already exists on the remote server; skipping...", local_path, )
+                    print(f"{local_path!r} already exists on the remote server; skipping...")
+                else:
+                    print(f"{local_path} does not exist on the remote server")
+                    LOGGER.info("'%s' does not exist on the remote server", local_path, )
+                    urls.append(entry["url"])
+            if urls:
+                print(f"Total URLs gathered after pre-processing: {len(urls)}")
+                LOGGER.info("Total URLs gathered after pre-processing: %d", len(urls))
+            else:
+                urls = [playlist_url]
+        else:
+            LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
+            print(f"'info' block does not contain valid 'entries': {info}")
+            urls = [playlist_url]
+    else:
+        urls = [playlist_url]
+
+    future = process_pool.submit(download_playlist, playlist_name, urls, destination)
 
     wrapped_callback = functools.partial(
         process_callback,
@@ -124,16 +172,17 @@ async def queue_download(
     return playlist_name
 
 
-def transfer_file(filepath: str) -> None:
+def transfer_file(local_path: str, remote_path: str) -> None:
     """Transfer a completed file."""
-    LOGGER.info("Transferring: %s", filepath)
-    rsync.run(filepath)
+    LOGGER.info("Transferring: %s", local_path)
+
+    rsync.run(source=local_path, destination=remote_path)
     if env.delete_after_sync:
         LOGGER.info(
             "Transfer complete; deleting: %s",
-            filepath,
+            local_path,
         )
-        os.remove(filepath)
+        os.remove(local_path)
 
 
 def transfer_callback(
@@ -165,27 +214,25 @@ def transfer_callback(
 
 
 def postprocess_hook(
-    filepath: str,
+    local_path: str,
+    remote_path: str,
     transfer_pool: ThreadPoolExecutor,
     stats: Dict[str, int],
 ) -> None:
     """Submit a completed file to the thread pool."""
-    filepath = filepath.strip()
-    if filepath.endswith(".webm") or filepath.endswith(".part"):
+    local_path = local_path.strip()
+    if local_path.endswith(".webm") or local_path.endswith(".part"):
         LOGGER.debug(
             "Transient download complete; awaiting final - %s",
-            filepath,
+            local_path,
         )
         return
-    LOGGER.info("Ready to transfer: %s", filepath)
-    future = transfer_pool.submit(
-        transfer_file,
-        filepath,
-    )
+    LOGGER.info("Ready to transfer: %s", local_path)
+    future = transfer_pool.submit(transfer_file, local_path, remote_path)
     future.add_done_callback(
         functools.partial(
             transfer_callback,
-            filepath=filepath,
+            filepath=local_path,
             stats=stats,
         )
     )
@@ -207,16 +254,37 @@ def download_progress_hook(
 
 def download_playlist(
     name: str,
-    url: str,
+    urls: List[str],
+    destination: pathlib.Path,
 ) -> Dict[str, Any]:
     """Downloads a playlist and returns download/transfer statistics."""
-    destination = env.data_dir.joinpath(name)
-    destination.mkdir(exist_ok=True)
+    start = time.time()
+    options: Dict[str, Any] = {
+        "logger": LOGGER,
+        "format": "bestaudio/best",
+        "ignoreerrors": True,
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "0",
+            },
+            {
+                "key": "FFmpegMetadata",
+            },
+            {
+                "key": "EmbedThumbnail",
+            },
+        ],
+        "writethumbnail": True,
+        "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
+    }
 
     stats: Dict[str, int] = {
         "downloaded": 0,
         "download_failed": 0,
     }
+
     transfer_pool = None
     if rsync.is_enabled:
         transfer_pool = ThreadPoolExecutor(
@@ -229,50 +297,29 @@ def download_playlist(
                 "transfer_failed": 0,
             }
         )
-    start = time.time()
+
+        def hook(local_path: str) -> None:
+            """Function to create a post process hook to initiate rsync in the background."""
+            # noinspection bad-argument-type
+            postprocess_hook(
+                local_path=local_path,
+                remote_path=rsync.get_remote_path(local_path),
+                transfer_pool=transfer_pool,
+                stats=stats,
+            )
+
+        options["post_hooks"] = [hook]
+        options["progress_hooks"] = [
+            functools.partial(
+                download_progress_hook,
+                stats=stats,
+            )
+        ]
+
     try:
-        options: Dict[str, Any] = {
-            "logger": LOGGER,
-            "format": "bestaudio/best",
-            "ignoreerrors": True,
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "0",
-                },
-                {
-                    "key": "FFmpegMetadata",
-                },
-                {
-                    "key": "EmbedThumbnail",
-                },
-            ],
-            "writethumbnail": True,
-            "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
-        }
-        if rsync.is_enabled:
-
-            def hook(filepath: str) -> None:
-                """Function to create a post process hook to initiate rsync in the background."""
-                # noinspection bad-argument-type
-                postprocess_hook(
-                    filepath=filepath,
-                    transfer_pool=transfer_pool,
-                    stats=stats,
-                )
-
-            options["post_hooks"] = [hook]
-            options["progress_hooks"] = [
-                functools.partial(
-                    download_progress_hook,
-                    stats=stats,
-                )
-            ]
-
         # noinspection bad-argument-type
         with yt_dlp.YoutubeDL(options) as ydl:
-            ydl.download([url])
+            ydl.download(urls)
     except Exception as exc:
         raise RuntimeError(f"{type(exc).__name__}: {exc}") from None
 
