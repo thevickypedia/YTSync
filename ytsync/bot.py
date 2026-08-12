@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from enum import StrEnum
-from typing import Dict, List
+from typing import Dict, List, Callable
 
 import requests
 from yt_dlp.utils import DownloadError
@@ -52,7 +52,7 @@ def intro() -> str:
 def _make_request(
     url: str,
     payload: dict,
-    files: dict = None,
+    files: dict | None = None,
     method: RequestMethods = RequestMethods.POST,
 ) -> requests.Response:
     """Makes a post request with a ``connect timeout`` of 5 seconds and ``read timeout`` of 60.
@@ -198,6 +198,7 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         payload: Payload as received.
     """
     LOGGER.debug(payload)
+    # noinspection not-mapping
     chat = Chat(**{**payload, **payload["chat"], **payload["from"]})
     if not await authenticate(chat):
         LOGGER.warning(payload)
@@ -210,25 +211,30 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         await process_text(chat, Text(**payload))
     elif payload.get("voice"):
         chat.message_type = "voice"
+        # noinspection not-mapping
         await process_voice(chat, Voice(**payload["voice"]))
     elif payload.get("document"):
         chat.message_type = "document"
+        # noinspection not-mapping
         await process_document(chat, Document(**payload["document"]))
     elif payload.get("video"):
         chat.message_type = "video"
+        # noinspection not-mapping
         await process_video(chat, Video(**payload["video"]))
     elif payload.get("audio"):
         chat.message_type = "audio"
+        # noinspection not-mapping
         await process_audio(chat, Audio(**payload["audio"]))
     elif payload.get("photo"):
         # Matches for compressed images
         chat.message_type = "photo"
+        # noinspection not-mapping,not-iterable
         await process_photo(chat, [PhotoFragment(**d) for d in payload["photo"]])
     else:
         reply_to(chat, "Payload type is not allowed.")
 
 
-async def username_is_valid(username: str) -> bool:
+def username_is_valid(username: str) -> bool:
     """Compares username and returns True if username is allowed."""
     for user in env.bot_users:
         if secrets.compare_digest(user, username):
@@ -324,6 +330,7 @@ async def process_voice(chat: Chat, data_class: Voice) -> None:
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Voice object.
     """
+    assert data_class, "Requested to process voice, but no voice note was received!"
     reply_to(chat, "Audio inputs are not supported at the moment. Please try text input.")
 
 
@@ -334,6 +341,7 @@ async def process_document(chat: Chat, data_class: Document | Audio | Video) -> 
         chat: Required section of the payload as Chat object.
         data_class: Required section of the payload as Document object.
     """
+    assert data_class, "Requested to process document, but no document was received!"
     reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
@@ -382,7 +390,7 @@ async def executor(command: str, chat: Chat) -> None:
     #   Playlist tracker - Telegram /track input
     #   Write unit tests and code coverage pipeline
     #   Full E2E testing for webhook + polling solution - must be always reachable
-    kwargs = dict(chat=chat, callback=reply_to)
+    kwargs: Dict[str, str | Callable | Chat] = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id

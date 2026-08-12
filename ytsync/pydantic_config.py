@@ -131,6 +131,7 @@ class PydanticEnvConfig(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ):
         """Order: vault, dotenv, env, init, secrets files."""
+        # noinspection argument-list
         return (
             VaultSettings(settings_cls),
             dotenv_settings,

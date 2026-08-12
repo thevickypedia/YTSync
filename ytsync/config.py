@@ -49,7 +49,7 @@ class EnvConfig(PydanticEnvConfig):
     bot_token: str
     bot_chat_ids: List[int]
     bot_users: List[str]
-    poll_interval: PositiveInt | PositiveFloat = Field(2, le=5, ge=1)
+    poll_interval: PositiveInt | PositiveFloat = Field(2, le=10, ge=1)
 
     # Remote config
     remote_host: str | None = None
@@ -72,6 +72,7 @@ class EnvConfig(PydanticEnvConfig):
         extra = "ignore"
 
 
+# noinspection argument-list
 env = EnvConfig()
 
 if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":

@@ -40,7 +40,6 @@ RUN python --version && \
 ADD LICENSE /app
 ADD README.md /app
 ADD requirements.txt /app
-ADD log_config.yml /app
 ADD entrypoint.py /app
 ADD ytsync /app/ytsync
 

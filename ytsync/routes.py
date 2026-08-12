@@ -54,6 +54,7 @@ async def telegram_webhook(request: Request):
         HTTPException:
             - 406: If the request payload is not JSON format-able.
     """
+    # noinspection unresolved-references
     LOGGER.debug(
         "Connection received from %s via %s",
         request.client.host,
@@ -74,7 +75,7 @@ async def telegram_webhook(request: Request):
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
     if payload := response.get("message"):
         LOGGER.debug(response)
-        process_request(payload)
+        await process_request(payload)
     else:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY.real,

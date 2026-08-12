@@ -81,7 +81,7 @@ async def run_polling():
             Exception,
         ) as error:
             if isinstance(error, asyncio.CancelledError):
-                LOGGER.info("Shutting down all threads and gracefully terminated.")
+                LOGGER.info("Terminated due to event cancellation.")
             else:
                 LOGGER.error(error)
             break

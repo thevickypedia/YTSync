@@ -78,8 +78,8 @@ def process_callback(
 async def queue_download(
     chat: Chat,
     callback: Callable,
-    playlist_url: str = None,
-    playlist_id: str = None,
+    playlist_url: str | None = None,
+    playlist_id: str | None = None,
 ) -> str:
     """Queue a playlist download in the process pool."""
     if playlist_url:
@@ -270,6 +270,7 @@ def download_playlist(
                 )
             ]
 
+        # noinspection bad-argument-type
         with yt_dlp.YoutubeDL(options) as ydl:
             ydl.download([url])
     except Exception as exc:

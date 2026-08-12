@@ -22,7 +22,8 @@ class Rsync:
         self.remote_path = env.remote_path
         self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, self._is_installed()))
 
-    def _is_installed(self) -> bool:
+    @staticmethod
+    def _is_installed() -> bool:
         """Returns a boolean flag to indicate the rsync installation status."""
         result = subprocess.run(
             ["command", "-V", "rsync"],

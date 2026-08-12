@@ -7,7 +7,7 @@ class Chat(BaseModel):
     """Base class for Chat model."""
 
     message_id: int
-    message_type: str = None
+    message_type: str | None = None
     date: int
 
     first_name: str

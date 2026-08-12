@@ -29,11 +29,19 @@ def webhook_is_available() -> bool:
         bool:
         Returns a boolean flag to indicate webhook availability.
     """
+    # TODO: There are possibilities of SSL errors that will leave the API in an un-reachable state
+    #   This logic only checks for the presence of a URL
+    #   1. Look for last_error key and check the timestamp of the occurrence
+    #   2. Create an intential circular dependency to send a message as a user and confirm it's receival node
+    #   Not sure if that's even possible OR an overkill
     try:
-        return bool(get_webhook().get("result", {}).get("url"))
+        webhook = get_webhook() or {}
+        result = webhook.get("result", {}) or {}
+        if isinstance(result, dict):
+            return bool(result.get("url"))
     except requests.RequestException as error:
         LOGGER.warning(error)
-        return False
+    return False
 
 
 @asynccontextmanager
