@@ -1,0 +1,74 @@
+Release Notes
+=============
+
+v0.0.1 (08/13/2026)
+-------------------
+- `f8cf728 <https://github.com/thevickypedia/YTSync/commit/f8cf7281ebb7d9fb91caeb160d71d295fd49cfe6>`_ chore: Release ``v0.0.1``
+- `d06aee9 <https://github.com/thevickypedia/YTSync/commit/d06aee95ca43fe8b01f2c4ffd585ae34a1873e1e>`_ chore: Update TODOs
+- `9b4c082 <https://github.com/thevickypedia/YTSync/commit/9b4c082b5eef59c6673477ebd9f1df963c06116a>`_ docs: Update README.md
+- `4612486 <https://github.com/thevickypedia/YTSync/commit/46124865718df30a68b5ba48613504f486638ca5>`_ feat: Add a status command and include polling vs webhook state in the response
+- `47f767d <https://github.com/thevickypedia/YTSync/commit/47f767dd71e950a2bb06d944efbba1dfc8fd8741>`_ perf: Add progress hooks regardless of transfer state to avoid race condition
+- `4d13f8a <https://github.com/thevickypedia/YTSync/commit/4d13f8a7f451f0f8406b19fedbd8d6021ff035b4>`_ refactor: Update telegram messages to be more explicit with styling; update linter
+- `272e080 <https://github.com/thevickypedia/YTSync/commit/272e080d02688417642d06a0d9b903428b4b5ae7>`_ perf: Check all files' existence instead of individual checkpoints with dedicated shell sessions
+- `b8a1272 <https://github.com/thevickypedia/YTSync/commit/b8a12726702538a76185f682bb9d1351e9309cce>`_ refactor: Remove all print statements; and make ``max_error_threshold`` configurable
+- `941878b <https://github.com/thevickypedia/YTSync/commit/941878b43835b76c850ef7bbd505207792abc8fe>`_ feat: Implement an acceptable error threshold for re-downloading playlist content; isolate the logic to get missing entries
+- `8b184a3 <https://github.com/thevickypedia/YTSync/commit/8b184a33bfddc553ca22e0a9731db194c0fe14be>`_ placeholder: Placeholder commit for a working ``exist_check`` feature
+- `0e1231d <https://github.com/thevickypedia/YTSync/commit/0e1231da4a1d9a8fbbf45d4ff906e30bbd2897b0>`_ perf: Improve webhook usability check during startup; delete webhooks before long polling
+- `6107c9f <https://github.com/thevickypedia/YTSync/commit/6107c9f8263533639d590560a6703fdfdaaf4c57>`_ perf: Address transient bugs and minor coding improvements
+- `c5a6b0d <https://github.com/thevickypedia/YTSync/commit/c5a6b0d4905b3d4bd45b3c99cbb962f8c40c20bf>`_ perf: Replace threaded timeout implementation with true async await; update process pool to maintain sequential downloads
+- `acd511c <https://github.com/thevickypedia/YTSync/commit/acd511ce717dc52c3edf7252b78c568f30801aaa>`_ perf: Add a timer with threadpool for inbound message responses
+- `c198c89 <https://github.com/thevickypedia/YTSync/commit/c198c89b6ed36e7dde54ab6d8968c8f354744953>`_ fix: Set ``progress_hooks`` only when rsync is enabled
+- `e7395d3 <https://github.com/thevickypedia/YTSync/commit/e7395d34526151d39950c10e8b216be50e779e17>`_ feat: Calculate download failures with ``progress_hooks``
+- `b597212 <https://github.com/thevickypedia/YTSync/commit/b597212092cc2e335b5e46efcf7d18ff713c6e42>`_ refactor: Remove word match and simply process response in bot controls
+- `58a5626 <https://github.com/thevickypedia/YTSync/commit/58a562649a1ce53779836a118377cc756ebef09d>`_ refactor: Redirect root to ``/docs`` endpoint
+- `34bfdc2 <https://github.com/thevickypedia/YTSync/commit/34bfdc260e6a2356063fbb620a0d719e07d37760>`_ refactor: Change the default logger from uvicorn to in-house
+- `baa062c <https://github.com/thevickypedia/YTSync/commit/baa062ca5dfd80b45df31282837adc32f19116da>`_ lint: Run linter!!
+- `9ffd361 <https://github.com/thevickypedia/YTSync/commit/9ffd3618d94ddaad7d4436ee6ce56559444cae79>`_ feat: Use reply option instead of new messages for updates through callback
+- `3768a31 <https://github.com/thevickypedia/YTSync/commit/3768a31148a2281718022d957f5ba3aa584e4efc>`_ lint: Update pre-commit hooks
+- `36d967c <https://github.com/thevickypedia/YTSync/commit/36d967c6e0963b93bc006f0070d6b5dcd479cdb6>`_ ci: Add GitHub workflows for ``pypi``, ``docker``, ``releases`` and ``release notes``
+- `4819458 <https://github.com/thevickypedia/YTSync/commit/48194580ac7dd622246a01242da5f7bfa72f550d>`_ fix: Avoid shutting down shared process pool when switching from webhooks to long polling and vice versa
+- `878f3a8 <https://github.com/thevickypedia/YTSync/commit/878f3a864f5b8437ebebbbf8418ec9476706a6bb>`_ perf: Make polling cancel safe and improve code quality
+- `84bfc4e <https://github.com/thevickypedia/YTSync/commit/84bfc4eef3e481d13c5cd77021aa25fec73420ae>`_ fix: Avoid failing on missing or invalid active tasks for polling
+- `3cbb5b8 <https://github.com/thevickypedia/YTSync/commit/3cbb5b87a262a387636aec9abc00f14e7dd96576>`_ chore: Rename project
+- `451591b <https://github.com/thevickypedia/YTSync/commit/451591b38a3d965e0114019338b16ea4b3ba2278>`_ chore: Add pyproject.toml and update .gitignore
+- `faab88c <https://github.com/thevickypedia/YTSync/commit/faab88c8ff9f9ce07b1905aac478b90dcbe57eaf>`_ perf: Gracefully shutdown process pool controllers
+- `b5776c1 <https://github.com/thevickypedia/YTSync/commit/b5776c171822fd3e4bfd87f2708b645f619b54a7>`_ lint: Update linter to 120 characters
+- `2d75979 <https://github.com/thevickypedia/YTSync/commit/2d75979edc84f9fc9d0e4d03fa61982393527221>`_ perf: Monitor both threads and processes along with transfer count
+- `2487cea <https://github.com/thevickypedia/YTSync/commit/2487cea6a75869dbb1b53950ed6448c7dfc43461>`_ fix: Avoid failing for transient errors
+- `cbe24be <https://github.com/thevickypedia/YTSync/commit/cbe24be6f4b715bb93903f990662f0740e3f2c4f>`_ fix: Remove quoting and let rsync handle it; skip partially downloaded files
+- `a9243f1 <https://github.com/thevickypedia/YTSync/commit/a9243f18de4d2272b5a9dd9ddc554ac1d7df5061>`_ feat: Use the ``delete_after_sync`` flag to remove the file after a transfer
+- `897e9e0 <https://github.com/thevickypedia/YTSync/commit/897e9e05a5056fe97629e25ce68af83116dd08f2>`_ perf: Use post hooks to avoid redundant process spawns
+- `021d85e <https://github.com/thevickypedia/YTSync/commit/021d85e4f39f3c0eda1fc137edfc7ff559257652>`_ fix: Auto create destination parent directories
+- `45f25ed <https://github.com/thevickypedia/YTSync/commit/45f25ed191792aaeb40431c70b0033a06881bd3d>`_ fix: Add missing ssh for docker containers
+- `a4be2f4 <https://github.com/thevickypedia/YTSync/commit/a4be2f4d6dc7b3ea378b225951f78f7c122ec95f>`_ perf: Set API worker count to 1 to avoid duplicating child processes
+- `404ba66 <https://github.com/thevickypedia/YTSync/commit/404ba66413620e9fe62b1619d63465b73d589d7e>`_ perf: Raise an error when rsync transfer fails
+- `5f6213d <https://github.com/thevickypedia/YTSync/commit/5f6213d26fbcd15e2f6c773d096fe7702edadad9>`_ feat: Create the concept of ``data`` directory for local storage
+- `69752b0 <https://github.com/thevickypedia/YTSync/commit/69752b03692b004dc87aac53d89c7fed097c4a54>`_ fix: Include ``ffmpeg`` and ``rsync`` within docker containers
+- `7e80062 <https://github.com/thevickypedia/YTSync/commit/7e8006292f41194d897a72200acfdfc92b878755>`_ feat: Dockerize the project
+- `57b9813 <https://github.com/thevickypedia/YTSync/commit/57b9813f1ec566f29ab3287e52ad287f5c74ad92>`_ perf: Create a pickleable error message to log the outcome
+- `84dffc5 <https://github.com/thevickypedia/YTSync/commit/84dffc5a41818b70e97b330eb79704f25068ce16>`_ fix: Drop polling task from active tasks when cancelled
+- `255ff41 <https://github.com/thevickypedia/YTSync/commit/255ff416504d79bde3b1b3d0cb03fcd6f49e465b>`_ refactor: Rename caller functions
+- `1296592 <https://github.com/thevickypedia/YTSync/commit/1296592f5fb7f5b8d37aa627d42f90d06d6339b5>`_ perf: Allow handling workers for processes and threads; use default options to get the folder name
+- `e10aa8c <https://github.com/thevickypedia/YTSync/commit/e10aa8cc3e0f243f8dead035ea814f2e2e84e338>`_ fix: Break loop when polling is cancelled and handle all exceptions in a single block
+- `585b831 <https://github.com/thevickypedia/YTSync/commit/585b83169d0c79f68a33233d44b2472e29668159>`_ perf: Restart polling when a webhook is deleted
+- `413261f <https://github.com/thevickypedia/YTSync/commit/413261fbcfe545b0667c05f1ddd2c2de3d3e40f5>`_ fix: Fix token vs secret mismatch for API inputs' validation
+- `ecf466e <https://github.com/thevickypedia/YTSync/commit/ecf466e84e2caa2ae53d811111f1d39e23dba724>`_ feat: Add new API endpoints to ``GET`` and ``DELETE`` webhooks
+- `547c4c6 <https://github.com/thevickypedia/YTSync/commit/547c4c651cecfcec99b4dd8768ea7bc5234d1ec2>`_ feat: Use fastapi to set webhook during run-time with a dedicated API endpoint
+- `74501c4 <https://github.com/thevickypedia/YTSync/commit/74501c4abc78faec2e6658f1b9b722ffc94c4a3d>`_ chore: Rename project
+- `6962ff7 <https://github.com/thevickypedia/YTSync/commit/6962ff775c4a7f8c650e482a9624437159d1f8e9>`_ feat: Include thumbnail and ffmpeg metadata
+- `7f710a6 <https://github.com/thevickypedia/YTSync/commit/7f710a6e209def23c71612f49cf01f822a09478d>`_ perf: Handle one callback per process instead of each thread
+- `61dd104 <https://github.com/thevickypedia/YTSync/commit/61dd10404a6da4674a52ee3e423c55b6ab338572>`_ feat: Add callback to notify transfer status
+- `5e8c4ad <https://github.com/thevickypedia/YTSync/commit/5e8c4ad1cb5f2ce1b6112cdc736fe6e047d4b031>`_ perf: Improve controllers and shutdown process
+- `e10ac04 <https://github.com/thevickypedia/YTSync/commit/e10ac04d5cbbfd0ec05d9b3aa4057b4a6e29b81a>`_ perf: Pass callback to the download and transfer states
+- `2cc042d <https://github.com/thevickypedia/YTSync/commit/2cc042dc0ebdacd832bd9bc05064c8e15e9b300c>`_ feat: Create parent directories in remote machine with escaped dirname(s)
+- `ce2e7aa <https://github.com/thevickypedia/YTSync/commit/ce2e7aa95c90732538a0fb962cf0ab13be54cb79>`_ feat: Setup end to end asynchronous file transfer to remote server using ``rsync``
+- `c1c7754 <https://github.com/thevickypedia/YTSync/commit/c1c77540ad7f0196e1d8d74da8f143f4ea288938>`_ fix: Account for invalid messages
+- `bfa5580 <https://github.com/thevickypedia/YTSync/commit/bfa5580cd19a1f6d2dfb590589df82259317b5ce>`_ feat: Add queued download based on incoming messages
+- `9a5dc09 <https://github.com/thevickypedia/YTSync/commit/9a5dc09031a6352b73c9e236e0f517b4cf07293f>`_ fix: Get ``Telegram`` bot working to return the received message when authenticated
+- `218ce76 <https://github.com/thevickypedia/YTSync/commit/218ce76dfcb352bf25669f1ad11ecd1860fd7512>`_ chore: Minimize ``.gitignore`` to a maintainable list
+- `ed5e2d4 <https://github.com/thevickypedia/YTSync/commit/ed5e2d4acc7948b65c8b184fac17a47fdab6dd8a>`_ perf: Run long polling as a backup for the webhook API
+- `e488a61 <https://github.com/thevickypedia/YTSync/commit/e488a61dc07fc9f385c1403c573b4de7784dc219>`_ lint: Add pre-commit for linter
+- `d3856fc <https://github.com/thevickypedia/YTSync/commit/d3856fca850eed67a416db8a5e393a3b739ce868>`_ feat: Add a base API to listen to telegram messages either via webhooks or long polling
+- `d8213e3 <https://github.com/thevickypedia/YTSync/commit/d8213e3f45fb70267e2c97b9d1a74f39a95c77e1>`_ chore: Add ``requirements.txt``
+- `3cf6cab <https://github.com/thevickypedia/YTSync/commit/3cf6cabc5ba6ea0034e7af5fc6f5ffca5128834b>`_ feat: Add ``vaultapi`` based pydantic config and a base ``__init__`` module
+- `ec5aa6b <https://github.com/thevickypedia/YTSync/commit/ec5aa6ba67223b081f0264ee4961cb52b533be02>`_ Initial commit
