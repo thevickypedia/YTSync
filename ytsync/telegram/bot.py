@@ -18,6 +18,7 @@ import requests
 import yt_dlp
 from yt_dlp.utils import DownloadError
 
+from ytsync.crontab import agent
 from ytsync.modules import config, exceptions, settings
 from ytsync.youtube import youtube
 
@@ -379,6 +380,13 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
                 txt += f" - [{config.env.bot_webhook_ip}]"
         else:
             txt = "Channel: Unknown"
+        if trackers := agent.get_trackers():
+            txt += "\n\n**Trackers:\n\n**"
+            for tracked in trackers:
+                url, name, schedule = tracked
+                txt += f"- Tracking {name!r} with schedule: {schedule}\n"
+        else:
+            LOGGER.info("No trackers found.")
         now = datetime.now()
         tzname = now.astimezone().tzname() or ""
         reply_to(chat, f"Server Timestamp: {now.strftime('%c')} {tzname}\n\n{txt}")
@@ -405,6 +413,7 @@ def tracker(playlist_url: str) -> str:
     assert all((info, info.get("title"))), "Failed to get the playlist title"
     title = info["title"]
     # TODO: Schedule should be user-input
+    #   Implement the ability to delete a schedule with /clear [OR] /release
     with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
