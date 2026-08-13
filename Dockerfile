@@ -1,31 +1,27 @@
-# TODO: Look into a light-weight image
-FROM ubuntu:24.04
+FROM python:3.12-slim-bookworm
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    DENO_INSTALL=/root/.deno \
+    PATH="/app/venv/bin:/root/.deno/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
 # System dependencies
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl \
         ca-certificates \
-        python3 \
-        python3-pip \
-        python3-venv \
-        python-is-python3 \
-        unzip \
-        git \
+        curl \
         ffmpeg \
+        git \
+        openssh-client \
         rsync \
-        openssh-client && \
+        unzip && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Deno
 RUN curl -fsSL https://deno.land/install.sh | sh
-
-ENV DENO_INSTALL="/root/.deno"
-ENV PATH="${DENO_INSTALL}/bin:${PATH}"
 
 # Verify system dependencies
 RUN python --version && \
@@ -38,28 +34,21 @@ RUN python --version && \
     ssh -V
 
 # Application files
-ADD LICENSE /app
-ADD README.md /app
-ADD requirements.txt /app
-ADD entrypoint.py /app
-ADD ytsync /app/ytsync
+COPY LICENSE README.md requirements.txt entrypoint.py /app/
+COPY ytsync /app/ytsync
 
 RUN ls -ltrh /app
 
-# Create venv
-RUN python -m venv /app/venv
+# Python virtual environment + dependencies
+RUN python -m venv /app/venv && \
+    /app/venv/bin/python -m pip install --upgrade pip uv && \
+    /app/venv/bin/uv pip install \
+        --python /app/venv/bin/python \
+        -r /app/requirements.txt && \
+    rm -rf /root/.cache/pip /root/.cache/uv
 
-# Install uv into the venv
-RUN /app/venv/bin/python -m pip install --upgrade pip uv
-
-# Install Python dependencies
-RUN /app/venv/bin/uv pip install \
-    --python /app/venv/bin/python \
-    -r /app/requirements.txt
-
-# Make venv the default Python
-ENV PATH="/app/venv/bin:${PATH}"
-
-RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh
+# SSH configuration directory
+RUN mkdir -p /root/.ssh && \
+    chmod 700 /root/.ssh
 
 ENTRYPOINT ["python", "entrypoint.py"]
