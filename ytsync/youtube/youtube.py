@@ -192,9 +192,8 @@ async def queue_download(
     if rsync.is_enabled and config.env.delete_after_sync:
         urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
-            # TODO: All 'os.path.join' needs to consider the destination OperatingSystem - currently assumes POSIX
             return (
-                f"{playlist_name!r} with [{preflight_stats['total']}] files "
+                f"{playlist_name!r} with [{preflight_stats['total']}] file(s) "
                 f"is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
             )
     else:
@@ -216,7 +215,7 @@ async def queue_download(
         )
     )
 
-    return f"Download queued for [{len(urls)}] files in {playlist_name!r}"
+    return f"Download queued for [{len(urls)}] file(s) in {playlist_name!r}"
 
 
 def transfer_file(local_path: str) -> None:

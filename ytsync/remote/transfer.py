@@ -1,6 +1,7 @@
 import logging
 import os
 import pathlib
+import posixpath
 import shlex
 import subprocess
 import time
@@ -47,7 +48,10 @@ class Rsync:
             Filepath in the remote server.
         """
         relative_path = os.path.relpath(local_path, config.env.data_dir)
-        return os.path.join(self.remote_path, relative_path)
+        return posixpath.join(
+            self.remote_path,
+            pathlib.Path(relative_path).as_posix(),
+        )
 
     def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
         """Return the local paths whose corresponding remote files exist.
