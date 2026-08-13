@@ -66,9 +66,9 @@ def process_callback(future: Future, callback: Callable, chat: Chat, name: str, 
     response = f"Download completed for {name!r} in {runtime:.2f}s\n\n"
     # No need to check for `rsync.is_enabled` - handled by `preflight_stats` being None
     if preflight_stats:
-        p_stats = "\n".join(list(stats_to_markdown(preflight_stats)))
+        p_stats = "\n".join(stats_to_markdown(preflight_stats))
         response += f"**Pre-flight result**:\n{p_stats}\n\n"
-    t_stats = "\n".join(list(stats_to_markdown(result)))
+    t_stats = "\n".join(stats_to_markdown(result))
     response += f"**Download/Transfer result**:\n{t_stats}\n\n"
     callback(
         chat=chat,
@@ -231,7 +231,6 @@ def transfer_callback(
     stats: Dict[str, int],
 ) -> None:
     """Called when an individual transfer thread completes."""
-    # TODO: Intermittent 0s - probably race condition?
     try:
         future.result()
     except Exception as exc:
@@ -283,11 +282,17 @@ def download_progress_hook(
     stats: Dict[str, int],
 ) -> None:
     """Track yt-dlp download completion."""
-    if data.get("status") == "finished":
+    status = data.get("status", "")
+    if status == "finished":
         stats["downloaded"] += 1
-
         LOGGER.info(
             "Download completed: %s",
+            data.get("filename"),
+        )
+    elif status == "error":
+        stats["download_failed"] += 1
+        LOGGER.error(
+            "Download failed: %s",
             data.get("filename"),
         )
 
@@ -299,6 +304,10 @@ def download_playlist(
 ) -> Dict[str, Any]:
     """Downloads a playlist and returns download/transfer statistics."""
     start = time.time()
+    stats: Dict[str, int] = {
+        "downloaded": 0,
+        "download_failed": 0,
+    }
     options: Dict[str, Any] = {
         "logger": LOGGER,
         "format": "bestaudio/best",
@@ -318,11 +327,12 @@ def download_playlist(
         ],
         "writethumbnail": True,
         "outtmpl": str(destination.joinpath(FILENAME_TEMPLATE)),
-    }
-
-    stats: Dict[str, int] = {
-        "downloaded": 0,
-        "download_failed": 0,
+        "progress_hooks": [
+            functools.partial(
+                download_progress_hook,
+                stats=stats,
+            )
+        ],
     }
 
     transfer_pool = None
@@ -348,12 +358,6 @@ def download_playlist(
             )
 
         options["post_hooks"] = [hook]
-        options["progress_hooks"] = [
-            functools.partial(
-                download_progress_hook,
-                stats=stats,
-            )
-        ]
 
     try:
         # noinspection bad-argument-type
