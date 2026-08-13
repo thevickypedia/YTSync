@@ -3,8 +3,9 @@ import logging
 import os
 import pathlib
 import time
+from collections.abc import Generator
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 
 import yt_dlp
 from pydantic import BaseModel
@@ -16,6 +17,7 @@ from ytsync.transfer import Rsync
 LOGGER = logging.getLogger("ytsync")
 process_pool = ProcessPoolExecutor(max_workers=1)
 rsync = Rsync()
+FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
 
 class Controller(BaseModel):
@@ -37,12 +39,18 @@ class Controller(BaseModel):
 controllers: List[Controller] = []
 
 
-def process_callback(
-    future: Future,
-    callback: Callable,
-    chat: Chat,
-    name: str,
-):
+def snake_to_pascal(snake_str: str) -> str:
+    """Converts a snake case to pascal cased string."""
+    return "".join(word.capitalize() for word in snake_str.split("_"))
+
+
+def stats_to_markdown(stats: Dict[str, int]) -> Generator[str]:
+    """Loops through a dict and updates all keys to be pascal and values to be integers."""
+    for k, v in stats.items():
+        yield f"**{snake_to_pascal(k)}**: {v}"
+
+
+def process_callback(future: Future, callback: Callable, chat: Chat, name: str, preflight_stats: Dict[str, int]):
     """Called when the playlist process finishes."""
     if error := future.exception():
         callback(
@@ -52,24 +60,16 @@ def process_callback(
         LOGGER.error("Process failed for %s: %s", name, error)
         return
 
-    result = future.result()
-
+    result: Dict[str, int] = future.result()
     runtime = result["runtime"]
-    downloaded = result["downloaded"]
-    download_failed = result["download_failed"]
-
-    response = (
-        f"Download complete: {name}\n\n"
-        f"Runtime: {runtime:.2f}s\n"
-        f"Successful downloads: {downloaded}\n"
-        f"Failed downloads: {download_failed}"
-    )
-
-    if "transferred" in result:
-        response += (
-            f"\n\n" f"Transfers:\n" f"  Successful: {result['transferred']}\n" f"  Failed: {result['transfer_failed']}"
-        )
-
+    result.pop("runtime")
+    response = f"Download completed for {name!r} in {runtime:.2f}s\n\n"
+    # No need to check for `rsync.is_enabled` - handled by `preflight_stats` being None
+    if preflight_stats:
+        p_stats = "\n".join(list(stats_to_markdown(preflight_stats)))
+        response += f"**Pre-flight result**:\n{p_stats}\n\n"
+    t_stats = "\n".join(list(stats_to_markdown(result)))
+    response += f"**Download/Transfer result**:\n{t_stats}\n\n"
     callback(
         chat=chat,
         response=response,
@@ -78,10 +78,9 @@ def process_callback(
 
 def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
     """Extract filename for a potential entry."""
-    # TODO: Set 'outtmpl' an env var (if validation is available in yt_dlp) [OR] top-level var - hardcoded
     # noinspection bad-argument-type
     return (
-        pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath("%(title)s.%(ext)s"))))
+        pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(FILENAME_TEMPLATE))))
         .with_suffix(".mp3")
         .name
     )
@@ -92,7 +91,7 @@ def get_missing_playlist_entries(
     info: Dict[str, Any],
     destination: pathlib.Path,
     playlist_url: str,
-) -> List[str]:
+) -> Tuple[List[str], Dict[str, int]]:
     """Get missing entries in a playlist URL when rsync is requested.
 
     Args:
@@ -105,15 +104,13 @@ def get_missing_playlist_entries(
         List[str]:
         Returns a list of all the missing entries.
     """
-    LOGGER.info("Info: %s", info)
+    counter = {"error": 0, "total": 0, "available": 0, "unavailable": 0}
     entries = info.get("entries")
-    LOGGER.info("Entries: %s", info.get("entries"))
     if not entries:
         LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
-        return [playlist_url]
+        return [playlist_url], counter
     urls = []
     url_file_map = {}
-    counter = {"error": 0, "total": 0, "available": 0, "unavailable": 0}
     for entry in info["entries"]:
         counter["total"] += 1
         if not entry or not entry.get("url"):
@@ -144,30 +141,22 @@ def get_missing_playlist_entries(
         urls.append(url)
         counter["unavailable"] += 1
 
-    # TODO: Include counter in the response when it's downloading - current response below
-    # Runtime: 4.78s
-    # Successful downloads: 0
-    # Failed downloads: 0
-    #
-    # Transfers:
-    #   Successful: 0
-    #   Failed: 0
     LOGGER.info(counter)
     # If there are items marked as unavailable
     # Don't care about error count since they'll likely fail to download for the same reason
     if counter["unavailable"]:
-        return urls
+        return urls, counter
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
     if counter["error"] > counter["total"] * (env.max_error_threshold / 100):
         LOGGER.info(
             "Error count %d EXCEEDS the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
         )
-        return [playlist_url]
+        return [playlist_url], counter
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
     )
-    return urls
+    return urls, counter
 
 
 async def queue_download(
@@ -198,20 +187,18 @@ async def queue_download(
     destination.mkdir(exist_ok=True)
 
     if rsync.is_enabled and env.delete_after_sync:
-        urls = get_missing_playlist_entries(ydl, info, destination, playlist_url)
+        urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
             # TODO: All 'os.path.join' needs to consider the destination OperatingSystem - currently assumes POSIX
             return f"{playlist_name!r} is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
     else:
         urls = [playlist_url]
+        preflight_stats = None
 
     future = process_pool.submit(download_playlist, playlist_name, urls, destination)
 
     wrapped_callback = functools.partial(
-        process_callback,
-        callback=callback,
-        chat=chat,
-        name=playlist_name,
+        process_callback, callback=callback, chat=chat, name=playlist_name, preflight_stats=preflight_stats
     )
 
     future.add_done_callback(wrapped_callback)
@@ -223,7 +210,7 @@ async def queue_download(
         )
     )
 
-    return f"Download queued for {playlist_name!r}"
+    return f"Download queued for {len(urls)} in {playlist_name!r}"
 
 
 def transfer_file(local_path: str) -> None:
@@ -244,6 +231,7 @@ def transfer_callback(
     stats: Dict[str, int],
 ) -> None:
     """Called when an individual transfer thread completes."""
+    # TODO: Intermittent 0s - probably race condition?
     try:
         future.result()
     except Exception as exc:
@@ -329,7 +317,7 @@ def download_playlist(
             },
         ],
         "writethumbnail": True,
-        "outtmpl": str(destination.joinpath("%(title)s.%(ext)s")),
+        "outtmpl": str(destination.joinpath(FILENAME_TEMPLATE)),
     }
 
     stats: Dict[str, int] = {
