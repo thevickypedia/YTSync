@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pathlib
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.routing import APIRoute
 
 from ytsync.api import routes
+from ytsync.crontab import agent
 from ytsync.modules import config
 from ytsync.telegram import poll, webhook
 from ytsync.version import __version__
@@ -92,6 +94,8 @@ async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
     # noinspection HttpUrlsUsage
     LOGGER.info("Hosting at http://%s:%s", config.env.host, config.env.port)
+    LOGGER.info("Initiating background tasks...")
+    bg_task = asyncio.create_task(agent.executor())
     if not webhook_is_usable():
         try:
             webhook.delete_webhook()
@@ -100,6 +104,7 @@ async def lifespan(_: FastAPI):
         poll.start_polling()
     yield
     await poll.stop_polling()
+    bg_task.cancel()
     poll.shutdown_event()
     LOGGER.info("Shutting down API server.")
 
