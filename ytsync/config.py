@@ -42,6 +42,9 @@ class EnvConfig(PydanticEnvConfig):
     # Concurrency
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
 
+    # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist
+    max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
+
     # Data
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
 

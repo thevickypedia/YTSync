@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from enum import StrEnum
-from typing import Dict, List, Callable
+from typing import Callable, Dict, List
 
 import requests
 from yt_dlp.utils import DownloadError
@@ -357,7 +357,6 @@ async def process_text(chat: Chat, data_class: Text) -> None:
     else:
         send_message(chat_id=chat.id, response="Un-processable payload")
         return
-    data_class.text = data_class.text.replace("override", "").replace("OVERRIDE", "")
     text_lower = data_class.text.lower().lstrip("/")
     if text_lower == "start":
         send_message(chat.id, intro())
@@ -383,6 +382,7 @@ async def executor(command: str, chat: Chat) -> None:
     """
     LOGGER.info("Request: %s", command)
     # TODO:
+    #   In addition to 'test' respond to 'status' - differentiate polling vs webhook along with the webhook url and IP
     #   Implement a queued system for messages
     #   Take multiple URLs with multiprocessing (timeout * # of URLs)
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
@@ -410,9 +410,7 @@ async def executor(command: str, chat: Chat) -> None:
         )
         return
     try:
-        # TODO: No log messages are printed within queue
-        name = await asyncio.wait_for(queue_download(**kwargs), timeout=10)
-        response = f"Download queued for {name!r}"
+        response = await asyncio.wait_for(queue_download(**kwargs), timeout=10)
     except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
         if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")

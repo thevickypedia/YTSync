@@ -48,7 +48,6 @@ class Rsync:
         relative_path = os.path.relpath(local_path, env.data_dir)
         remote_path = os.path.join(self.remote_path, relative_path)
         LOGGER.info("local path: %s -> remote path: %s", local_path, remote_path)
-        print(f"local path: {local_path} -> remote path: {remote_path}")
         return remote_path
 
     # TODO: This solution needs to account multiple paths and have built-in exponential back off

@@ -104,15 +104,11 @@ def get_missing_playlist_entries(
         List[str]:
         Returns a list of all the missing entries.
     """
-    # TODO: Make this configurable
-    max_failure_threshold = 30
-
     LOGGER.info("Info: %s", info)
     entries = info.get("entries")
     LOGGER.info("Entries: %s", info.get("entries"))
     if not entries:
         LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
-        print(f"'info' block does not contain valid 'entries': {info}")
         return [playlist_url]
     urls = []
     counter = {"error": 0, "total": 0, "available": 0, "unavailable": 0}
@@ -120,18 +116,15 @@ def get_missing_playlist_entries(
         counter["total"] += 1
         if not entry or not entry.get("url"):
             LOGGER.warning("Invalid entry found: %s", entry or "None")
-            print(f"Invalid entry found: {entry or 'None'}")
             counter["error"] += 1
             continue
         try:
             filename = get_filename(ydl, entry, destination)
         except Exception as error:
-            print(error)
             LOGGER.error(error)
             counter["error"] += 1
             continue
         LOGGER.info("Processed filename: %s", filename)
-        print(f"Processed filename: {filename}")
         local_path = destination.joinpath(filename)
         # TODO: Individual checks will start a new shell - this is EXPENSIVE
         #   Either do threads or check all files in one SSH session
@@ -140,10 +133,8 @@ def get_missing_playlist_entries(
                 "'%s' already exists on the remote server; skipping...",
                 local_path,
             )
-            print(f"{local_path!r} already exists on the remote server; skipping...")
             counter["available"] += 1
             continue
-        print(f"{local_path} does not exist on the remote server")
         LOGGER.info(
             "'%s' does not exist on the remote server",
             local_path,
@@ -151,19 +142,27 @@ def get_missing_playlist_entries(
         urls.append(entry["url"])
         counter["unavailable"] += 1
 
+    # TODO: Include counter in the response when it's downloading - current response below
+    # Runtime: 4.78s
+    # Successful downloads: 0
+    # Failed downloads: 0
+    #
+    # Transfers:
+    #   Successful: 0
+    #   Failed: 0
     LOGGER.info(counter)
     # If there are items marked as unavailable
     # Don't care about error count since they'll likely fail to download for the same reason
     if counter["unavailable"]:
         return urls
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
-    if counter["error"] > counter["total"] * (max_failure_threshold / 100):
+    if counter["error"] > counter["total"] * (env.max_error_threshold / 100):
         LOGGER.info(
-            "Error count %d EXCEEDS the acceptable threshold of %d pct", counter["error"], max_failure_threshold
+            "Error count %d EXCEEDS the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
         )
         return [playlist_url]
     # Happy path - no unavailability and error rate is within the acceptable bounds
-    LOGGER.info("Error count %d is within the acceptable threshold of %d pct", counter["error"], max_failure_threshold)
+    LOGGER.info("Error count %d is within the acceptable threshold of %d pct", counter["error"], env.max_error_threshold)
     return urls
 
 
@@ -198,7 +197,7 @@ async def queue_download(
         urls = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
             # TODO: All 'os.path.join' needs to consider the destination OperatingSystem - currently assumes POSIX
-            return f"{playlist_name!r} is already available at {os.path.join(env.data_dir, playlist_name)}"
+            return f"{playlist_name!r} is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
     else:
         urls = [playlist_url]
 
