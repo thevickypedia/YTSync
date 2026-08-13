@@ -79,6 +79,7 @@ def process_callback(
 def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
     """Extract filename for a potential entry."""
     # TODO: Set 'outtmpl' an env var (if validation is available in yt_dlp) [OR] top-level var - hardcoded
+    # noinspection bad-argument-type
     return (
         pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath("%(title)s.%(ext)s"))))
         .with_suffix(".mp3")
@@ -111,6 +112,7 @@ def get_missing_playlist_entries(
         LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
         return [playlist_url]
     urls = []
+    url_file_map = {}
     counter = {"error": 0, "total": 0, "available": 0, "unavailable": 0}
     for entry in info["entries"]:
         counter["total"] += 1
@@ -124,11 +126,11 @@ def get_missing_playlist_entries(
             LOGGER.error(error)
             counter["error"] += 1
             continue
-        LOGGER.info("Processed filename: %s", filename)
-        local_path = destination.joinpath(filename)
-        # TODO: Individual checks will start a new shell - this is EXPENSIVE
-        #   Either do threads or check all files in one SSH session
-        if rsync.remote_file_exists(local_path):
+        url_file_map[entry["url"]] = destination.joinpath(filename)
+
+    existing = rsync.remote_files_exist(list(url_file_map.values()))
+    for url, local_path in url_file_map.items():
+        if local_path in existing:
             LOGGER.info(
                 "'%s' already exists on the remote server; skipping...",
                 local_path,
@@ -139,7 +141,7 @@ def get_missing_playlist_entries(
             "'%s' does not exist on the remote server",
             local_path,
         )
-        urls.append(entry["url"])
+        urls.append(url)
         counter["unavailable"] += 1
 
     # TODO: Include counter in the response when it's downloading - current response below
@@ -162,7 +164,9 @@ def get_missing_playlist_entries(
         )
         return [playlist_url]
     # Happy path - no unavailability and error rate is within the acceptable bounds
-    LOGGER.info("Error count %d is within the acceptable threshold of %d pct", counter["error"], env.max_error_threshold)
+    LOGGER.info(
+        "Error count %d is within the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
+    )
     return urls
 
 

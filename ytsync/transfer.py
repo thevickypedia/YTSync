@@ -4,6 +4,7 @@ import pathlib
 import shlex
 import subprocess
 import time
+from typing import List, Set
 
 from ytsync.config import env
 
@@ -46,30 +47,56 @@ class Rsync:
             Filepath in the remote server.
         """
         relative_path = os.path.relpath(local_path, env.data_dir)
-        remote_path = os.path.join(self.remote_path, relative_path)
-        LOGGER.info("local path: %s -> remote path: %s", local_path, remote_path)
-        return remote_path
+        return os.path.join(self.remote_path, relative_path)
 
-    # TODO: This solution needs to account multiple paths and have built-in exponential back off
-    def remote_file_exists(self, local_path: pathlib.Path) -> bool:
-        """Return True if filename exists on the remote server."""
-        remote_path = self.get_remote_path(local_path)
-        remote_command = f"test -f {shlex.quote(remote_path)}"
-        command = [
-            "ssh",
-            f"{self.remote_user}@{self.remote_host}",
-            remote_command,
-        ]
-        LOGGER.debug("Command: %r", command)
-        result = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            timeout=3,
-        )
-        LOGGER.debug("Return code: ", result.returncode)
-        return result.returncode == 0
+    def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
+        """Return the local paths whose corresponding remote files exist.
+
+        All files are checked in a single SSH invocation. If the SSH call fails,
+        retry with exponential backoff.
+        """
+        if not local_paths:
+            return set()
+
+        remote_paths = [self.get_remote_path(path) for path in local_paths]
+
+        # Generate a shell script that outputs the index of every file that exists.
+        #
+        # Using indexes rather than paths avoids having to parse filenames containing
+        # spaces, newlines, etc. on the local side.
+        checks = "\n".join(f"test -f {shlex.quote(path)} && printf '%d\\n' {i}" for i, path in enumerate(remote_paths))
+
+        max_attempts = 5
+        initial_delay = 1.0
+
+        for attempt in range(max_attempts):
+            try:
+                result = subprocess.run(
+                    [
+                        "ssh",
+                        f"{self.remote_user}@{self.remote_host}",
+                        "bash",
+                        "-s",
+                    ],
+                    input=checks,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                )
+                existing = set()
+                for line in result.stdout.splitlines():
+                    try:
+                        existing.add(local_paths[int(line)])
+                    except (ValueError, IndexError):
+                        # Unexpected output from the remote shell.
+                        continue
+                return existing
+            except subprocess.CalledProcessError:
+                if attempt == max_attempts - 1:
+                    raise
+                delay = initial_delay * (2**attempt)
+                time.sleep(delay)
+        return set()
 
     def run(self, source: str) -> None:
         """Syncs a file to remote server with exponential backoff retry logic."""
