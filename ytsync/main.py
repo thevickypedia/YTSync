@@ -9,16 +9,10 @@ from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.routing import APIRoute
 
-from ytsync.config import env
-from ytsync.poll import shutdown_event, start_polling, stop_polling
-from ytsync.routes import (
-    api_delete_webhook,
-    api_get_webhook,
-    api_set_webhook,
-    telegram_webhook,
-)
+from ytsync.api import routes
+from ytsync.modules import config
+from ytsync.telegram import poll, webhook
 from ytsync.version import __version__
-from ytsync.webhook import delete_webhook, get_webhook
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -66,8 +60,8 @@ def webhook_is_usable() -> bool:
     max_pending_updates = 100
     max_error_age_seconds = 60
     try:
-        webhook = get_webhook() or {}
-        result = webhook.get("result", {}) or {}
+        existing_webhook = webhook.get_webhook() or {}
+        result = existing_webhook.get("result", {}) or {}
         assert isinstance(result, dict), f"Invalid result object received: {result}"
     except (AssertionError, requests.RequestException) as error:
         LOGGER.warning(error)
@@ -97,16 +91,16 @@ def webhook_is_usable() -> bool:
 async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
     # noinspection HttpUrlsUsage
-    LOGGER.info("Hosting at http://%s:%s", env.host, env.port)
+    LOGGER.info("Hosting at http://%s:%s", config.env.host, config.env.port)
     if not webhook_is_usable():
         try:
-            delete_webhook()
+            webhook.delete_webhook()
         except requests.RequestException:
             pass
-        start_polling()
+        poll.start_polling()
     yield
-    await stop_polling()
-    shutdown_event()
+    await poll.stop_polling()
+    poll.shutdown_event()
     LOGGER.info("Shutting down API server.")
 
 
@@ -115,11 +109,11 @@ async def docs_redirect() -> RedirectResponse:
     return RedirectResponse("/docs")
 
 
-routes = [
+api_routes = [
     APIRoute(
-        endpoint=telegram_webhook,
+        endpoint=routes.telegram_webhook,
         methods=["POST"],
-        path=env.bot_endpoint,
+        path=config.env.bot_endpoint,
         include_in_schema=False,
     ),
     APIRoute(
@@ -129,34 +123,34 @@ routes = [
         include_in_schema=False,
     ),
     APIRoute(
-        endpoint=api_get_webhook,
+        endpoint=routes.api_get_webhook,
         methods=["GET"],
         path="/get-webhook",
     ),
     APIRoute(
-        endpoint=api_set_webhook,
+        endpoint=routes.api_set_webhook,
         methods=["POST"],
         path="/set-webhook",
     ),
     APIRoute(
-        endpoint=api_delete_webhook,
+        endpoint=routes.api_delete_webhook,
         methods=["DELETE"],
         path="/delete-webhook",
     ),
 ]
 
-app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=routes)
+app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=api_routes)
 
 
 def start():
     """Start the Jarvis API server using Uvicorn."""
     module_name = pathlib.Path(__file__)
     kwargs = dict(
-        host=env.host,
-        port=env.port,
+        host=config.env.host,
+        port=config.env.port,
         app=f"{module_name.parent.stem}.main:app",
         workers=1,
     )
-    if env.log_config:
-        kwargs["log_config"] = env.log_config
+    if config.env.log_config:
+        kwargs["log_config"] = config.env.log_config
     uvicorn.run(**kwargs)

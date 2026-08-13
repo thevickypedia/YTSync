@@ -11,10 +11,8 @@ from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, HttpUrl
 
-from ytsync.bot import process_request
-from ytsync.config import env
-from ytsync.poll import start_polling, stop_polling
-from ytsync.webhook import delete_webhook, get_webhook, set_webhook
+from ytsync.modules import config
+from ytsync.telegram import bot, poll, webhook
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(description="Enter your telegram username")
@@ -31,10 +29,10 @@ def two_factor(request: Request) -> bool:
         bool:
         Flag to indicate the calling function if the auth was successful.
     """
-    if env.bot_secret:
+    if config.env.bot_secret:
         if secrets.compare_digest(
             request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""),
-            env.bot_secret,
+            config.env.bot_secret,
         ):
             return True
     else:
@@ -75,7 +73,7 @@ async def telegram_webhook(request: Request):
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
     if payload := response.get("message"):
         LOGGER.debug(response)
-        await process_request(payload)
+        await bot.process_request(payload)
     else:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY.real,
@@ -96,7 +94,7 @@ async def api_set_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to POST a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_token):
+    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
@@ -105,15 +103,15 @@ async def api_set_webhook(
             raise HTTPException(
                 status_code=HTTPStatus.BAD_REQUEST.real,
             )
-        if set_webhook(
+        if webhook.set_webhook(
             webhook=str(body.webhook),
             secret_token=body.secret_token,
             webhook_ip=body.webhook_ip,
         ):
-            env.bot_webhook = body.webhook
-            env.bot_secret = body.secret_token
+            config.env.bot_webhook = body.webhook
+            config.env.bot_secret = body.secret_token
             async with POLL_LOCK:
-                await stop_polling()
+                await poll.stop_polling()
             raise HTTPException(
                 status_code=HTTPStatus.OK.real,
             )
@@ -129,12 +127,12 @@ async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to GET a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_token):
+    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
     try:
-        return get_webhook()
+        return webhook.get_webhook()
     except requests.RequestException as error:
         LOGGER.error(error)
         raise HTTPException(
@@ -146,15 +144,15 @@ async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to DELETE a webhook."""
-    if not secrets.compare_digest(apikey.credentials, env.bot_token):
+    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
     try:
-        response = delete_webhook()
+        response = webhook.delete_webhook()
         async with POLL_LOCK:
-            await stop_polling()
-            start_polling()
+            await poll.stop_polling()
+            poll.start_polling()
         return response
     except requests.RequestException as error:
         LOGGER.error(error)

@@ -17,14 +17,14 @@ from pydantic import (
     PositiveInt,
 )
 
-from ytsync.pydantic_config import PydanticEnvConfig
+from ytsync.modules import pydantic_config
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 
 
-class EnvConfig(PydanticEnvConfig):
+class EnvConfig(pydantic_config.PydanticEnvConfig):
     """Configuration values for the project.
 
     >>> EnvConfig

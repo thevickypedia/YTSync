@@ -6,7 +6,7 @@ import subprocess
 import time
 from typing import List, Set
 
-from ytsync.config import env
+from ytsync.modules import config
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -20,9 +20,9 @@ class Rsync:
 
     def __init__(self):
         """Instantiates the object."""
-        self.remote_host = env.remote_host
-        self.remote_user = env.remote_user
-        self.remote_path = env.remote_path
+        self.remote_host = config.env.remote_host
+        self.remote_user = config.env.remote_user
+        self.remote_path = config.env.remote_path
         self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, self._is_installed()))
 
     @staticmethod
@@ -46,7 +46,7 @@ class Rsync:
             str:
             Filepath in the remote server.
         """
-        relative_path = os.path.relpath(local_path, env.data_dir)
+        relative_path = os.path.relpath(local_path, config.env.data_dir)
         return os.path.join(self.remote_path, relative_path)
 
     def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
@@ -117,7 +117,7 @@ class Rsync:
         ]
 
         attempt = 0
-        while attempt < env.max_retries:
+        while attempt < config.env.max_retries:
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True)
 
@@ -127,26 +127,30 @@ class Rsync:
 
                 # Sync failed
                 attempt += 1
-                if attempt < env.max_retries:
+                if attempt < config.env.max_retries:
                     # Calculate exponential backoff: 3s, 6s, 12s, 24s...
-                    delay = env.backoff_factor * (2 ** (attempt - 1))
-                    LOGGER.warning(f"⚠️  Sync failed (Attempt {attempt}/{env.max_retries}). Retrying in {delay}s...")
+                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
+                    LOGGER.warning(
+                        f"⚠️  Sync failed (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s..."
+                    )
                     LOGGER.warning(f"   Error: {result.stderr.strip()}")
                     time.sleep(delay)
                 else:
-                    LOGGER.error(f"❌ Failed to sync {source} after {env.max_retries} attempts.")
+                    LOGGER.error(f"❌ Failed to sync {source} after {config.env.max_retries} attempts.")
                     LOGGER.error(f"   Final Error: {result.stderr.strip()}")
                     raise RuntimeError(f"Transfer Error: {result.stderr.strip()}") from None
             except Exception as e:
                 attempt += 1
-                if attempt < env.max_retries:
-                    delay = env.backoff_factor * (2 ** (attempt - 1))
+                if attempt < config.env.max_retries:
+                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
                     LOGGER.warning(
-                        f"⚠️  Exception occurred (Attempt {attempt}/{env.max_retries}). Retrying in {delay}s..."
+                        f"⚠️  Exception occurred (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s..."
                     )
                     LOGGER.warning(f"   Error: {e}")
                     time.sleep(delay)
                 else:
-                    LOGGER.error(f"❌ Failed to sync {source} after {env.max_retries} attempts due to exception.")
+                    LOGGER.error(
+                        f"❌ Failed to sync {source} after {config.env.max_retries} attempts due to exception."
+                    )
                     LOGGER.error(f"   Final Error: {e}")
                     raise RuntimeError(f"Transfer Error [{type(e).__name__}]: {e}") from None

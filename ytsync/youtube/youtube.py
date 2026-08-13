@@ -10,13 +10,12 @@ from typing import Any, Callable, Dict, List, Tuple
 import yt_dlp
 from pydantic import BaseModel
 
-from ytsync.config import env
-from ytsync.settings import Chat
-from ytsync.transfer import Rsync
+from ytsync.modules import config, settings
+from ytsync.remote import transfer
 
 LOGGER = logging.getLogger("ytsync")
 process_pool = ProcessPoolExecutor(max_workers=1)
-rsync = Rsync()
+rsync = transfer.Rsync()
 FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
 
@@ -50,7 +49,9 @@ def stats_to_markdown(stats: Dict[str, int]) -> Generator[str]:
         yield f"**{snake_to_pascal(k)}**: {v}"
 
 
-def process_callback(future: Future, callback: Callable, chat: Chat, name: str, preflight_stats: Dict[str, int]):
+def process_callback(
+    future: Future, callback: Callable, chat: settings.Chat, name: str, preflight_stats: Dict[str, int]
+):
     """Called when the playlist process finishes."""
     if error := future.exception():
         callback(
@@ -147,20 +148,22 @@ def get_missing_playlist_entries(
     if counter["unavailable"]:
         return urls, counter
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
-    if counter["error"] > counter["total"] * (env.max_error_threshold / 100):
+    if counter["error"] > counter["total"] * (config.env.max_error_threshold / 100):
         LOGGER.info(
-            "Error count %d EXCEEDS the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
+            "Error count %d EXCEEDS the acceptable threshold of %d pct",
+            counter["error"],
+            config.env.max_error_threshold,
         )
         return [playlist_url], counter
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
-        "Error count %d is within the acceptable threshold of %d pct", counter["error"], env.max_error_threshold
+        "Error count %d is within the acceptable threshold of %d pct", counter["error"], config.env.max_error_threshold
     )
     return urls, counter
 
 
 async def queue_download(
-    chat: Chat,
+    chat: settings.Chat,
     callback: Callable,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
@@ -183,10 +186,10 @@ async def queue_download(
     playlist_name = info.get("title")
     assert playlist_name, "Failed to extract the playlist's title"
 
-    destination = env.data_dir.joinpath(playlist_name)
+    destination = config.env.data_dir.joinpath(playlist_name)
     destination.mkdir(exist_ok=True)
 
-    if rsync.is_enabled and env.delete_after_sync:
+    if rsync.is_enabled and config.env.delete_after_sync:
         urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
             # TODO: All 'os.path.join' needs to consider the destination OperatingSystem - currently assumes POSIX
@@ -217,7 +220,7 @@ def transfer_file(local_path: str) -> None:
     """Transfer a completed file."""
     LOGGER.info("Transferring: %s", local_path)
     rsync.run(source=local_path)
-    if env.delete_after_sync:
+    if config.env.delete_after_sync:
         LOGGER.info(
             "Transfer complete; deleting: %s",
             local_path,
@@ -338,7 +341,7 @@ def download_playlist(
     transfer_pool = None
     if rsync.is_enabled:
         transfer_pool = ThreadPoolExecutor(
-            max_workers=env.max_transfers,
+            max_workers=config.env.max_transfers,
             thread_name_prefix=f"transfer-{name}",
         )
         stats.update(

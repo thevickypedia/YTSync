@@ -17,12 +17,10 @@ from typing import Callable, Dict, List
 import requests
 from yt_dlp.utils import DownloadError
 
-from ytsync.config import env
-from ytsync.exceptions import BotInUse, BotTokenInvalid, BotWebhookConflict
-from ytsync.settings import Audio, Chat, Document, PhotoFragment, Text, Video, Voice
-from ytsync.youtube import queue_download
+from ytsync.modules import config, exceptions, settings
+from ytsync.youtube import youtube
 
-BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
+BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
 ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
@@ -82,7 +80,7 @@ def _make_request(
 
 
 def reply_to(
-    chat: Chat,
+    chat: settings.Chat,
     response: str,
     parse_mode: str | None = "markdown",
     retry: bool = False,
@@ -185,10 +183,10 @@ async def poll_for_messages(offset: int) -> None | int:
 
     if response.status_code == 409:
         if "webhook" in err_desc.lower():
-            raise BotWebhookConflict(err_desc)
-        raise BotInUse(err_desc)
+            raise exceptions.BotWebhookConflict(err_desc)
+        raise exceptions.BotInUse(err_desc)
     if response.status_code == 401:
-        raise BotTokenInvalid(error_data)
+        raise exceptions.BotTokenInvalid(error_data)
     raise ConnectionError(error_data)
 
 
@@ -200,7 +198,7 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
     """
     LOGGER.debug(payload)
     # noinspection not-mapping
-    chat = Chat(**{**payload, **payload["chat"], **payload["from"]})
+    chat = settings.Chat(**{**payload, **payload["chat"], **payload["from"]})
     if not await authenticate(chat):
         LOGGER.warning(payload)
         return
@@ -209,41 +207,41 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         return
     if payload.get("text"):
         chat.message_type = "text"
-        await process_text(chat, Text(**payload))
+        await process_text(chat, settings.Text(**payload))
     elif payload.get("voice"):
         chat.message_type = "voice"
         # noinspection not-mapping
-        await process_voice(chat, Voice(**payload["voice"]))
+        await process_voice(chat, settings.Voice(**payload["voice"]))
     elif payload.get("document"):
         chat.message_type = "document"
         # noinspection not-mapping
-        await process_document(chat, Document(**payload["document"]))
+        await process_document(chat, settings.Document(**payload["document"]))
     elif payload.get("video"):
         chat.message_type = "video"
         # noinspection not-mapping
-        await process_video(chat, Video(**payload["video"]))
+        await process_video(chat, settings.Video(**payload["video"]))
     elif payload.get("audio"):
         chat.message_type = "audio"
         # noinspection not-mapping
-        await process_audio(chat, Audio(**payload["audio"]))
+        await process_audio(chat, settings.Audio(**payload["audio"]))
     elif payload.get("photo"):
         # Matches for compressed images
         chat.message_type = "photo"
         # noinspection not-mapping,not-iterable
-        await process_photo(chat, [PhotoFragment(**d) for d in payload["photo"]])
+        await process_photo(chat, [settings.PhotoFragment(**d) for d in payload["photo"]])
     else:
         reply_to(chat, "Payload type is not allowed.")
 
 
 def username_is_valid(username: str) -> bool:
     """Compares username and returns True if username is allowed."""
-    for user in env.bot_users:
+    for user in config.env.bot_users:
         if secrets.compare_digest(user, username):
             return True
     return False
 
 
-async def authenticate(chat: Chat) -> bool:
+async def authenticate(chat: settings.Chat) -> bool:
     """Authenticates the user with ``userId`` and ``userName``.
 
     Args:
@@ -260,14 +258,14 @@ async def authenticate(chat: Chat) -> bool:
             response=f"Sorry {chat.first_name}! I can't process requests from bots.",
         )
         return False
-    if chat.id not in env.bot_chat_ids or not username_is_valid(username=chat.username):
+    if chat.id not in config.env.bot_chat_ids or not username_is_valid(username=chat.username):
         LOGGER.error("Unauthorized chatID [%d] or userName [%s]", chat.id, chat.username)
         send_message(chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})")
         return False
     return True
 
 
-async def verify_timeout(chat: Chat) -> bool:
+async def verify_timeout(chat: settings.Chat) -> bool:
     """Verifies whether the message was received in the past 60 seconds.
 
     Args:
@@ -289,7 +287,7 @@ async def verify_timeout(chat: Chat) -> bool:
     return False
 
 
-async def process_photo(chat: Chat, data_class: List[PhotoFragment]) -> None:
+async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFragment]) -> None:
     """Processes a photo input.
 
     Args:
@@ -304,7 +302,7 @@ async def process_photo(chat: Chat, data_class: List[PhotoFragment]) -> None:
     )
 
 
-async def process_audio(chat: Chat, data_class: Audio) -> None:
+async def process_audio(chat: settings.Chat, data_class: settings.Audio) -> None:
     """Processes an audio input.
 
     Args:
@@ -314,7 +312,7 @@ async def process_audio(chat: Chat, data_class: Audio) -> None:
     await process_document(chat, data_class)
 
 
-async def process_video(chat: Chat, data_class: Video) -> None:
+async def process_video(chat: settings.Chat, data_class: settings.Video) -> None:
     """Processes a video input.
 
     Args:
@@ -324,7 +322,7 @@ async def process_video(chat: Chat, data_class: Video) -> None:
     await process_document(chat, data_class)
 
 
-async def process_voice(chat: Chat, data_class: Voice) -> None:
+async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None:
     """Processes the audio file in payload received after checking for authentication.
 
     Args:
@@ -335,7 +333,9 @@ async def process_voice(chat: Chat, data_class: Voice) -> None:
     reply_to(chat, "Audio inputs are not supported at the moment. Please try text input.")
 
 
-async def process_document(chat: Chat, data_class: Document | Audio | Video) -> None:
+async def process_document(
+    chat: settings.Chat, data_class: settings.Document | settings.Audio | settings.Video
+) -> None:
     """Processes the document in payload received after checking for authentication.
 
     Args:
@@ -346,7 +346,7 @@ async def process_document(chat: Chat, data_class: Document | Audio | Video) -> 
     reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
-async def process_text(chat: Chat, data_class: Text) -> None:
+async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     """Processes the text in payload received after checking for authentication.
 
     Args:
@@ -372,10 +372,10 @@ async def process_text(chat: Chat, data_class: Text) -> None:
         task = ACTIVE_TASKS.get("poll")
         if task and not task.done():
             txt = "Channel: Polling"
-        elif env.bot_webhook:
-            txt = f"Channel: Webhook via {env.bot_webhook}"
-            if env.bot_webhook_ip:
-                txt += f" - [{env.bot_webhook_ip}]"
+        elif config.env.bot_webhook:
+            txt = f"Channel: Webhook via {config.env.bot_webhook}"
+            if config.env.bot_webhook_ip:
+                txt += f" - [{config.env.bot_webhook_ip}]"
         else:
             txt = "Channel: Unknown"
         now = datetime.now()
@@ -385,7 +385,7 @@ async def process_text(chat: Chat, data_class: Text) -> None:
     await executor(data_class.text, chat)
 
 
-async def executor(command: str, chat: Chat) -> None:
+async def executor(command: str, chat: settings.Chat) -> None:
     """Executes the command via offline communicator.
 
     Args:
@@ -402,7 +402,7 @@ async def executor(command: str, chat: Chat) -> None:
     #   Full E2E testing for webhook + polling solution - must be always reachable
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
     #   Allow updates without telegram bot - just through the API (different auth mechanism - currently bot token ONLY)
-    kwargs: Dict[str, str | Callable | Chat] = dict(chat=chat, callback=reply_to)
+    kwargs: Dict[str, str | Callable | settings.Chat] = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
@@ -422,7 +422,7 @@ async def executor(command: str, chat: Chat) -> None:
         )
         return
     try:
-        response = await asyncio.wait_for(queue_download(**kwargs), timeout=10)
+        response = await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=10)
     except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
         if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")

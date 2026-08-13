@@ -3,23 +3,17 @@ import logging
 
 import requests.exceptions
 
-from ytsync.bot import ACTIVE_TASKS, poll_for_messages
-from ytsync.config import env
-from ytsync.exceptions import (
-    BotInUse,
-    BotTokenInvalid,
-    BotWebhookConflict,
-    EgressErrors,
-)
-from ytsync.youtube import controllers, process_pool
+from ytsync.modules import config, exceptions
+from ytsync.telegram import bot
+from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
 
 
 def shutdown_event():
     """Shuts down all the threads and gracefully terminates the processes."""
-    process_pool.shutdown(wait=True)
-    for controller in controllers:
+    youtube.process_pool.shutdown(wait=True)
+    for controller in youtube.controllers:
         LOGGER.info("Shutting down controller for: %s", controller.name)
         try:
             result = controller.future.result()
@@ -31,7 +25,7 @@ def shutdown_event():
 
 async def stop_polling() -> None:
     """Stop polling for incoming messages."""
-    task = ACTIVE_TASKS.pop("poll", None)
+    task = bot.ACTIVE_TASKS.pop("poll", None)
     if task and not task.done():
         LOGGER.info("Stopping long poll")
         task.cancel("polling stopped")
@@ -43,12 +37,12 @@ async def stop_polling() -> None:
 
 def start_polling() -> None:
     """Start polling for incoming messages."""
-    task = ACTIVE_TASKS.get("poll")
+    task = bot.ACTIVE_TASKS.get("poll")
     if task and not task.done():
         LOGGER.warning("Polling task already running")
         return
     LOGGER.info("Polling for incoming messages...")
-    ACTIVE_TASKS["poll"] = asyncio.create_task(run_polling())
+    bot.ACTIVE_TASKS["poll"] = asyncio.create_task(run_polling())
 
 
 async def run_polling():
@@ -57,24 +51,24 @@ async def run_polling():
     failed_connections = 0
     while True:
         try:
-            await asyncio.sleep(env.poll_interval)
-            if offset_id := await poll_for_messages(offset):
+            await asyncio.sleep(config.env.poll_interval)
+            if offset_id := await bot.poll_for_messages(offset):
                 offset = offset_id
-        except EgressErrors as error:
+        except exceptions.EgressErrors as error:
             if isinstance(error, requests.exceptions.ReadTimeout):
                 continue
             LOGGER.error(error)
             failed_connections += 1
-            if failed_connections > env.max_retries:
+            if failed_connections > config.env.max_retries:
                 LOGGER.critical("ATTENTION::Couldn't recover from connection error. Restarting current process.")
-                delay = failed_connections * env.backoff_factor
+                delay = failed_connections * config.env.backoff_factor
                 LOGGER.info("Restarting in %d seconds.", delay)
                 await asyncio.sleep(delay)  # Simple backoff wait
         except (
             asyncio.CancelledError,
-            BotWebhookConflict,
-            BotInUse,
-            BotTokenInvalid,
+            exceptions.BotWebhookConflict,
+            exceptions.BotInUse,
+            exceptions.BotTokenInvalid,
             KeyboardInterrupt,
             Exception,
         ) as error:
