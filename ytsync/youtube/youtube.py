@@ -166,8 +166,8 @@ def get_missing_playlist_entries(
 
 
 async def queue_download(
-    chat: settings.Chat = None,
-    callback: Callable = None,
+    chat: settings.Chat | None = None,
+    callback: Callable | None = None,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
 ) -> str:
@@ -175,7 +175,7 @@ async def queue_download(
     if playlist_url:
         LOGGER.debug("Playlist URL: %s", playlist_url)
     elif playlist_id:
-        playlist_url = f"https://music.youtube.com/playlist?list={playlist_id}"
+        playlist_url = config.PLAYLIST_URL.format(playlist_id=playlist_id)
     else:
         raise ValueError("Either 'playlist_url' [OR] 'playlist_id' is required!!")
 

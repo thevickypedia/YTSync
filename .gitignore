@@ -4,6 +4,7 @@ logs/
 __pycache__/
 
 .DS_Store
+*.db
 *.env
 *.mp3
 *.mp4

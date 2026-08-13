@@ -18,11 +18,12 @@ from pydantic import (
     PositiveInt,
 )
 
-from ytsync.modules import pydantic_config
+from ytsync.modules import database, pydantic_config
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
+PLAYLIST_URL = "https://music.youtube.com/playlist?list={playlist_id}"
 
 
 class AllowedCronSchedule(StrEnum):
@@ -58,6 +59,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     # Data
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
+    database: FilePath | NewPath = pathlib.Path("data/database.db")
 
     # Telegram config
     bot_token: str
@@ -93,3 +95,8 @@ env = EnvConfig()
 if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":
     warnings.warn("No remote connections have been setup, all downloaded media will be stored locally.")
 env.data_dir.mkdir(exist_ok=True)
+db = database.Database(database=env.database)
+db.create_table(
+    table_name="ytsync",
+    columns=["url", "name", "schedule"],
+)

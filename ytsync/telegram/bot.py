@@ -15,6 +15,7 @@ from enum import StrEnum
 from typing import Callable, Dict, List
 
 import requests
+import yt_dlp
 from yt_dlp.utils import DownloadError
 
 from ytsync.modules import config, exceptions, settings
@@ -385,6 +386,36 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     await executor(data_class.text, chat)
 
 
+def tracker(playlist_url: str) -> str:
+    """Handles tracker for a playlist URL.
+
+    Args:
+        playlist_url: URL to sync on schedule.
+
+    Returns:
+        str:
+        Returns the response string for Telegram.
+    """
+    with yt_dlp.YoutubeDL() as ydl:
+        info = ydl.extract_info(
+            playlist_url,
+            download=False,
+            process=False,
+        )
+    assert all((info, info.get("title"))), "Failed to get the playlist title"
+    title = info["title"]
+    # TODO: Schedule should be user-input
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);",
+            (playlist_url, title, config.env.default_tracker),
+        )
+        connection.commit()
+    # TODO: Expand schedule to meaningful statement
+    return f"Playlist {title!r} will be synced based on the schedule: {config.env.default_tracker}"
+
+
 async def executor(command: str, chat: settings.Chat) -> None:
     """Executes the command via offline communicator.
 
@@ -395,7 +426,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
     LOGGER.info("Request: %s", command)
     # TODO:
     #   Playlist tracker - Telegram /track input
-    #   Alerts when switching between polling and webhooks
+    #   Alerts when switching between polling and webhooks (heartbeat to test connectivity)
     #   Write unit tests and code coverage pipeline in GHA
     #   Feature to allow cookies
     #   Playlist thumbnail gets downloaded but not sent as hooks (hence not transferred)
@@ -416,15 +447,18 @@ async def executor(command: str, chat: settings.Chat) -> None:
             reply_to(chat, "Invalid entry, a playlist url is required followed by /url")
             return
     elif command.startswith("/track"):
-        if statement := command.replace("/track", "").strip():
-            # TODO: Create a DB and store it
-            print(statement)
+        if (statement := command.replace("/track", "").strip()).startswith("http"):
+            try:
+                response = tracker(statement)
+                reply_to(chat, response)
+            except Exception as error:
+                reply_to(chat, error.__str__())
         else:
             reply_to(
                 chat,
-                "Invalid entry, a playlist url [OR] id is required followed by /track",
+                "Invalid entry, a playlist url is required followed by /track",
             )
-            return
+        return
     else:
         send_message(
             chat_id=chat.id,
