@@ -1,10 +1,9 @@
 import asyncio
 import logging
-from typing import Dict
 
 import requests.exceptions
 
-from ytsync.bot import poll_for_messages
+from ytsync.bot import ACTIVE_TASKS, poll_for_messages
 from ytsync.config import env
 from ytsync.exceptions import (
     BotInUse,
@@ -15,7 +14,6 @@ from ytsync.exceptions import (
 from ytsync.youtube import controllers, process_pool
 
 LOGGER = logging.getLogger("ytsync")
-ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
 
 def shutdown_event():

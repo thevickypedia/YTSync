@@ -24,6 +24,7 @@ from ytsync.youtube import queue_download
 
 BASE_URL = f"https://api.telegram.org/bot{env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
+ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
 
 class RequestMethods(StrEnum):
@@ -367,8 +368,19 @@ async def process_text(chat: Chat, data_class: Text) -> None:
             response="Use '/id' or '/url' followed by the identifier.",
         )
         return
-    if text_lower == "test":
-        reply_to(chat, f"Test message received at - {datetime.now().strftime('%c')}")
+    if text_lower in ("status", "stats", "test"):
+        task = ACTIVE_TASKS.get("poll")
+        if task and not task.done():
+            txt = "Channel: Polling"
+        elif env.bot_webhook:
+            txt = f"Channel: Webhook via {env.bot_webhook}"
+            if env.bot_webhook_ip:
+                txt += f" - [{env.bot_webhook_ip}]"
+        else:
+            txt = "Channel: Unknown"
+        now = datetime.now()
+        tzname = now.astimezone().tzname() or ""
+        reply_to(chat, f"Server Timestamp: {now.strftime('%c')} {tzname}\n\n{txt}")
         return
     await executor(data_class.text, chat)
 
@@ -382,12 +394,8 @@ async def executor(command: str, chat: Chat) -> None:
     """
     LOGGER.info("Request: %s", command)
     # TODO:
-    #   In addition to 'test' respond to 'status' - differentiate polling vs webhook along with the webhook url and IP
-    #   Implement a queued system for messages
-    #   Take multiple URLs with multiprocessing (timeout * # of URLs)
-    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    #   JellyFin - playlists different directories in env vars
     #   Playlist tracker - Telegram /track input
+    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
     #   Write unit tests and code coverage pipeline
     #   Full E2E testing for webhook + polling solution - must be always reachable
     kwargs: Dict[str, str | Callable | Chat] = dict(chat=chat, callback=reply_to)
