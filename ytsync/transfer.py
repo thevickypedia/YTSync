@@ -1,8 +1,9 @@
 import logging
 import os
+import pathlib
+import shlex
 import subprocess
 import time
-import shlex
 
 from ytsync.config import env
 
@@ -34,7 +35,7 @@ class Rsync:
         )
         return result.returncode == 0
 
-    def get_remote_path(self, local_path: str) -> str:
+    def get_remote_path(self, local_path: pathlib.Path | str) -> str:
         """Use existing local filepath to derive the filepath in remote server.
 
         Args:
@@ -51,7 +52,7 @@ class Rsync:
         return remote_path
 
     # TODO: This solution needs to account multiple paths and have built-in exponential back off
-    def remote_file_exists(self, local_path: str) -> bool:
+    def remote_file_exists(self, local_path: pathlib.Path) -> bool:
         """Return True if filename exists on the remote server."""
         remote_path = self.get_remote_path(local_path)
         remote_command = f"test -f {shlex.quote(remote_path)}"
@@ -71,9 +72,9 @@ class Rsync:
         LOGGER.debug("Return code: ", result.returncode)
         return result.returncode == 0
 
-
-    def run(self, source: str, destination: str) -> None:
+    def run(self, source: str) -> None:
         """Syncs a file to remote server with exponential backoff retry logic."""
+        destination = self.get_remote_path(source)
         remote_location = f"{self.remote_user}@{self.remote_host}:" f"{destination}"
         LOGGER.info("Syncing: '%s' -> '%s'", source, remote_location)
 
