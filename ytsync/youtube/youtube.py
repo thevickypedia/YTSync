@@ -193,7 +193,10 @@ async def queue_download(
         urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
             # TODO: All 'os.path.join' needs to consider the destination OperatingSystem - currently assumes POSIX
-            return f"{playlist_name!r} is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
+            return (
+                f"{playlist_name!r} with [{preflight_stats['total']}] files "
+                f"is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
+            )
     else:
         urls = [playlist_url]
         preflight_stats = None
@@ -213,7 +216,7 @@ async def queue_download(
         )
     )
 
-    return f"Download queued for {len(urls)} in {playlist_name!r}"
+    return f"Download queued for [{len(urls)}] files in {playlist_name!r}"
 
 
 def transfer_file(local_path: str) -> None:
