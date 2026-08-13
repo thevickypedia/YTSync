@@ -2,6 +2,7 @@ import functools
 import logging
 import os
 import pathlib
+import posixpath
 import time
 from collections.abc import Generator
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
@@ -39,40 +40,43 @@ controllers: List[Controller] = []
 
 
 def snake_to_pascal(snake_str: str) -> str:
-    """Converts a snake case to pascal cased string."""
+    """Convert a snake_case string to PascalCase."""
     return "".join(word.capitalize() for word in snake_str.split("_"))
 
 
-def stats_to_markdown(stats: Dict[str, int]) -> Generator[str]:
-    """Loops through a dict and updates all keys to be pascal and values to be integers."""
-    for k, v in stats.items():
-        yield f"**{snake_to_pascal(k)}**: {v}"
+def stats_to_markdown(stats: Dict[str, int]) -> Generator[str, None, None]:
+    """Format statistics as Telegram Markdown."""
+    for key, value in stats.items():
+        yield f"*{snake_to_pascal(key)}*: {value}"
 
 
 def process_callback(
-    future: Future, name: str, preflight_stats: Dict[str, int], callback: Callable = None, chat: settings.Chat = None
+    future: Future,
+    name: str,
+    preflight_stats: Dict[str, int],
+    callback: Callable | None = None,
+    chat: settings.Chat | None = None,
 ):
     """Called when the playlist process finishes."""
     if error := future.exception():
-        # TODO: North star: Only chat should be optional - callback should be an ntfy [OR] telegram notif without chat
+        # TODO: North star: Only chat should be optional - callback should be an ntfy [OR] telegram without 'chat' param
         if callback and chat:
             callback(
                 chat=chat,
-                response=f"Download failed for {name}\n\n{error}",
+                response=f"❌ *Download failed*\n\n*{name}*\n\n{error}",
             )
         LOGGER.error("Process failed for %s: %s", name, error)
         return
 
     result: Dict[str, int] = future.result()
-    runtime = result["runtime"]
-    result.pop("runtime")
-    response = f"Download completed for {name!r} in {runtime:.2f}s\n\n"
+    runtime = result.pop("runtime")
+    response = f"✅ *Download completed*\n\n" f"*{name}* completed in `{runtime:.2f}s`.\n\n"
     # No need to check for `rsync.is_enabled` - handled by `preflight_stats` being None
     if preflight_stats:
         p_stats = "\n".join(stats_to_markdown(preflight_stats))
-        response += f"**Pre-flight result**:\n{p_stats}\n\n"
+        response += f"*Pre-flight result:*\n{p_stats}\n\n"
     t_stats = "\n".join(stats_to_markdown(result))
-    response += f"**Download/Transfer result**:\n{t_stats}\n\n"
+    response += f"*Download/Transfer result:*\n{t_stats}"
     if callback and chat:
         callback(
             chat=chat,
@@ -196,8 +200,9 @@ async def queue_download(
         urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
         if not urls:
             return (
-                f"{playlist_name!r} with [{preflight_stats['total']}] file(s) "
-                f"is already available at {os.path.join(rsync.remote_path, playlist_name)!r}"
+                "ℹ️ *Already available*\n\n"
+                f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
+                f"`{posixpath.join(rsync.remote_path, playlist_name)}`"
             )
     else:
         urls = [playlist_url]
@@ -222,7 +227,7 @@ async def queue_download(
         )
     )
 
-    return f"Download queued for [{len(urls)}] file(s) in {playlist_name!r}"
+    return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
 
 
 def transfer_file(local_path: str) -> None:

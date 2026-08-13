@@ -29,7 +29,6 @@ PLAYLIST_URL = "https://music.youtube.com/playlist?list={playlist_id}"
 class AllowedCronSchedule(StrEnum):
     """Allowed cron schedule to track playlists."""
 
-    MINUTELY = "* * * * *"
     HOURLY = "0 * * * *"
     DAILY = "0 0 * * *"
     WEEKLY = "0 0 * * 0"
@@ -59,7 +58,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     # Data
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
-    database: FilePath | NewPath = pathlib.Path("data/database.db")
+    database: str | pathlib.Path = Field("database.db", pattern=r"^[A-Za-z0-9]+\.db$")
 
     # Telegram config
     bot_token: str
@@ -95,8 +94,6 @@ env = EnvConfig()
 if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":
     warnings.warn("No remote connections have been setup, all downloaded media will be stored locally.")
 env.data_dir.mkdir(exist_ok=True)
+env.database = env.data_dir.joinpath(env.database)
 db = database.Database(database=env.database)
-db.create_table(
-    table_name="ytsync",
-    columns=["url", "name", "schedule"],
-)
+db.create_table(table_name="ytsync", columns=["url", "name", "schedule"], primary_key="url")

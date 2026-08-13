@@ -64,7 +64,7 @@ class Database:
         timeout: Timeout for the connection to database.
     """
 
-    def __init__(self, database: pathlib.Path, timeout: int = 3):
+    def __init__(self, database: pathlib.Path | str, timeout: int = 3):
         """Instantiates the class ``Database`` with the given datastore and timeout options.
 
         Args:

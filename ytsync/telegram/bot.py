@@ -381,15 +381,16 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         else:
             txt = "Channel: Unknown"
         if trackers := agent.get_trackers():
-            txt += "\n\n**Trackers:\n\n**"
-            for tracked in trackers:
+            txt += "\n\n*Trackers:*\n"
+            for idx, tracked in enumerate(trackers, start=1):
                 url, name, schedule = tracked
-                txt += f"- Tracking {name!r} with schedule: {schedule}\n"
+                txt += f"{idx}. *{name}* — `{schedule}`\n"
         else:
             LOGGER.info("No trackers found.")
         now = datetime.now()
         tzname = now.astimezone().tzname() or ""
-        reply_to(chat, f"Server Timestamp: {now.strftime('%c')} {tzname}\n\n{txt}")
+        final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}"
+        reply_to(chat, final)
         return
     await executor(data_class.text, chat)
 
@@ -416,13 +417,25 @@ def tracker(playlist_url: str) -> str:
     #   Implement the ability to delete a schedule with /clear [OR] /release
     with config.db.connection as connection:
         cursor = connection.cursor()
+        cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
+        row = cursor.fetchone()
+        if row is not None:
+            url, name, schedule = row
+            return (
+                "❌ *Already scheduled*\n\n"
+                f"*{name}* is already scheduled for sync.\n\n"
+                f"*URL:* `{url}`\n\n"
+                f"*Schedule:* `{schedule}`\n\n"
+                "Use `/status` to get the schedule index, then "
+                "`/delete <index>` to remove it before adding a new schedule."
+            )
         cursor.execute(
             "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);",
             (playlist_url, title, config.env.default_tracker),
         )
         connection.commit()
     # TODO: Expand schedule to meaningful statement
-    return f"Playlist {title!r} will be synced based on the schedule: {config.env.default_tracker}"
+    return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
 
 
 async def executor(command: str, chat: settings.Chat) -> None:
@@ -447,13 +460,13 @@ async def executor(command: str, chat: settings.Chat) -> None:
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
         else:
-            reply_to(chat, "Invalid entry, a playlist id is required followed by /id")
+            reply_to(chat, "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`")
             return
     elif command.startswith("/url"):
         if playlist_url := command.replace("/url", "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
-            reply_to(chat, "Invalid entry, a playlist url is required followed by /url")
+            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
             return
     elif command.startswith("/track"):
         if (statement := command.replace("/track", "").strip()).startswith("http"):
@@ -461,17 +474,18 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 response = tracker(statement)
                 reply_to(chat, response)
             except Exception as error:
-                reply_to(chat, error.__str__())
+                reply_to(chat, f"❌ *Error*\n\n`{error}`")
         else:
-            reply_to(
-                chat,
-                "Invalid entry, a playlist url is required followed by /track",
-            )
+            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
         return
     else:
         send_message(
             chat_id=chat.id,
-            response=f"Invalid command received: {command}\n\nEither use '/id' or '/url' followed by the identifier.",
+            response=(
+                f"❌ *Invalid command*\n\n"
+                f"Received: `{command}`\n\n"
+                f"Use `/id` or `/url` followed by the identifier."
+            ),
         )
         return
     try:
@@ -480,7 +494,9 @@ async def executor(command: str, chat: settings.Chat) -> None:
         if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")
             response = (
-                "Failed to retrieve metadata within 10s - please try to a different '/id' or '/url' for this content"
+                "❌ *Metadata lookup failed*\n\n"
+                "Failed to retrieve metadata within 10 seconds.\n\n"
+                "Please try a different `/id` or `/url` for this content."
             )
         else:
             response = error.__str__()
