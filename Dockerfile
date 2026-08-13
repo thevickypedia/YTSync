@@ -1,3 +1,4 @@
+# TODO: Look into a light-weight image
 FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive

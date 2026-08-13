@@ -395,9 +395,13 @@ async def executor(command: str, chat: Chat) -> None:
     LOGGER.info("Request: %s", command)
     # TODO:
     #   Playlist tracker - Telegram /track input
-    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    #   Write unit tests and code coverage pipeline
+    #   Alerts when switching between polling and webhooks
+    #   Write unit tests and code coverage pipeline in GHA
+    #   Feature to allow cookies
+    #   Playlist thumbnail gets downloaded but not sent as hooks (hence not transferred)
     #   Full E2E testing for webhook + polling solution - must be always reachable
+    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
+    #   Allow updates without telegram bot - just through the API (different auth mechanism - currently bot token ONLY)
     kwargs: Dict[str, str | Callable | Chat] = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
