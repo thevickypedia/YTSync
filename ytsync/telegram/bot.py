@@ -415,6 +415,16 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             reply_to(chat, "Invalid entry, a playlist url is required followed by /url")
             return
+    elif command.startswith("/track"):
+        if statement := command.replace("/track", "").strip():
+            # TODO: Create a DB and store it
+            print(statement)
+        else:
+            reply_to(
+                chat,
+                "Invalid entry, a playlist url [OR] id is required followed by /track",
+            )
+            return
     else:
         send_message(
             chat_id=chat.id,

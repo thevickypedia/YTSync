@@ -50,14 +50,16 @@ def stats_to_markdown(stats: Dict[str, int]) -> Generator[str]:
 
 
 def process_callback(
-    future: Future, callback: Callable, chat: settings.Chat, name: str, preflight_stats: Dict[str, int]
+    future: Future, name: str, preflight_stats: Dict[str, int], callback: Callable = None, chat: settings.Chat = None
 ):
     """Called when the playlist process finishes."""
     if error := future.exception():
-        callback(
-            chat=chat,
-            response=f"Download failed for {name}\n\n{error}",
-        )
+        # TODO: North star: Only chat should be optional - callback should be an ntfy [OR] telegram notif without chat
+        if callback and chat:
+            callback(
+                chat=chat,
+                response=f"Download failed for {name}\n\n{error}",
+            )
         LOGGER.error("Process failed for %s: %s", name, error)
         return
 
@@ -71,10 +73,11 @@ def process_callback(
         response += f"**Pre-flight result**:\n{p_stats}\n\n"
     t_stats = "\n".join(stats_to_markdown(result))
     response += f"**Download/Transfer result**:\n{t_stats}\n\n"
-    callback(
-        chat=chat,
-        response=response,
-    )
+    if callback and chat:
+        callback(
+            chat=chat,
+            response=response,
+        )
 
 
 def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
@@ -163,8 +166,8 @@ def get_missing_playlist_entries(
 
 
 async def queue_download(
-    chat: settings.Chat,
-    callback: Callable,
+    chat: settings.Chat = None,
+    callback: Callable = None,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
 ) -> str:
@@ -203,7 +206,11 @@ async def queue_download(
     future = process_pool.submit(download_playlist, playlist_name, urls, destination)
 
     wrapped_callback = functools.partial(
-        process_callback, callback=callback, chat=chat, name=playlist_name, preflight_stats=preflight_stats
+        process_callback,
+        name=playlist_name,
+        preflight_stats=preflight_stats,
+        callback=callback,
+        chat=chat,
     )
 
     future.add_done_callback(wrapped_callback)

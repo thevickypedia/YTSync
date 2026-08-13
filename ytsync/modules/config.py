@@ -3,6 +3,7 @@ import os
 import pathlib
 import socket
 import warnings
+from enum import StrEnum
 from ipaddress import IPv4Address
 from multiprocessing import current_process
 from typing import Any, Dict, List
@@ -22,6 +23,16 @@ from ytsync.modules import pydantic_config
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
+
+
+class AllowedCronSchedule(StrEnum):
+    """Allowed cron schedule to track playlists."""
+
+    MINUTELY = "* * * * *"
+    HOURLY = "0 * * * *"
+    DAILY = "0 0 * * *"
+    WEEKLY = "0 0 * * 0"
+    MONTHLY = "0 0 1 * *"
 
 
 class EnvConfig(pydantic_config.PydanticEnvConfig):
@@ -53,6 +64,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     bot_chat_ids: List[int]
     bot_users: List[str]
     poll_interval: PositiveInt | PositiveFloat = Field(2, le=10, ge=1)
+    default_tracker: AllowedCronSchedule = AllowedCronSchedule.DAILY
 
     # Remote config
     remote_host: str | None = None
