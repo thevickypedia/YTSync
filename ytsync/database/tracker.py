@@ -1,12 +1,18 @@
+import asyncio
+import logging
 from typing import List, Tuple
 
 import yt_dlp
 
 from ytsync.modules import config
+from ytsync.youtube import youtube
+
+LOGGER = logging.getLogger("ytsync")
 
 
 def get() -> List[Tuple[str, str, str]]:
     """Get trackers stored in the database."""
+    # TODO: Create a structured array with dataclasses for all DB interactions including columns and tables
     with config.db.connection as connection:
         cursor = connection.cursor()
         return cursor.execute("SELECT * FROM ytsync").fetchall()
@@ -52,6 +58,27 @@ def insert(playlist_url: str) -> str:
         connection.commit()
     # TODO: Expand schedule to meaningful statement
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
+
+
+def sync(idx: int) -> str:
+    """Syncs a tracker (on-demand) by its 1-based status index."""
+    idx -= 1
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        trackers = cursor.execute("SELECT url, name, schedule FROM ytsync").fetchall()
+        if not trackers:
+            return "⚠️ No trackers found!"
+        if idx < 0 or idx >= len(trackers):
+            return (
+                "❌ *Invalid tracker index*\n\n"
+                f"Tracker `{idx + 1}` does not exist.\n\n"
+                "Use `/status` to see the available tracker indexes."
+            )
+        url, name, _ = trackers[idx]
+        LOGGER.info("Executing sync for '%s' with '%s'", name, url)
+        # TODO: Implement alternate notifications or just pass chat into this
+        asyncio.create_task(youtube.queue_download(playlist_url=url))
+    return f"✅ *Sync queued*\n\n" f"*{name}* will be synced shortly."
 
 
 def delete(idx: int) -> str:

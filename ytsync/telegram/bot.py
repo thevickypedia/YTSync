@@ -441,6 +441,17 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
         return
+    elif command.startswith("/sync"):
+        if index := command.replace("/sync", "").strip():
+            if index.isdigit():
+                response = tracker.sync(int(index))
+                reply_to(chat, response)
+            else:
+                reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")
+            return
+        else:
+            reply_to(chat, "❌ *Invalid entry*\n\nAn index ID is required, followed by `/sync`.")
+        return
     elif command.startswith("/delete"):
         if index := command.replace("/delete", "").strip():
             if index.isdigit():
@@ -450,7 +461,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")
             return
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
+            reply_to(chat, f"❌ *Invalid entry*\n\nAn index ID is required, followed by `/delete`.{trackers_text()}")
         return
     else:
         send_message(
