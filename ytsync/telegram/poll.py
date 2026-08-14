@@ -10,7 +10,7 @@ from ytsync.youtube import youtube
 LOGGER = logging.getLogger("ytsync")
 
 
-def shutdown_event():
+def shutdown_event() -> None:
     """Shuts down all the threads and gracefully terminates the processes."""
     youtube.process_pool.shutdown(wait=True)
     for controller in youtube.controllers:

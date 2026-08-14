@@ -38,3 +38,11 @@ class BotTokenInvalid(BotError):
     >>> BotTokenInvalid
 
     """
+
+
+class InvalidArgument(ValueError):
+    """Custom ``ValueError`` to indicate invalid args.
+
+    >>> InvalidArgument
+
+    """

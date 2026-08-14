@@ -14,6 +14,8 @@ class DatabaseConnection:
 
     """
 
+    connection: sqlite3.Connection
+
     def __init__(self, datastore: str, timeout: int):
         """Instantiates the database connection.
 
@@ -23,7 +25,6 @@ class DatabaseConnection:
         """
         self.datastore = datastore
         self.timeout = timeout
-        self.connection: sqlite3.Connection | None = None
 
     def __enter__(self) -> sqlite3.Connection:
         """Creates and returns a database connection.
@@ -71,7 +72,7 @@ class Database:
             database: Database filepath.
             timeout: Connection timeout for the database.
         """
-        self.datastore = database
+        self.datastore = str(database)
         self.timeout = timeout
 
     @property

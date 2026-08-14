@@ -137,6 +137,7 @@ class CronExpression:
                     if special_char in cron_atom:
                         break
                 else:
+                    # noinspection bad-argument-type
                     unified.update(parse_atom(cron_atom, span))
 
             self.numerical_tab.append(unified)
@@ -146,7 +147,7 @@ class CronExpression:
 
     def check_trigger(
         self,
-        date_tuple: Tuple[int, int, int, int, int] | Tuple[int, ...] = None,
+        date_tuple: Tuple[int, int, int, int, int] | Tuple[int, ...] | None = None,
         utc_offset: int = 0,
     ) -> bool:
         """Returns boolean indicating if the trigger is active at the given time.

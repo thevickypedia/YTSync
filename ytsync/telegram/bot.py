@@ -15,10 +15,9 @@ from enum import StrEnum
 from typing import Callable, Dict, List
 
 import requests
-import yt_dlp
 from yt_dlp.utils import DownloadError
 
-from ytsync.crontab import agent
+from ytsync.database import tracker
 from ytsync.modules import config, exceptions, settings
 from ytsync.youtube import youtube
 
@@ -348,6 +347,19 @@ async def process_document(
     reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
+def trackers_text() -> str:
+    """Get trackers in a Markdown friendly format."""
+    txt = ""
+    if trackers := tracker.get():
+        txt += "\n\n*Trackers:*\n"
+        for idx, tracked in enumerate(trackers, start=1):
+            url, name, schedule = tracked
+            txt += f"{idx}. *{name}* — `{schedule}`\n"
+    else:
+        LOGGER.info("No trackers found.")
+    return txt
+
+
 async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     """Processes the text in payload received after checking for authentication.
 
@@ -380,62 +392,13 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
                 txt += f" - [{config.env.bot_webhook_ip}]"
         else:
             txt = "Channel: Unknown"
-        if trackers := agent.get_trackers():
-            txt += "\n\n*Trackers:*\n"
-            for idx, tracked in enumerate(trackers, start=1):
-                url, name, schedule = tracked
-                txt += f"{idx}. *{name}* — `{schedule}`\n"
-        else:
-            LOGGER.info("No trackers found.")
+        txt += trackers_text()
         now = datetime.now()
         tzname = now.astimezone().tzname() or ""
         final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}"
         reply_to(chat, final)
         return
     await executor(data_class.text, chat)
-
-
-def tracker(playlist_url: str) -> str:
-    """Handles tracker for a playlist URL.
-
-    Args:
-        playlist_url: URL to sync on schedule.
-
-    Returns:
-        str:
-        Returns the response string for Telegram.
-    """
-    with yt_dlp.YoutubeDL() as ydl:
-        info = ydl.extract_info(
-            playlist_url,
-            download=False,
-            process=False,
-        )
-    assert all((info, info.get("title"))), "Failed to get the playlist title"
-    title = info["title"]
-    # TODO: Schedule should be user-input
-    #   Implement the ability to delete a schedule with /clear [OR] /release
-    with config.db.connection as connection:
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
-        row = cursor.fetchone()
-        if row is not None:
-            url, name, schedule = row
-            return (
-                "❌ *Already scheduled*\n\n"
-                f"*{name}* is already scheduled for sync.\n\n"
-                f"*URL:* `{url}`\n\n"
-                f"*Schedule:* `{schedule}`\n\n"
-                "Use `/status` to get the schedule index, then "
-                "`/delete <index>` to remove it before adding a new schedule."
-            )
-        cursor.execute(
-            "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);",
-            (playlist_url, title, config.env.default_tracker),
-        )
-        connection.commit()
-    # TODO: Expand schedule to meaningful statement
-    return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
 
 
 async def executor(command: str, chat: settings.Chat) -> None:
@@ -471,10 +434,21 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith("/track"):
         if (statement := command.replace("/track", "").strip()).startswith("http"):
             try:
-                response = tracker(statement)
+                response = tracker.insert(statement)
                 reply_to(chat, response)
             except Exception as error:
                 reply_to(chat, f"❌ *Error*\n\n`{error}`")
+        else:
+            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
+        return
+    elif command.startswith("/delete"):
+        if index := command.replace("/delete", "").strip():
+            if index.isdigit():
+                response = tracker.delete(int(index))
+                reply_to(chat, response)
+            else:
+                reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")
+            return
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
         return
