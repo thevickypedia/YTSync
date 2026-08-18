@@ -197,6 +197,8 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
     Args:
         payload: Payload as received.
     """
+    # TODO: Any function calling 'process_request' should include a broad Exception catcher
+    #   This is a design choice, since failing to process a request will break both webhooks and long polling
     LOGGER.debug(payload)
     # noinspection not-mapping
     chat = settings.Chat(**{**payload, **payload["chat"], **payload["from"]})

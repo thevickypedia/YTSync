@@ -59,6 +59,7 @@ class Rsync:
         All files are checked in a single SSH invocation. If the SSH call fails,
         retry with exponential backoff.
         """
+        # TODO: Exist check runs too many times - it is OK for connection issues but if the command failed - then fail fast
         if not local_paths:
             return set()
 
@@ -95,9 +96,11 @@ class Rsync:
                         # Unexpected output from the remote shell.
                         continue
                 return existing
-            except subprocess.CalledProcessError:
+            except subprocess.CalledProcessError as error:
                 if attempt == max_attempts - 1:
-                    raise
+                    LOGGER.error("Failed to check remote files")
+                    LOGGER.error(error)
+                    break
                 delay = initial_delay * (2**attempt)
                 time.sleep(delay)
         return set()
