@@ -4,6 +4,7 @@ import secrets
 from http import HTTPStatus
 from ipaddress import IPv4Address
 from json.decoder import JSONDecodeError
+from typing import List
 
 import requests
 from fastapi import Depends, Request
@@ -11,12 +12,14 @@ from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, HttpUrl
 
+from ytsync.database import tracker
 from ytsync.modules import config
 from ytsync.telegram import bot, poll, webhook
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(description="Enter your telegram username")
 POLL_LOCK = asyncio.Lock()
+# TODO: Add more description for API functions
 
 
 def two_factor(request: Request) -> bool:
@@ -81,7 +84,7 @@ async def telegram_webhook(request: Request):
         )
 
 
-class Payload(BaseModel):
+class SetWebhook(BaseModel):
     """Request payload for POST webhook endpoint."""
 
     webhook: HttpUrl
@@ -90,7 +93,7 @@ class Payload(BaseModel):
 
 
 async def api_set_webhook(
-    body: Payload,
+    body: SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to POST a webhook."""
@@ -169,3 +172,69 @@ async def api_delete_webhook(
         raise HTTPException(
             status_code=HTTPStatus.EXPECTATION_FAILED.real,
         )
+
+
+async def api_get_trackers(
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to GET all trackers."""
+    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+    if trackers := tracker.get():
+        print(trackers, type(trackers))
+        return [
+            dict(index=idx, url=url, name=name, schedule=schedule) for idx, (url, name, schedule) in enumerate(trackers)
+        ]
+    raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
+
+
+class Trackers(BaseModel):
+    """Payload to add trackers through API."""
+
+    urls: List[HttpUrl]
+
+
+async def api_add_trackers(
+    body: Trackers,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to ADD new trackers."""
+    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+    stats = {}
+    for url in body.urls:
+        try:
+            code = tracker.insert(str(url), return_code=True)
+        except Exception as error:
+            LOGGER.error(error)
+            code = 500
+        stats[url] = HTTPStatus(value=code)
+    return stats
+
+
+async def api_delete_trackers(
+    indices: str,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to DELETE given trackers."""
+    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+    try:
+        indices = [int(idx) for idx in indices.split(",")]
+    except ValueError:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST)
+    stats = {}
+    for idx in indices:
+        try:
+            code = tracker.delete(idx, return_code=True)
+        except Exception as error:
+            LOGGER.error(error)
+            code = 500
+        stats[idx] = HTTPStatus(value=code)
+    return stats

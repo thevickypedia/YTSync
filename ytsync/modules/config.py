@@ -83,6 +83,9 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     bot_secret: str | None = Field(None, pattern="^[A-Za-z0-9_-]{1,256}$")
     bot_certificate: FilePath | None = None
 
+    # API config
+    apikey: str | None = None
+
     class Config:
         """Environment variables configuration."""
 
@@ -114,3 +117,5 @@ env.data_dir.mkdir(exist_ok=True)
 env.database = env.data_dir.joinpath(env.database)
 db = database.Database(database=env.database)
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule"], primary_key="url")
+if not env.apikey:
+    env.apikey = env.bot_token

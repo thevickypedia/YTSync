@@ -59,7 +59,7 @@ class Rsync:
         All files are checked in a single SSH invocation. If the SSH call fails,
         retry with exponential backoff.
         """
-        # TODO: Exist check runs too many times - it is OK for connection issues but if the command failed - then fail fast
+        # TODO: Runs too many times - wait for connection issues but fail fast for command failed
         if not local_paths:
             return set()
 

@@ -142,6 +142,21 @@ api_routes = [
         methods=["DELETE"],
         path="/delete-webhook",
     ),
+    APIRoute(
+        endpoint=routes.api_get_trackers,
+        methods=["GET"],
+        path="/get-trackers",
+    ),
+    APIRoute(
+        endpoint=routes.api_add_trackers,
+        methods=["POST"],
+        path="/add-trackers",
+    ),
+    APIRoute(
+        endpoint=routes.api_delete_trackers,
+        methods=["DELETE"],
+        path="/delete-trackers",
+    ),
 ]
 
 app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=api_routes)

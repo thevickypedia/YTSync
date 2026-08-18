@@ -455,7 +455,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith("/delete"):
         if index := command.replace("/delete", "").strip():
             if index.isdigit():
-                response = tracker.delete(int(index))
+                # NOTE: enumeration in trackers_text fn starts at 1, hence the negation here
+                response = tracker.delete(int(index) - 1)
                 reply_to(chat, response)
             else:
                 reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")

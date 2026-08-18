@@ -18,11 +18,12 @@ def get() -> List[Tuple[str, str, str]]:
         return cursor.execute("SELECT * FROM ytsync").fetchall()
 
 
-def insert(playlist_url: str) -> str:
+def insert(playlist_url: str, return_code: bool = False) -> str | int:
     """Handles tracker for a playlist URL.
 
     Args:
         playlist_url: URL to sync on schedule.
+        return_bool: Boolean flag to return indicator flag instead of structured text.
 
     Returns:
         str:
@@ -43,6 +44,8 @@ def insert(playlist_url: str) -> str:
         row = cursor.fetchone()
         if row is not None:
             url, name, schedule = row
+            if return_code:
+                return 409
             return (
                 "❌ *Already scheduled*\n\n"
                 f"*{name}* is already scheduled for sync.\n\n"
@@ -56,6 +59,8 @@ def insert(playlist_url: str) -> str:
             (playlist_url, title, config.env.default_tracker),
         )
         connection.commit()
+    if return_code:
+        return 200
     # TODO: Expand schedule to meaningful statement
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
 
@@ -81,15 +86,18 @@ def sync(idx: int) -> str:
     return f"✅ *Sync queued*\n\n" f"*{name}* will be synced shortly."
 
 
-def delete(idx: int) -> str:
+def delete(idx: int, return_code: bool = False) -> str:
     """Delete a tracker by its 1-based status index."""
-    idx -= 1
     with config.db.connection as connection:
         cursor = connection.cursor()
         trackers = cursor.execute("SELECT url, name, schedule FROM ytsync").fetchall()
         if not trackers:
+            if return_code:
+                return 404
             return "⚠️ No trackers found!"
         if idx < 0 or idx >= len(trackers):
+            if return_code:
+                return 400
             return (
                 "❌ *Invalid tracker index*\n\n"
                 f"Tracker `{idx + 1}` does not exist.\n\n"
@@ -101,6 +109,8 @@ def delete(idx: int) -> str:
             (url,),
         )
         connection.commit()
+    if return_code:
+        return 200
     return (
         "✅ *Tracker deleted*\n\n"
         f"*{name}* has been removed from the sync schedule.\n\n"
