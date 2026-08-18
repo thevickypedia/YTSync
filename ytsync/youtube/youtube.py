@@ -377,14 +377,38 @@ def download_playlist(
         options["post_hooks"] = [hook]
 
     for url in urls:
-        try:
-            # noinspection bad-argument-type
-            with yt_dlp.YoutubeDL(options) as ydl:
-                # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
-                # This monotonic loop is to properly capture individual errors and attach custom handlers
-                ydl.download([url])
-        except Exception as error:
-            LOGGER.error(error)
+        attempt = 0
+        while attempt < config.env.max_retries:
+            try:
+                # noinspection bad-argument-type
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    # yt_dlp is single threaded, but it will fail/skip all errors based on 'ignoreerrors' flag
+                    # This monotonic loop is to properly capture individual errors and attach custom handlers
+                    ydl.download([url])
+            except Exception as error:
+                error_str = str(error)
+                # Avoid piling on top of existing 403 errors
+                if "403" in error_str or "Forbidden" in error_str:
+                    LOGGER.error(error)
+                    attempt = config.env.max_retries
+                    break
+                attempt += 1
+                if attempt < config.env.max_retries:
+                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
+                    LOGGER.warning(
+                        f"Download error occurred (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s..."
+                    )
+                    LOGGER.warning(f"Error: {error}")
+                    time.sleep(delay)
+                else:
+                    LOGGER.error(
+                        f"Failed to download {url} after {config.env.max_retries} attempts due to repeated exceptions."
+                    )
+                    LOGGER.error(f"Final Error: {error}")
+                    break
+
+        # If # of attempts is equal/exceeds max_retries, then assume download failed
+        if attempt >= config.env.max_retries:
             stats["download_failed"] += 1
 
     if stats["download_failed"] == len(urls):
