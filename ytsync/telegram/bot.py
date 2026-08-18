@@ -410,8 +410,6 @@ async def executor(command: str, chat: settings.Chat) -> None:
     """
     LOGGER.info("Request: %s", command)
     # TODO:
-    #   Playlist tracker - Telegram /track input
-    #   Alerts when switching between polling and webhooks (heartbeat to test connectivity)
     #   Write unit tests and code coverage pipeline in GHA
     #   Feature to allow cookies
     #   Playlist thumbnail gets downloaded but not sent as hooks (hence not transferred)
@@ -484,6 +482,6 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 "Please try a different `/id` or `/url` for this content."
             )
         else:
+            LOGGER.error(error)
             response = error.__str__()
-    LOGGER.info("Response: %s", response)
     reply_to(chat, response)

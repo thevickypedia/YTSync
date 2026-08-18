@@ -98,28 +98,38 @@ async def api_set_webhook(
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
-    if body.webhook:
-        if not body.webhook.scheme == "https":
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST.real,
-            )
-        if webhook.set_webhook(
-            webhook=str(body.webhook),
-            secret_token=body.secret_token,
-            webhook_ip=body.webhook_ip,
-        ):
-            config.env.bot_webhook = body.webhook
-            config.env.bot_secret = body.secret_token
-            async with POLL_LOCK:
-                await poll.stop_polling()
-            raise HTTPException(
-                status_code=HTTPStatus.OK.real,
-            )
+    # No webhook received
+    if not body.webhook:
         raise HTTPException(
-            status_code=HTTPStatus.EXPECTATION_FAILED.real,
+            status_code=HTTPStatus.BAD_REQUEST.real,
+        )
+    # Invalid URL scheme - only 'https' is accepted
+    if body.webhook.scheme != "https":
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL scheme")
+    # Invalid URL path - only the path served by the API (via env.bot_endpoint) is accepted
+    if body.webhook.path != config.env.bot_endpoint:
+        LOGGER.warning(
+            "Invalid webhook path received. Expected: '%s'; received: '%s'",
+            config.env.bot_endpoint,
+            body.webhook.path,
+        )
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL path")
+
+    if webhook.set_webhook(
+        webhook=body.webhook,
+        secret_token=body.secret_token,
+        webhook_ip=body.webhook_ip,
+    ):
+        config.env.bot_webhook = body.webhook
+        config.env.bot_secret = body.secret_token
+        config.env.bot_webhook_ip = body.webhook_ip
+        async with POLL_LOCK:
+            await poll.stop_polling()
+        raise HTTPException(
+            status_code=HTTPStatus.OK.real,
         )
     raise HTTPException(
-        status_code=HTTPStatus.BAD_REQUEST.real,
+        status_code=HTTPStatus.EXPECTATION_FAILED.real,
     )
 
 
