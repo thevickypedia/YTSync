@@ -13,78 +13,75 @@ DEFAULT_LOG_FILENAME: str = datetime.now().strftime(str(logs_dir / "ytsync_%d-%m
 data_dir.mkdir(parents=True, exist_ok=True)
 logs_dir.mkdir(parents=True, exist_ok=True)
 
-if log_config := os.environ.get("LOG_CONFIG"):
-    assert os.path.isfile(log_config), "log_config must be a valid file path"
-else:
-    log_level = os.environ.get("LOG_LEVEL", "INFO")
-    assert log_level in (
-        "DEBUG",
-        "INFO",
-        "WARNING",
-        "ERROR",
-        "CRITICAL",
-    ), "log_level must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL"
+log_level = os.environ.get("LOG_LEVEL", "DEBUG")
+assert log_level in (
+    "DEBUG",
+    "INFO",
+    "WARNING",
+    "ERROR",
+    "CRITICAL",
+), "log_level must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL"
 
-    log_config = {
-        "version": 1,
-        "disable_existing_loggers": True,
-        "formatters": {
-            "default": {
-                "()": "uvicorn.logging.DefaultFormatter",
-                "fmt": "%(asctime)s %(levelprefix)-9s %(name)s - [%(funcName)s:%(lineno)d] - %(message)s",
-                "use_colors": False,
-            },
-            "access": {
-                "()": "uvicorn.logging.AccessFormatter",
-                "fmt": '%(asctime)s %(levelprefix)-9s %(name)s -: %(client_addr)s - "%(request_line)s" %(status_code)s',
-                "use_colors": False,
-            },
-            "error": {
-                "()": "uvicorn.logging.DefaultFormatter",
-                "fmt": "%(asctime)s %(levelprefix)-9s %(name)s - [%(funcName)s:%(lineno)d] - %(message)s",
-                "use_colors": False,
-            },
+log_config = {
+    "version": 1,
+    "disable_existing_loggers": True,
+    "formatters": {
+        "default": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "fmt": "%(asctime)s %(levelprefix)-9s %(name)s - [%(funcName)s:%(lineno)d] - %(message)s",
+            "use_colors": False,
         },
-        "handlers": {
-            "default": {
-                "class": "logging.FileHandler",
-                "formatter": "default",
-                "filename": DEFAULT_LOG_FILENAME,
-            },
-            "access": {
-                "class": "logging.FileHandler",
-                "formatter": "access",
-                "filename": DEFAULT_LOG_FILENAME,
-            },
-            "error": {
-                "class": "logging.FileHandler",
-                "formatter": "error",
-                "filename": DEFAULT_LOG_FILENAME,
-            },
+        "access": {
+            "()": "uvicorn.logging.AccessFormatter",
+            "fmt": '%(asctime)s %(levelprefix)-9s %(name)s -: %(client_addr)s - "%(request_line)s" %(status_code)s',
+            "use_colors": False,
         },
-        "loggers": {
-            "ytsync": {
-                "propagate": False,
-                "level": log_level,
-                "handlers": ["default"],
-            },
-            "uvicorn": {
-                "propagate": False,
-                "level": log_level,
-                "handlers": ["default"],
-            },
-            "uvicorn.error": {
-                "propagate": False,
-                "level": log_level,
-                "handlers": ["error"],
-            },
-            "uvicorn.access": {
-                "propagate": False,
-                "level": log_level,
-                "handlers": ["access"],
-            },
+        "error": {
+            "()": "uvicorn.logging.DefaultFormatter",
+            "fmt": "%(asctime)s %(levelprefix)-9s %(name)s - [%(funcName)s:%(lineno)d] - %(message)s",
+            "use_colors": False,
         },
-    }
+    },
+    "handlers": {
+        "default": {
+            "class": "logging.FileHandler",
+            "formatter": "default",
+            "filename": DEFAULT_LOG_FILENAME,
+        },
+        "access": {
+            "class": "logging.FileHandler",
+            "formatter": "access",
+            "filename": DEFAULT_LOG_FILENAME,
+        },
+        "error": {
+            "class": "logging.FileHandler",
+            "formatter": "error",
+            "filename": DEFAULT_LOG_FILENAME,
+        },
+    },
+    "loggers": {
+        "ytsync": {
+            "propagate": False,
+            "level": log_level,
+            "handlers": ["default"],
+        },
+        "uvicorn": {
+            "propagate": False,
+            "level": log_level,
+            "handlers": ["default"],
+        },
+        "uvicorn.error": {
+            "propagate": False,
+            "level": log_level,
+            "handlers": ["error"],
+        },
+        "uvicorn.access": {
+            "propagate": False,
+            "level": log_level,
+            "handlers": ["access"],
+        },
+    },
+}
 
 os.environ["log_config"] = json.dumps(log_config)
 
