@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Tuple
 import yt_dlp
 from pydantic import BaseModel
 
-from ytsync.modules import config, settings
+from ytsync.modules import config, retry, settings
 from ytsync.remote import transfer
 
 LOGGER = logging.getLogger("ytsync")
@@ -234,6 +234,7 @@ def transfer_file(local_path: str) -> None:
     """Transfer a completed file."""
     LOGGER.info("Transferring: %s", local_path)
     rsync.run(source=local_path)
+    LOGGER.info("Successfully synced %s", local_path)
     if config.env.delete_after_sync:
         LOGGER.info(
             "Transfer complete; deleting: %s",
@@ -314,6 +315,15 @@ def download_progress_hook(
         )
 
 
+def downloader(url: str, options: Dict[str, Any]):
+    """Downloads the given URL with specific set of options."""
+    # noinspection bad-argument-type
+    with yt_dlp.YoutubeDL(options) as ydl:
+        # yt_dlp is single threaded, but it will fail/skip all errors based on 'ignoreerrors' flag
+        # This monotonic loop is to properly capture individual errors and attach custom handlers
+        ydl.download([url])
+
+
 def download_playlist(
     name: str,
     urls: List[str],
@@ -377,38 +387,11 @@ def download_playlist(
         options["post_hooks"] = [hook]
 
     for url in urls:
-        attempt = 0
-        while attempt < config.env.max_retries:
-            try:
-                # noinspection bad-argument-type
-                with yt_dlp.YoutubeDL(options) as ydl:
-                    # yt_dlp is single threaded, but it will fail/skip all errors based on 'ignoreerrors' flag
-                    # This monotonic loop is to properly capture individual errors and attach custom handlers
-                    ydl.download([url])
-            except Exception as error:
-                error_str = str(error)
-                # Avoid piling on top of existing 403 errors
-                if "403" in error_str or "Forbidden" in error_str:
-                    LOGGER.error(error)
-                    attempt = config.env.max_retries
-                    break
-                attempt += 1
-                if attempt < config.env.max_retries:
-                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
-                    LOGGER.warning(
-                        f"Download error occurred (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s..."
-                    )
-                    LOGGER.warning(f"Error: {error}")
-                    time.sleep(delay)
-                else:
-                    LOGGER.error(
-                        f"Failed to download {url} after {config.env.max_retries} attempts due to repeated exceptions."
-                    )
-                    LOGGER.error(f"Final Error: {error}")
-                    break
+        max_retries = config.env.max_retries
+        retry_model = retry.retry(function=downloader, max_retries=max_retries, **dict(url=url, options=options))
 
         # If # of attempts is equal/exceeds max_retries, then assume download failed
-        if attempt >= config.env.max_retries:
+        if retry_model.attempts >= max_retries:
             stats["download_failed"] += 1
 
     if stats["download_failed"] == len(urls):

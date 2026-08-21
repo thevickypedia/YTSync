@@ -50,7 +50,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     log_config: FilePath | Dict[str, Any] | None = None
 
     # Applies to YT download, rsync and telegram polling
-    max_retries: PositiveInt | PositiveFloat = Field(10, le=30, ge=1)
+    max_retries: PositiveInt = Field(10, le=30, ge=1)
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
 
     # Concurrency

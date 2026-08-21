@@ -4,12 +4,22 @@ import pathlib
 import posixpath
 import shlex
 import subprocess
-import time
 from typing import List, Set
 
-from ytsync.modules import config
+from ytsync.modules import config, retry
 
 LOGGER = logging.getLogger("ytsync")
+
+
+def runner(cmd: str, source: str) -> subprocess.CompletedProcess:
+    """Runs a given command with subprocess module."""
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        LOGGER.info(f"Successfully synced {source}")
+        return result  # Success, exit function
+    raise subprocess.CalledProcessError(
+        returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr
+    )
 
 
 class Rsync:
@@ -53,6 +63,29 @@ class Rsync:
             pathlib.Path(relative_path).as_posix(),
         )
 
+    def exist_check(self, checks: str, local_paths: List[pathlib.Path]) -> Set[str]:
+        """Checks if a list of files exist on the remote server and returns the existing ones."""
+        result = subprocess.run(
+            [
+                "ssh",
+                f"{self.remote_user}@{self.remote_host}",
+                "bash",
+                "-s",
+            ],
+            input=checks,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        existing = set()
+        for line in result.stdout.splitlines():
+            try:
+                existing.add(local_paths[int(line)])
+            except (ValueError, IndexError):
+                # Unexpected output from the remote shell.
+                continue
+        return existing
+
     def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
         """Return the local paths whose corresponding remote files exist.
 
@@ -71,39 +104,10 @@ class Rsync:
         # spaces, newlines, etc. on the local side.
         checks = "\n".join(f"test -f {shlex.quote(path)} && printf '%d\\n' {i}" for i, path in enumerate(remote_paths))
 
-        max_attempts = 5
-        initial_delay = 1.0
-
-        for attempt in range(max_attempts):
-            try:
-                result = subprocess.run(
-                    [
-                        "ssh",
-                        f"{self.remote_user}@{self.remote_host}",
-                        "bash",
-                        "-s",
-                    ],
-                    input=checks,
-                    text=True,
-                    capture_output=True,
-                    check=True,
-                )
-                existing = set()
-                for line in result.stdout.splitlines():
-                    try:
-                        existing.add(local_paths[int(line)])
-                    except (ValueError, IndexError):
-                        # Unexpected output from the remote shell.
-                        continue
-                return existing
-            except subprocess.CalledProcessError as error:
-                if attempt == max_attempts - 1:
-                    LOGGER.error("Failed to check remote files")
-                    LOGGER.error(error)
-                    break
-                delay = initial_delay * (2**attempt)
-                time.sleep(delay)
-        return set()
+        existing = retry.retry(
+            function=self.exist_check, max_retries=2, backoff_factor=1, **dict(checks=checks, local_paths=local_paths)
+        )
+        return existing.response or set()
 
     def run(self, source: str) -> None:
         """Syncs a file to remote server with exponential backoff retry logic."""
@@ -123,37 +127,4 @@ class Rsync:
             remote_location,
         ]
 
-        attempt = 0
-        while attempt < config.env.max_retries:
-            try:
-                result = subprocess.run(cmd, capture_output=True, text=True)
-
-                if result.returncode == 0:
-                    LOGGER.info(f"Successfully synced {source}")
-                    return  # Success, exit function
-
-                # Sync failed
-                attempt += 1
-                if attempt < config.env.max_retries:
-                    # Calculate exponential backoff: 3s, 6s, 12s, 24s...
-                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
-                    LOGGER.warning(f"Sync failed (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s...")
-                    LOGGER.warning(f"Error: {result.stderr.strip()}")
-                    time.sleep(delay)
-                else:
-                    LOGGER.error(f"Failed to sync {source} after {config.env.max_retries} attempts.")
-                    LOGGER.error(f"Final Error: {result.stderr.strip()}")
-                    raise RuntimeError(f"Transfer Error: {result.stderr.strip()}") from None
-            except Exception as e:
-                attempt += 1
-                if attempt < config.env.max_retries:
-                    delay = config.env.backoff_factor * (2 ** (attempt - 1))
-                    LOGGER.warning(
-                        f"Exception occurred (Attempt {attempt}/{config.env.max_retries}). Retrying in {delay}s..."
-                    )
-                    LOGGER.warning(f"Error: {e}")
-                    time.sleep(delay)
-                else:
-                    LOGGER.error(f"Failed to sync {source} after {config.env.max_retries} attempts due to exception.")
-                    LOGGER.error(f"Final Error: {e}")
-                    raise RuntimeError(f"Transfer Error [{type(e).__name__}]: {e}") from None
+        retry.retry(function=runner, raise_error=True, **dict(cmd=cmd, source=source))
