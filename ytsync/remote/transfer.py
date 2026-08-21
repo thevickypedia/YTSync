@@ -92,7 +92,6 @@ class Rsync:
         All files are checked in a single SSH invocation. If the SSH call fails,
         retry with exponential backoff.
         """
-        # TODO: Runs too many times - wait for connection issues but fail fast for command failed
         if not local_paths:
             return set()
 
@@ -103,6 +102,7 @@ class Rsync:
         # Using indexes rather than paths avoids having to parse filenames containing
         # spaces, newlines, etc. on the local side.
         checks = "\n".join(f"test -f {shlex.quote(path)} && printf '%d\\n' {i}" for i, path in enumerate(remote_paths))
+        checks += "\nexit 0\n"
 
         existing = retry.retry(
             function=self.exist_check, max_retries=2, backoff_factor=1, **dict(checks=checks, local_paths=local_paths)
