@@ -1,6 +1,37 @@
 Release Notes
 =============
 
+v0.0.2 (08/22/2026)
+-------------------
+- `7f8ffc5 <https://github.com/thevickypedia/YTSync/commit/7f8ffc5e12593d24a95d0e160cdba3e77a8186e3>`_ chore: Release ``0.0.2``
+- `e221f26 <https://github.com/thevickypedia/YTSync/commit/e221f26c7c238ab3afb21411c3ae5aa4663c500a>`_ docs: Add more description to API docstrings
+- `1725c74 <https://github.com/thevickypedia/YTSync/commit/1725c74e527611a62f0a72261f69d68a40f9fbdb>`_ chore: Update type hints, docstrings and clear old todos
+- `38bcc02 <https://github.com/thevickypedia/YTSync/commit/38bcc027912560dc656cee3161fd772083921043>`_ feat: Create ``.m3u`` files to account for playlist in media players
+- `3386ab3 <https://github.com/thevickypedia/YTSync/commit/3386ab3012eb8c39e42ae570892e01bc9aca532c>`_ perf: Implement exist check functionality even for local file storage; avoid retry loop for ``unavailable`` errors; split ``download`` vs ``data`` locations
+- `659406a <https://github.com/thevickypedia/YTSync/commit/659406a05d09d7c6be18c18d2f2738ef9cb99c8f>`_ perf: Implement exist check functionality even for local file storage
+- `5e73b2d <https://github.com/thevickypedia/YTSync/commit/5e73b2d7b34a205aa86ea20c7586f98f474f31a9>`_ fix: Add an `exit 0` for exist checker to avoid failing on failed checks
+- `75eab6b <https://github.com/thevickypedia/YTSync/commit/75eab6b9f9f4d2ee9cf159c6e824c2a5d06b07b9>`_ refactor: Create a reusable retry module with exponential backoff factor
+- `0f880c3 <https://github.com/thevickypedia/YTSync/commit/0f880c3cafa37654830c58c019fe05dc93e25b56>`_ chore: Update entrypoint sript ignore custom log config
+- `e8f4b57 <https://github.com/thevickypedia/YTSync/commit/e8f4b57f24bebe068f766ac6f4075f0f16d96b46>`_ feat: Add a retry logic with exponential back off factor for YT download failures
+- `bf95a21 <https://github.com/thevickypedia/YTSync/commit/bf95a21fc10a3e4f221f29a5b9f040f1bdb32292>`_ refactor: Keep logging style consistent
+- `1713077 <https://github.com/thevickypedia/YTSync/commit/171307713c8bb0b0c220a3da64b70c5617d7d803>`_ fix: Avoid masking errors that results in misleading ``download_failed`` count
+- `c9e512c <https://github.com/thevickypedia/YTSync/commit/c9e512ce91eca4b2e4e6af188dadaf03a02a6140>`_ feat: Add API endpoints for trackers
+- `9376999 <https://github.com/thevickypedia/YTSync/commit/937699966b50591055296e43bc8ce3b6e15da72b>`_ fix: Avoid failing the whole process when exist check feature fails; add todos for future improvements
+- `7451974 <https://github.com/thevickypedia/YTSync/commit/74519748cb5f334610ac233c88975ed647ccfdf6>`_ perf: Add startup validation to ensure ``env.bot_webhook.path`` and ``env.bot_endpoint`` match
+- `5fdb097 <https://github.com/thevickypedia/YTSync/commit/5fdb097f142097e01d340a66839925b7a68d6aa7>`_ perf: Block ``POST /set-webhook`` requests with invalid URL path
+- `8c3e11d <https://github.com/thevickypedia/YTSync/commit/8c3e11d9fda7c754d39dd48d3bccc3bdda4bd146>`_ feat: Include an option to ``/sync`` playlist on-demand by index ID
+- `1f09994 <https://github.com/thevickypedia/YTSync/commit/1f0999487a633a5f84471e45bb6a1726db2d7352>`_ feat: Add ``/delete`` functionality to remove tracking URLs from the database
+- `d377ab0 <https://github.com/thevickypedia/YTSync/commit/d377ab09bdcddd005061718cd852b3a3d4a9aac0>`_ perf: Make ``url`` a primary key for datastore; reject duplicate requests
+- `a0daa8f <https://github.com/thevickypedia/YTSync/commit/a0daa8fa7ba7fe046ebcc72e47dcb35b13cfe547>`_ feat: Include trackers in the status report in Telegram messages
+- `7dd286f <https://github.com/thevickypedia/YTSync/commit/7dd286fcee94eddb93c8e69ebafbaa833e4c921b>`_ feat: Create a background task that monitors and syncs the requested URLs
+- `d6ae4a9 <https://github.com/thevickypedia/YTSync/commit/d6ae4a9b2e7ef822c3cfbdc71579b6026e86d883>`_ placeholder: Store tracker URLs in a local database
+- `3481095 <https://github.com/thevickypedia/YTSync/commit/348109524df98b0337ab80fcc918c68d34a578f2>`_ placeholder: Add a new feature to ``/track`` playlists on a schedule
+- `e3aa22a <https://github.com/thevickypedia/YTSync/commit/e3aa22a3f17dc67f94a63d94c5c8b20a0949cd2d>`_ perf: Use a lighter image for Docker setup
+- `564a0be <https://github.com/thevickypedia/YTSync/commit/564a0be9de4501747a85ff7177c9fe1dfc22112c>`_ fix: Use OS-agnostic remote paths
+- `bb2758d <https://github.com/thevickypedia/YTSync/commit/bb2758d55051bcdb6195c0e130c42cec4439c35e>`_ perf: Include the number of files in a playlist when already available
+- `bee701c <https://github.com/thevickypedia/YTSync/commit/bee701c4da31705fd34787e7e456a1eaac49d180>`_ refactor: Move all modules to subfolders based on functionality
+- `860165e <https://github.com/thevickypedia/YTSync/commit/860165eb234602f8ef78f743ecd7cbe274f7a708>`_ chore: Update release notes for v0.0.1
+
 v0.0.1 (08/13/2026)
 -------------------
 - `f8cf728 <https://github.com/thevickypedia/YTSync/commit/f8cf7281ebb7d9fb91caeb160d71d295fd49cfe6>`_ chore: Release ``v0.0.1``
