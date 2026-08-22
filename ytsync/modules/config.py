@@ -61,6 +61,8 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     # Data
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
+    logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
+    download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
     database: str | pathlib.Path = Field("database.db", pattern=r"^[A-Za-z0-9]+\.db$")
 
     # Telegram config
@@ -114,6 +116,7 @@ if env.bot_webhook and env.bot_webhook.path != env.bot_endpoint:
 if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":
     warnings.warn("No remote connections have been setup, all downloaded media will be stored locally.")
 env.data_dir.mkdir(exist_ok=True)
+env.download_dir.mkdir(exist_ok=True)
 env.database = env.data_dir.joinpath(env.database)
 db = database.Database(database=env.database)
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule"], primary_key="url")

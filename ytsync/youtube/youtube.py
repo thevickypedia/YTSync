@@ -202,7 +202,7 @@ async def queue_download(
     playlist_name = info.get("title")
     assert playlist_name, "Failed to extract the playlist's title"
 
-    destination = config.env.data_dir.joinpath(playlist_name)
+    destination = config.env.download_dir.joinpath(playlist_name)
     destination.mkdir(exist_ok=True)
 
     urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)

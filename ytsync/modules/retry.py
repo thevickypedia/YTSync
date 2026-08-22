@@ -43,10 +43,11 @@ def retry(
     while attempt < max_retries:
         try:
             result = function(*args, **kwargs)
+            break
         except Exception as error:
             error_str = str(error)
             # Avoid piling on top of existing 403 errors
-            if "403" in error_str or "Forbidden" in error_str:
+            if "403" in error_str or "Forbidden" in error_str or "unavailable" in error_str:
                 LOGGER.error(error)
                 attempt = max_retries
                 break

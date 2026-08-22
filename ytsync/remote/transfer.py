@@ -57,7 +57,7 @@ class Rsync:
             str:
             Filepath in the remote server.
         """
-        relative_path = os.path.relpath(local_path, config.env.data_dir)
+        relative_path = os.path.relpath(local_path, config.env.download_dir)
         return posixpath.join(
             self.remote_path,
             pathlib.Path(relative_path).as_posix(),
