@@ -71,7 +71,7 @@ def process_callback(
     result: Dict[str, int] = future.result()
     runtime = result.pop("runtime")
     response = f"✅ *Download completed*\n\n" f"*{name}* completed in `{runtime:.2f}s`.\n\n"
-    # No need to check for `rsync.is_enabled` - handled by `preflight_stats` being None
+    # preflight_status is set to None if checks fail
     if preflight_stats:
         p_stats = "\n".join(stats_to_markdown(preflight_stats))
         response += f"*Pre-flight result:*\n{p_stats}\n\n"
@@ -99,7 +99,7 @@ def get_missing_playlist_entries(
     info: Dict[str, Any],
     destination: pathlib.Path,
     playlist_url: str,
-) -> Tuple[List[str], Dict[str, int]]:
+) -> Tuple[List[str], Dict[str, int] | None]:
     """Get missing entries in a playlist URL when rsync is requested.
 
     Args:
@@ -116,9 +116,9 @@ def get_missing_playlist_entries(
     entries = info.get("entries")
     if not entries:
         LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
-        return [playlist_url], counter
+        return [playlist_url], None
     urls = []
-    url_file_map = {}
+    url_file_map: Dict[str, pathlib.Path] = {}
     for entry in info["entries"]:
         counter["total"] += 1
         if not entry or not entry.get("url"):
@@ -133,7 +133,16 @@ def get_missing_playlist_entries(
             continue
         url_file_map[entry["url"]] = destination.joinpath(filename)
 
-    existing = rsync.remote_files_exist(list(url_file_map.values()))
+    if not url_file_map:
+        return [playlist_url], None
+    if rsync.is_enabled:
+        # Check files' presence in remote server
+        existing = rsync.remote_files_exist(list(url_file_map.values()))
+    else:
+        # Check files' presence in local data directory
+        existing = {file for file in url_file_map.values() if file.exists()}
+
+    # Redundant loop but it's a necessary evil because of a cleaner remote check
     for url, local_path in url_file_map.items():
         if local_path in existing:
             LOGGER.info(
@@ -196,17 +205,13 @@ async def queue_download(
     destination = config.env.data_dir.joinpath(playlist_name)
     destination.mkdir(exist_ok=True)
 
-    if rsync.is_enabled and config.env.delete_after_sync:
-        urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
-        if not urls:
-            return (
-                "ℹ️ *Already available*\n\n"
-                f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
-                f"`{posixpath.join(rsync.remote_path, playlist_name)}`"
-            )
-    else:
-        urls = [playlist_url]
-        preflight_stats = None
+    urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
+    if not urls:
+        return (
+            "ℹ️ *Already available*\n\n"
+            f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
+            f"`{posixpath.join(rsync.remote_path, playlist_name)}`"
+        )
 
     future = process_pool.submit(download_playlist, playlist_name, urls, destination)
 
