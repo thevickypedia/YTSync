@@ -45,12 +45,6 @@ def retry(
             result = function(*args, **kwargs)
             break
         except Exception as error:
-            error_str = str(error)
-            # Avoid piling on top of existing 403 errors
-            if "403" in error_str or "Forbidden" in error_str or "unavailable" in error_str:
-                LOGGER.error(error)
-                attempt = max_retries
-                break
             attempt += 1
             if attempt < max_retries:
                 # Calculate exponential backoff: 3s, 6s, 12s, 24s...

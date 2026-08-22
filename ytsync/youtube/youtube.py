@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Tuple
 import yt_dlp
 from pydantic import BaseModel
 
-from ytsync.modules import config, retry, settings
+from ytsync.modules import config, settings
 from ytsync.remote import transfer
 
 LOGGER = logging.getLogger("ytsync")
@@ -321,15 +321,6 @@ def download_progress_hook(
         )
 
 
-def downloader(url: str, options: Dict[str, Any]):
-    """Downloads the given URL with specific set of options."""
-    # noinspection bad-argument-type
-    with yt_dlp.YoutubeDL(options) as ydl:
-        # yt_dlp is single threaded, but it will fail/skip all errors based on 'ignoreerrors' flag
-        # This monotonic loop is to properly capture individual errors and attach custom handlers
-        ydl.download([url])
-
-
 def download_playlist(
     name: str,
     urls: List[str],
@@ -392,13 +383,16 @@ def download_playlist(
 
         options["post_hooks"] = [hook]
 
-    for url in urls:
-        max_retries = config.env.max_retries
-        retry_model = retry.retry(function=downloader, max_retries=max_retries, **dict(url=url, options=options))
-
-        # If # of attempts is equal/exceeds max_retries, then assume download failed
-        if retry_model.attempts >= max_retries:
-            stats["download_failed"] += 1
+    # noinspection bad-argument-type
+    with yt_dlp.YoutubeDL(options) as ydl:
+        for url in urls:
+            try:
+                # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
+                # This monotonic loop is to properly capture individual errors and attach custom handlers
+                ydl.download([url])
+            except Exception as error:
+                LOGGER.error(error)
+                stats["download_failed"] += 1
 
     if stats["download_failed"] == len(urls):
         raise RuntimeError(f"All download(s) [{len(urls)}] failed for {name!r}")

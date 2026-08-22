@@ -49,7 +49,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     port: PositiveInt = 4483
     log_config: FilePath | Dict[str, Any] | None = None
 
-    # Applies to YT download, rsync and telegram polling
+    # Applies to rsync and telegram polling
     max_retries: PositiveInt = Field(10, le=30, ge=1)
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
 
