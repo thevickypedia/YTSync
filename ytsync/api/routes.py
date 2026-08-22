@@ -230,7 +230,7 @@ async def api_add_trackers(
         try:
             code = tracker.insert(str(url), return_code=True)
         except Exception as error:
-            LOGGER.error(error)
+            LOGGER.exception(error)
             code = 500
         stats[url] = HTTPStatus(value=code)
     return stats
@@ -259,7 +259,7 @@ async def api_delete_trackers(
         try:
             code = tracker.delete(idx, return_code=True)
         except Exception as error:
-            LOGGER.error(error)
+            LOGGER.exception(error)
             code = 500
         stats[idx] = HTTPStatus(value=code)
     return stats

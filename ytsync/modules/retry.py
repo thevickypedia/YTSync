@@ -59,7 +59,7 @@ def retry(
                 LOGGER.error(
                     f"Error occurred on {function.__name__!r} after {max_retries} attempts due to repeated exceptions."
                 )
-                LOGGER.error(f"Final Error: {error}")
+                LOGGER.exception(error)
                 if raise_error:
                     raise RuntimeError(f"{type(error).__name__}: {error}") from None
                 break

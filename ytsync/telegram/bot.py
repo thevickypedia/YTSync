@@ -416,6 +416,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     try:
         await executor(data_class.text, chat)
     except Exception as error:
+        LOGGER.exception(error)
         reply_to(chat, f"❌ *Error*\n\n`{error}`")
 
 

@@ -129,7 +129,7 @@ def get_missing_playlist_entries(
         try:
             filename = get_filename(ydl, entry, destination)
         except Exception as error:
-            LOGGER.error(error)
+            LOGGER.exception(error)
             counter["error"] += 1
             continue
         url_file_map[entry["url"]] = destination.joinpath(filename)
@@ -209,10 +209,11 @@ async def queue_download(
     urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
     if not urls:
         assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
+        intended_path = posixpath.join(rsync.remote_path, playlist_name) if rsync.is_enabled else destination
         return (
             "ℹ️ *Already available*\n\n"
             f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
-            f"`{posixpath.join(rsync.remote_path, playlist_name)}`"
+            f"`{intended_path}`"
         )
 
     future = processor.submit(
@@ -404,7 +405,7 @@ def download_playlist(
                 # This monotonic loop is to properly capture individual errors and attach custom handlers
                 ydl.download([url])
             except Exception as error:
-                LOGGER.error(error)
+                LOGGER.exception(error)
                 stats["download_failed"] += 1
 
     if stats["download_failed"] == len(urls):

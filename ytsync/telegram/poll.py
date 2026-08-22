@@ -19,6 +19,7 @@ def shutdown_event() -> None:
             result = controller.future.result()
         except Exception as exc:
             LOGGER.error("Controller failed for %s: %s", controller.name, exc)
+            LOGGER.exception(exc)
         else:
             LOGGER.info("Controller completed for %s: %s", controller.name, result)
 
