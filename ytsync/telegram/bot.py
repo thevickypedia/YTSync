@@ -454,7 +454,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith("/sync"):
         if index := command.replace("/sync", "").strip():
             if index.isdigit():
-                response = tracker.sync(int(index))
+                response = tracker.sync(idx=int(index), chat=chat, callback=reply_to)
                 reply_to(chat, response)
             else:
                 reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")

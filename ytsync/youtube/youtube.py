@@ -408,7 +408,7 @@ def download_playlist(
                 stats["download_failed"] += 1
 
     if stats["download_failed"] == len(urls):
-        raise RuntimeError(f"All download(s) [{len(urls)}] failed for {name!r}")
+        raise RuntimeError(f"{len(urls)} download(s) failed for {name!r}")
 
     if transfer_pool:
         LOGGER.info(

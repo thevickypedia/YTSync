@@ -1,10 +1,10 @@
 import asyncio
 import logging
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import yt_dlp
 
-from ytsync.modules import config
+from ytsync.modules import config, settings
 from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
@@ -65,7 +65,7 @@ def insert(playlist_url: str, return_code: bool = False) -> str | int:
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
 
 
-def sync(idx: int) -> str:
+def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None = None) -> str:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
     Args:
@@ -89,8 +89,7 @@ def sync(idx: int) -> str:
             )
         url, name, _ = trackers[idx]
         LOGGER.info("Executing sync for '%s' with '%s'", name, url)
-        # TODO: Implement alternate notifications or just pass chat into this
-        asyncio.create_task(youtube.queue_download(playlist_url=url))
+        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
     return f"✅ *Sync queued*\n\n" f"*{name}* will be synced shortly."
 
 
