@@ -19,7 +19,6 @@ from ytsync.telegram import bot, poll, webhook
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(description="Enter your telegram username")
 POLL_LOCK = asyncio.Lock()
-# TODO: Add more description for API functions
 
 
 def two_factor(request: Request) -> bool:
@@ -96,7 +95,12 @@ async def api_set_webhook(
     body: SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to POST a webhook."""
+    """API endpoint to POST a webhook.
+
+    Args:
+        body: Takes the required webhook parameters as body.
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
@@ -139,7 +143,11 @@ async def api_set_webhook(
 async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to GET a webhook."""
+    """API endpoint to GET a webhook.
+
+    Args:
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
@@ -156,7 +164,11 @@ async def api_get_webhook(
 async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to DELETE a webhook."""
+    """API endpoint to DELETE a webhook.
+
+    Args:
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
@@ -177,7 +189,11 @@ async def api_delete_webhook(
 async def api_get_trackers(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to GET all trackers."""
+    """API endpoint to GET all trackers.
+
+    Args:
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
@@ -199,7 +215,12 @@ async def api_add_trackers(
     body: Trackers,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to ADD new trackers."""
+    """API endpoint to ADD new trackers.
+
+    Args:
+        body: Takes the required tracker parameters as body.
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
@@ -219,7 +240,12 @@ async def api_delete_trackers(
     indices: str,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to DELETE given trackers."""
+    """API endpoint to DELETE given trackers.
+
+    Args:
+        indices: Comma separated list of indices to remove from scheduled trackers.
+        apikey: API key as header for authentication.
+    """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
