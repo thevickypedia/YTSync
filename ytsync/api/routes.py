@@ -183,7 +183,6 @@ async def api_get_trackers(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
     if trackers := tracker.get():
-        print(trackers, type(trackers))
         return [
             dict(index=idx, url=url, name=name, schedule=schedule) for idx, (url, name, schedule) in enumerate(trackers)
         ]

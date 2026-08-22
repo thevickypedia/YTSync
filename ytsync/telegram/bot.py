@@ -197,8 +197,6 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
     Args:
         payload: Payload as received.
     """
-    # TODO: Any function calling 'process_request' should include a broad Exception catcher
-    #   This is a design choice, since failing to process a request will break both webhooks and long polling
     LOGGER.debug(payload)
     # noinspection not-mapping
     chat = settings.Chat(**{**payload, **payload["chat"], **payload["from"]})
@@ -400,7 +398,10 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}"
         reply_to(chat, final)
         return
-    await executor(data_class.text, chat)
+    try:
+        await executor(data_class.text, chat)
+    except Exception as error:
+        reply_to(chat, f"❌ *Error*\n\n`{error}`")
 
 
 async def executor(command: str, chat: settings.Chat) -> None:
@@ -414,10 +415,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
     # TODO:
     #   Write unit tests and code coverage pipeline in GHA
     #   Feature to allow cookies
-    #   Playlist thumbnail gets downloaded but not sent as hooks (hence not transferred)
-    #   Full E2E testing for webhook + polling solution - must be always reachable
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    #   Allow updates without telegram bot - just through the API (different auth mechanism - currently bot token ONLY)
     kwargs: Dict[str, str | Callable | settings.Chat] = dict(chat=chat, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
@@ -433,11 +431,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
             return
     elif command.startswith("/track"):
         if (statement := command.replace("/track", "").strip()).startswith("http"):
-            try:
-                response = tracker.insert(statement)
-                reply_to(chat, response)
-            except Exception as error:
-                reply_to(chat, f"❌ *Error*\n\n`{error}`")
+            response = str(tracker.insert(statement))
+            reply_to(chat, response)
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
         return
@@ -456,7 +451,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
         if index := command.replace("/delete", "").strip():
             if index.isdigit():
                 # NOTE: enumeration in trackers_text fn starts at 1, hence the negation here
-                response = tracker.delete(int(index) - 1)
+                response = str(tracker.delete(int(index) - 1))
                 reply_to(chat, response)
             else:
                 reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")

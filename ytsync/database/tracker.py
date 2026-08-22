@@ -23,11 +23,11 @@ def insert(playlist_url: str, return_code: bool = False) -> str | int:
 
     Args:
         playlist_url: URL to sync on schedule.
-        return_bool: Boolean flag to return indicator flag instead of structured text.
+        return_code: Boolean flag to return HTTP code instead of structured text.
 
     Returns:
         str:
-        Returns the response string for Telegram.
+        Returns the response string for Telegram and HTTP code for API calls.
     """
     with yt_dlp.YoutubeDL() as ydl:
         info = ydl.extract_info(
@@ -66,7 +66,15 @@ def insert(playlist_url: str, return_code: bool = False) -> str | int:
 
 
 def sync(idx: int) -> str:
-    """Syncs a tracker (on-demand) by its 1-based status index."""
+    """Syncs a tracker (on-demand) by its 1-based status index.
+
+    Args:
+        idx: Index to be synced.
+
+    Returns:
+        str:
+        Returns the response string for Telegram.
+    """
     idx -= 1
     with config.db.connection as connection:
         cursor = connection.cursor()
@@ -86,8 +94,17 @@ def sync(idx: int) -> str:
     return f"✅ *Sync queued*\n\n" f"*{name}* will be synced shortly."
 
 
-def delete(idx: int, return_code: bool = False) -> str:
-    """Delete a tracker by its 1-based status index."""
+def delete(idx: int, return_code: bool = False) -> str | int:
+    """Delete a tracker by its 1-based status index.
+
+    Args:
+        idx: Index of the list to be cleared.
+        return_code: Boolean flag to return HTTP code instead of structured text.
+
+    Returns:
+        str:
+        Returns the response string for Telegram and HTTP code for API calls.
+    """
     with config.db.connection as connection:
         cursor = connection.cursor()
         trackers = cursor.execute("SELECT url, name, schedule FROM ytsync").fetchall()

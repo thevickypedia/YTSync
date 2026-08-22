@@ -23,7 +23,7 @@ services:
       - ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro
     ports:
       # host_port:container_port
-      - ${PORT:-4321}:${port:-4321}"
+      - ${PORT:-4321}:${port:-4321}
     deploy:
       # 'reservations' key is supported only in swarm mode
       resources:

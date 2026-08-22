@@ -142,7 +142,7 @@ def get_missing_playlist_entries(
         # Check files' presence in local data directory
         existing = {file for file in url_file_map.values() if file.exists()}
 
-    # Redundant loop but it's a necessary evil because of a cleaner remote check
+    # Redundant loop, but it's a necessary evil because of a cleaner remote check
     for url, local_path in url_file_map.items():
         if local_path in existing:
             LOGGER.info(
