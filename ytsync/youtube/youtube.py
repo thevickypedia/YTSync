@@ -207,6 +207,7 @@ async def queue_download(
 
     urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
     if not urls:
+        assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
         return (
             "ℹ️ *Already available*\n\n"
             f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
@@ -240,7 +241,7 @@ def transfer_file(local_path: str) -> None:
     LOGGER.info("Transferring: %s", local_path)
     rsync.run(source=local_path)
     LOGGER.info("Successfully synced %s", local_path)
-    if config.env.delete_after_sync:
+    if rsync.is_enabled and config.env.delete_after_sync:
         LOGGER.info(
             "Transfer complete; deleting: %s",
             local_path,
@@ -402,7 +403,7 @@ def download_playlist(
     if stats["download_failed"] == len(urls):
         raise RuntimeError(f"All download(s) [{len(urls)}] failed for {name!r}")
 
-    if transfer_pool is not None:
+    if transfer_pool:
         LOGGER.info(
             "Waiting for transfers for %s",
             name,
@@ -414,8 +415,21 @@ def download_playlist(
             stats["transferred"],
             stats["transfer_failed"],
         )
+        rsync.create_playlist(name)
+    else:
+        create_local_playlist(destination)
 
     return {
         "runtime": time.time() - start,
         **stats,
     }
+
+
+def create_local_playlist(destination: pathlib.Path) -> None:
+    """Create a .m3u file on the local machine."""
+    filepath = destination.joinpath(f"{destination.name}.m3u")
+    if files := [file for file in os.listdir(destination) if file.endswith(".mp3")]:
+        with open(filepath, "w") as playlist_file:
+            playlist_file.write("\n".join(files) + "\n")
+        return
+    LOGGER.warning(f"No eligible files found in {destination}")
