@@ -360,6 +360,29 @@ def trackers_text() -> str:
     return txt
 
 
+def get_process_pool() -> str:
+    """Get the status text for process pool."""
+    pending = youtube.processor.status()
+    txt = f"Total downloads submitted: {youtube.processor.total_submissions}"
+    if pending is not None:
+        txt += f"\nPending downloads: {pending}"
+    return txt
+
+
+def get_channel() -> str:
+    """Get the channel text for telegram interactions."""
+    task = ACTIVE_TASKS.get("poll")
+    if task and not task.done():
+        txt = "Channel: Polling"
+    elif config.env.bot_webhook:
+        txt = f"Channel: Webhook via {config.env.bot_webhook}"
+        if config.env.bot_webhook_ip:
+            txt += f" - [{config.env.bot_webhook_ip}]"
+    else:
+        txt = "Channel: Unknown"
+    return txt
+
+
 async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     """Processes the text in payload received after checking for authentication.
 
@@ -383,19 +406,11 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         )
         return
     if text_lower in ("status", "stats", "test"):
-        task = ACTIVE_TASKS.get("poll")
-        if task and not task.done():
-            txt = "Channel: Polling"
-        elif config.env.bot_webhook:
-            txt = f"Channel: Webhook via {config.env.bot_webhook}"
-            if config.env.bot_webhook_ip:
-                txt += f" - [{config.env.bot_webhook_ip}]"
-        else:
-            txt = "Channel: Unknown"
+        txt = get_channel()
         txt += trackers_text()
         now = datetime.now()
         tzname = now.astimezone().tzname() or ""
-        final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}"
+        final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}\n\n{get_process_pool()}"
         reply_to(chat, final)
         return
     try:

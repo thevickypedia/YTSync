@@ -54,7 +54,10 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
 
     # Concurrency
+    # Maximum number of parallel transfers to remote server
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
+    # Cooldown period (in seconds) between every download (always sequential)
+    cooldown_interval: PositiveInt = Field(3, ge=3, le=3600)  # 3s to 1h
 
     # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist
     max_error_threshold: PositiveInt = Field(30, le=100, ge=10)

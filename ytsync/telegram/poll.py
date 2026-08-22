@@ -12,7 +12,7 @@ LOGGER = logging.getLogger("ytsync")
 
 def shutdown_event() -> None:
     """Shuts down all the threads and gracefully terminates the processes."""
-    youtube.process_pool.shutdown(wait=True)
+    youtube.processor.shutdown()
     for controller in youtube.controllers:
         LOGGER.info("Shutting down controller for: %s", controller.name)
         try:

@@ -5,7 +5,7 @@ import pathlib
 import posixpath
 import time
 from collections.abc import Generator
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Tuple
 
 import yt_dlp
@@ -13,9 +13,10 @@ from pydantic import BaseModel
 
 from ytsync.modules import config, settings
 from ytsync.remote import transfer
+from ytsync.youtube import process
 
 LOGGER = logging.getLogger("ytsync")
-process_pool = ProcessPoolExecutor(max_workers=1)
+processor = process.Processor(max_workers=1, cooldown_interval=config.env.cooldown_interval)
 rsync = transfer.Rsync()
 FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
@@ -214,7 +215,11 @@ async def queue_download(
             f"`{posixpath.join(rsync.remote_path, playlist_name)}`"
         )
 
-    future = process_pool.submit(download_playlist, playlist_name, urls, destination)
+    future = processor.submit(
+        identifier=playlist_name,
+        function=download_playlist,
+        **dict(name=playlist_name, urls=urls, destination=destination),
+    )
 
     wrapped_callback = functools.partial(
         process_callback,
@@ -233,7 +238,15 @@ async def queue_download(
         )
     )
 
-    return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
+    # TODO: Take timezone as argument for dockerized runs, and honor timezone through out the project
+    if processor.total_submissions == 0:
+        return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
+    else:
+        cooldown = processor.cooldown_interval
+        return (
+            f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at "
+            f"{time.ctime(time.time() + cooldown)} after {cooldown}s"
+        )
 
 
 def transfer_file(local_path: str) -> None:
