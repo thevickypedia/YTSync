@@ -1,6 +1,8 @@
+import functools
 import logging
+import threading
 import time
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import Future, ProcessPoolExecutor
 from typing import Callable
 
 LOGGER = logging.getLogger("ytsync")
@@ -35,6 +37,12 @@ class Processor:
         self.cooldown_interval = cooldown_interval
         self.total_submissions = 0
 
+        # Monotonic timestamp of the last completed task.
+        self.last_completion_time: float | None = None
+
+        # Protects submission/completion state if submit() can be called concurrently
+        self._lock = threading.Lock()
+
     def status(self) -> int | None:
         """Logs the status of process pool executor, and returns the pending count."""
         try:
@@ -47,29 +55,46 @@ class Processor:
             pending = None
         return pending
 
+    def tracker(self, _: Future, name: str) -> None:
+        """Track when a task actually completes."""
+        with self._lock:
+            self.last_completion_time = time.monotonic()
+        LOGGER.info("Task '%s' has completed at %.3f", name, self.last_completion_time)
+
     def submit(self, identifier: str, function: Callable, *args, **kwargs):
         """Submits the function for background execution.
+
+        Each task waits for the remaining cooldown period since the previous task's completion.
 
         Args:
             identifier: Name for the task.
             function: Function to execute.
         """
-        if self.total_submissions == 0:
-            cooldown = 0
-            LOGGER.info("Submitting %s now", identifier)
-        else:
-            cooldown = self.cooldown_interval
-            LOGGER.info("Submitting %s at: %s (cooldown=%ss)", identifier, time.ctime(time.time() + cooldown), cooldown)
-        self.total_submissions += 1
-        self.status()
-        future = self.process_pool.submit(
-            _run_with_cooldown,
-            function,
-            cooldown,
-            *args,
-            **kwargs,
-        )
-        return future
+        with self._lock:
+            now = time.monotonic()
+
+            if self.last_completion_time is None:
+                # First task runs immediately.
+                cooldown = 0
+                LOGGER.info("Submitting %s now", identifier)
+            else:
+                elapsed = now - self.last_completion_time
+                cooldown = max(0, self.cooldown_interval - elapsed)
+                if cooldown:
+                    LOGGER.info("Submitting %s with %.2fs remaining cooldown", identifier, cooldown)
+                else:
+                    LOGGER.info("Submitting %s now (%.2fs since last completion)", identifier, elapsed)
+            self.total_submissions += 1
+            self.status()
+            future = self.process_pool.submit(
+                _run_with_cooldown,
+                function,
+                cooldown,
+                *args,
+                **kwargs,
+            )
+            future.add_done_callback(functools.partial(self.tracker, name=identifier))
+            return future
 
     def shutdown(self, wait: bool = True, cancel_futures: bool = False):
         """Shutdown the entire process pool."""
