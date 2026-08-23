@@ -1,8 +1,10 @@
 import asyncio
 import logging
-from typing import Callable, List, Tuple
+from collections.abc import Generator
+from typing import Callable, Tuple
 
 import yt_dlp
+from pydantic import BaseModel, HttpUrl
 
 from ytsync.modules import config, settings
 from ytsync.youtube import youtube
@@ -10,12 +12,31 @@ from ytsync.youtube import youtube
 LOGGER = logging.getLogger("ytsync")
 
 
-def get() -> List[Tuple[str, str, str]]:
+class DBSchema(BaseModel):
+    """Schema for all DB interactions.
+
+    >>> DBSchema
+
+    """
+
+    url: HttpUrl
+    name: str
+    schedule: str
+
+
+def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
+    """Convert a row of tuple into a DBSchema object."""
+    fields = DBSchema.model_fields.keys()
+    return DBSchema(**dict(zip(fields, row)))
+
+
+def get() -> Generator[DBSchema]:
     """Get trackers stored in the database."""
-    # TODO: Create a structured array with dataclasses for all DB interactions including columns and tables
     with config.db.connection as connection:
         cursor = connection.cursor()
-        return cursor.execute("SELECT * FROM ytsync").fetchall()
+        data = cursor.execute("SELECT * FROM ytsync").fetchall()
+    for row in data:
+        yield row_to_schema(row)
 
 
 def insert(playlist_url: str, return_code: bool = False) -> str | int:
@@ -41,16 +62,15 @@ def insert(playlist_url: str, return_code: bool = False) -> str | int:
     with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
-        row = cursor.fetchone()
-        if row is not None:
-            url, name, schedule = row
+        if row := cursor.fetchone():
+            tracked = row_to_schema(row)
             if return_code:
                 return 409
             return (
                 "❌ *Already scheduled*\n\n"
-                f"*{name}* is already scheduled for sync.\n\n"
-                f"*URL:* `{url}`\n\n"
-                f"*Schedule:* `{schedule}`\n\n"
+                f"*{tracked.name}* is already scheduled for sync.\n\n"
+                f"*URL:* `{tracked.url}`\n\n"
+                f"*Schedule:* `{tracked.schedule}`\n\n"
                 "Use `/status` to get the schedule index, then "
                 "`/delete <index>` to remove it before adding a new schedule."
             )
@@ -76,21 +96,19 @@ def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None 
         Returns the response string for Telegram.
     """
     idx -= 1
-    with config.db.connection as connection:
-        cursor = connection.cursor()
-        trackers = cursor.execute("SELECT url, name, schedule FROM ytsync").fetchall()
-        if not trackers:
-            return "⚠️ No trackers found!"
-        if idx < 0 or idx >= len(trackers):
-            return (
-                "❌ *Invalid tracker index*\n\n"
-                f"Tracker `{idx + 1}` does not exist.\n\n"
-                "Use `/status` to see the available tracker indexes."
-            )
-        url, name, _ = trackers[idx]
-        LOGGER.info("Executing sync for '%s' with '%s'", name, url)
-        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
-    return f"✅ *Sync queued*\n\n" f"*{name}* will be synced shortly."
+    trackers = list(get())
+    if not trackers:
+        return "⚠️ No trackers found!"
+    if idx < 0 or idx >= len(trackers):
+        return (
+            "❌ *Invalid tracker index*\n\n"
+            f"Tracker `{idx + 1}` does not exist.\n\n"
+            "Use `/status` to see the available tracker indexes."
+        )
+    tracker = trackers[idx]
+    LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, tracker.url)
+    asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=tracker.url, callback=callback))
+    return f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be synced shortly."
 
 
 def delete(idx: int, return_code: bool = False) -> str | int:
@@ -104,32 +122,32 @@ def delete(idx: int, return_code: bool = False) -> str | int:
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
+    trackers = list(get())
+    if not trackers:
+        if return_code:
+            return 404
+        return "⚠️ No trackers found!"
+    if idx < 0 or idx >= len(trackers):
+        if return_code:
+            return 400
+        return (
+            "❌ *Invalid tracker index*\n\n"
+            f"Tracker `{idx + 1}` does not exist.\n\n"
+            "Use `/status` to see the available tracker indexes."
+        )
+    tracker = trackers[idx]
     with config.db.connection as connection:
         cursor = connection.cursor()
-        trackers = cursor.execute("SELECT url, name, schedule FROM ytsync").fetchall()
-        if not trackers:
-            if return_code:
-                return 404
-            return "⚠️ No trackers found!"
-        if idx < 0 or idx >= len(trackers):
-            if return_code:
-                return 400
-            return (
-                "❌ *Invalid tracker index*\n\n"
-                f"Tracker `{idx + 1}` does not exist.\n\n"
-                "Use `/status` to see the available tracker indexes."
-            )
-        url, name, schedule = trackers[idx]
         cursor.execute(
             "DELETE FROM ytsync WHERE url = ?;",
-            (url,),
+            (tracker.url,),
         )
         connection.commit()
     if return_code:
         return 200
     return (
         "✅ *Tracker deleted*\n\n"
-        f"*{name}* has been removed from the sync schedule.\n\n"
-        f"*URL:* `{url}`\n"
-        f"*Schedule:* `{schedule}`"
+        f"*{tracker.name}* has been removed from the sync schedule.\n\n"
+        f"*URL:* `{tracker.url}`\n"
+        f"*Schedule:* `{tracker.schedule}`"
     )

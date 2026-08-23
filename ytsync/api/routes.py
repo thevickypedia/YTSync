@@ -198,9 +198,10 @@ async def api_get_trackers(
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
-    if trackers := tracker.get():
+    if trackers := list(tracker.get()):
         return [
-            dict(index=idx, url=url, name=name, schedule=schedule) for idx, (url, name, schedule) in enumerate(trackers)
+            dict(index=idx, url=tracked.url, name=tracked.name, schedule=tracked.schedule)
+            for idx, tracked in enumerate(trackers)
         ]
     raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
 

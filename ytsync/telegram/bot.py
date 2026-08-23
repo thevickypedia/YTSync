@@ -354,11 +354,10 @@ async def process_document(
 def trackers_text() -> str:
     """Get trackers in a Markdown friendly format."""
     txt = ""
-    if trackers := tracker.get():
+    if trackers := list(tracker.get()):
         txt += "\n\n*Trackers:*\n"
         for idx, tracked in enumerate(trackers, start=1):
-            _, name, schedule = tracked
-            txt += f"{idx}. *{name}* — `{schedule}`\n"
+            txt += f"{idx}. *{tracked.name}* — `{tracked.schedule}`\n"
     else:
         LOGGER.info("No trackers found.")
     return txt

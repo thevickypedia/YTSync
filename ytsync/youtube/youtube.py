@@ -244,11 +244,10 @@ async def queue_download(
         return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
-        eastern_time = future_utc.astimezone(config.env.tz)
-        time_str = eastern_time.strftime("%a %b %d %H:%M:%S %Y %Z")
+        zoned_time = future_utc.astimezone(config.env.tz)
+        t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         return (
-            f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at "
-            f"{time_str} after `{cooldown:.2f}s`"
+            f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at {t_string}"
         )
 
 

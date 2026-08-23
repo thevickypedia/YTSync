@@ -49,7 +49,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     host: str = socket.gethostbyname("localhost")
     port: PositiveInt = 4483
-    tz: ZoneInfo | tzinfo = datetime.now().astimezone().tzinfo
+    tz: ZoneInfo | tzinfo | None = datetime.now().astimezone().tzinfo
     log_config: FilePath | Dict[str, Any] | None = None
 
     # Applies to rsync and telegram polling
@@ -111,7 +111,7 @@ def tzname() -> str:
 
     Converts "America/Chicago" to "CDT"
     """
-    return datetime.now(env.tz).tzname()
+    return datetime.now(env.tz).tzname() or ""
 
 
 def now() -> datetime:
