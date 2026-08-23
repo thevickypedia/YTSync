@@ -278,12 +278,16 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     """
     if int(time.time()) - chat.date < 60:
         return True
-    request_time = time.strftime("%m-%d-%Y %H:%M:%S", time.localtime(chat.date))
+    # Convert Unix timestamp to datetime in the specific timezone
+    local_dt = datetime.fromtimestamp(chat.date, tz=config.env.tz)
+    current_dt = datetime.now(tz=config.env.tz)
+    # Format the datetime objects
+    request_time = local_dt.strftime("%m-%d-%Y %H:%M:%S")
+    processed_time = current_dt.strftime("%m-%d-%Y %H:%M:%S")
     LOGGER.warning("Request timed out [%s] for %s", request_time, chat.username)
     reply_to(
         chat,
-        f"Request timed out\nRequested: {request_time}\n"
-        f"Processed: {time.strftime('%m-%d-%Y %H:%M:%S', time.localtime(time.time()))}",
+        f"Request timed out\nRequested: {request_time}\n" f"Processed: {processed_time}",
     )
     return False
 
@@ -353,7 +357,7 @@ def trackers_text() -> str:
     if trackers := tracker.get():
         txt += "\n\n*Trackers:*\n"
         for idx, tracked in enumerate(trackers, start=1):
-            url, name, schedule = tracked
+            _, name, schedule = tracked
             txt += f"{idx}. *{name}* — `{schedule}`\n"
     else:
         LOGGER.info("No trackers found.")
@@ -408,9 +412,9 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     if text_lower in ("status", "stats", "test"):
         txt = get_channel()
         txt += trackers_text()
-        now = datetime.now()
-        tzname = now.astimezone().tzname() or ""
-        final = f"🕐 *Server Timestamp:* `{now.strftime('%c')} {tzname}`\n\n{txt}\n\n{get_process_pool()}"
+        final = (
+            f"🕐 *Server Timestamp:* `{config.now().strftime('%c')} {config.tzname()}`\n\n{txt}\n\n{get_process_pool()}"
+        )
         reply_to(chat, final)
         return
     try:

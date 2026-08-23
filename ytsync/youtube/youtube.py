@@ -6,6 +6,7 @@ import posixpath
 import time
 from collections.abc import Generator
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Tuple
 
 import yt_dlp
@@ -239,13 +240,15 @@ async def queue_download(
         )
     )
 
-    # TODO: Take timezone as argument for dockerized runs, and honor timezone through out the project
     if cooldown == 0:
         return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
+        future_utc = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
+        eastern_time = future_utc.astimezone(config.env.tz)
+        time_str = eastern_time.strftime("%a %b %d %H:%M:%S %Y %Z")
         return (
             f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at "
-            f"{time.ctime(time.time() + cooldown)} after {cooldown}s"
+            f"{time_str} after {cooldown}s"
         )
 
 

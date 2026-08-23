@@ -3,10 +3,12 @@ import os
 import pathlib
 import socket
 import warnings
+from datetime import datetime, tzinfo
 from enum import StrEnum
 from ipaddress import IPv4Address
 from multiprocessing import current_process
 from typing import Any, Dict, List
+from zoneinfo import ZoneInfo
 
 from pydantic import (
     DirectoryPath,
@@ -47,6 +49,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     host: str = socket.gethostbyname("localhost")
     port: PositiveInt = 4483
+    tz: ZoneInfo | tzinfo = datetime.now().astimezone().tzinfo
     log_config: FilePath | Dict[str, Any] | None = None
 
     # Applies to rsync and telegram polling
@@ -101,6 +104,20 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
 # noinspection argument-list
 env = EnvConfig()
+
+
+def tzname() -> str:
+    """Returns the timezone name regardless of the TZ value set.
+
+    Converts "America/Chicago" to "CDT"
+    """
+    return datetime.now(env.tz).tzname()
+
+
+def now() -> datetime:
+    """Returns the datetime object in the current timezone."""
+    return datetime.now(env.tz)
+
 
 # 'bot_webhook' is optional but 'bot_endpoint' is mandatory
 # 'bot_endpoint' is registered in FastAPI during startup to serve incoming requests via webhooks
