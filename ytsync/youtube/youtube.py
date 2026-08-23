@@ -248,7 +248,7 @@ async def queue_download(
         time_str = eastern_time.strftime("%a %b %d %H:%M:%S %Y %Z")
         return (
             f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at "
-            f"{time_str} after {cooldown}s"
+            f"{time_str} after `{cooldown:.2f}s`"
         )
 
 

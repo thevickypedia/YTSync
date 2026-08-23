@@ -17,7 +17,7 @@ def _run_with_cooldown(
     """Runs task sequentially, with a cooldown period between each task."""
     # The first task should run immediately.
     # Subsequent tasks will already be serialized by the single-worker pool,
-    # but need to wait for N seconds after the previous task has completed.
+    # but need to wait for the calculated cooldown before running.
     if cooldown:
         time.sleep(cooldown)
 
@@ -25,20 +25,29 @@ def _run_with_cooldown(
 
 
 class Processor:
-    """Process object to kick off ProcessPoolExecutor with a single worker and a cooldown period between each execution.
+    """Kicks off ProcessPoolExecutor with a single worker and a cooldown period between each execution.
 
     >>> Processor
 
     """
 
-    def __init__(self, cooldown_interval: int = 3):
+    def __init__(self, cooldown_interval: int = 3, buffer: int = 60):
         """Instantiates the processor object."""
         self.process_pool = ProcessPoolExecutor(max_workers=1)
         self.cooldown_interval = cooldown_interval
+        self.buffer = buffer
         self.total_submissions = 0
 
-        # Monotonic timestamp of the last completed task.
+        # Monotonic timestamp of the last task that actually completed
+        # This is updated only by tracker()
         self.last_completion_time: float | None = None
+
+        # Monotonic timestamp representing when the next submitted task
+        # is scheduled to be available.
+        #
+        # Unlike last_completion_time, this is a scheduling value and may
+        # be in the future when tasks are queued faster than they complete.
+        self.next_available_time: float | None = None
 
         # Protects submission/completion state if submit() can be called concurrently
         self._lock = threading.Lock()
@@ -64,39 +73,44 @@ class Processor:
     def submit(self, identifier: str, function: Callable, *args, **kwargs) -> Tuple[Future, int | float]:
         """Submits the function for background execution.
 
-        Each task waits for the remaining cooldown period since the previous task's completion.
+        Each task waits for the remaining scheduled cooldown period.
+
+        The first task runs immediately. Each subsequent submission reserves
+        the next available slot by advancing it by cooldown_interval + buffer.
 
         Args:
             identifier: Name for the task.
             function: Function to execute.
 
         Returns:
-            Tuple[Future, int]:
-            Returns a tuple with a future object and cooldown period the task will wait.
+            Tuple[Future, int | float]:
+            Returns a future object and the cooldown period the task will wait.
         """
         with self._lock:
             now = time.monotonic()
 
-            # No submissions were made and last completion is None - so true first task
-            if self.last_completion_time is None and self.total_submissions == 0:
+            # No submissions were made - this is the true first task
+            if self.total_submissions == 0:
                 # First task runs immediately
                 cooldown = 0
+                # Reserve the next available slot.
+                self.next_available_time = now + self.cooldown_interval + self.buffer
                 LOGGER.info("Submitting %s now", identifier)
-            # There are submission(s) but last completion is None - ONE task is still running
-            elif self.last_completion_time is None:
-                # Number of submissions times the cool down interval
-                # Stagger queued tasks so they remain serialized by cooldown
-                # A task is currently running and no completion has been observed yet
-                # Since no completion is observed, there is no accurate way to determine next cooldown
-                cooldown = self.cooldown_interval * self.total_submissions
-            # There are submission(s) and last completion is recorded - calculate cooldown based on it
+
+            # There are already submissions. Use the scheduled next available
+            # time rather than last_completion_time.
+            #
+            # This is important because the actual completion time is unknown
+            # while a task is still running. We therefore reserve slots based
+            # on the previous scheduled slot adding a buffer to it.
             else:
-                elapsed = now - self.last_completion_time
-                cooldown = max(0, self.cooldown_interval - elapsed)
-                if cooldown:
-                    LOGGER.info("Submitting %s with %.2fs remaining cooldown", identifier, cooldown)
-                else:
-                    LOGGER.info("Submitting %s now (%.2fs since last completion)", identifier, elapsed)
+                cooldown = max(0, self.next_available_time - now)
+                LOGGER.info("Submitting %s with %.2fs remaining cooldown", identifier, cooldown)
+                # Reserve the next slot as well.
+                #
+                # Assuming task execution itself takes zero time for scheduling
+                # Every submission moves the next slot by the cooldown interval + safety buffer
+                self.next_available_time += self.cooldown_interval + self.buffer
             self.total_submissions += 1
             self.status()
             future = self.process_pool.submit(
@@ -106,7 +120,12 @@ class Processor:
                 *args,
                 **kwargs,
             )
-            future.add_done_callback(functools.partial(self.tracker, name=identifier))
+            future.add_done_callback(
+                functools.partial(
+                    self.tracker,
+                    name=identifier,
+                )
+            )
             return future, cooldown
 
     def shutdown(self, wait: bool = True, cancel_futures: bool = False):
