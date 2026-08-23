@@ -16,7 +16,7 @@ from ytsync.remote import transfer
 from ytsync.youtube import process
 
 LOGGER = logging.getLogger("ytsync")
-processor = process.Processor(max_workers=1, cooldown_interval=config.env.cooldown_interval)
+processor = process.Processor(cooldown_interval=config.env.cooldown_interval)
 rsync = transfer.Rsync()
 FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
@@ -216,7 +216,7 @@ async def queue_download(
             f"`{intended_path}`"
         )
 
-    future = processor.submit(
+    future, cooldown = processor.submit(
         identifier=playlist_name,
         function=download_playlist,
         **dict(name=playlist_name, urls=urls, destination=destination),
@@ -240,10 +240,9 @@ async def queue_download(
     )
 
     # TODO: Take timezone as argument for dockerized runs, and honor timezone through out the project
-    if processor.total_submissions == 0:
+    if cooldown == 0:
         return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
-        cooldown = processor.cooldown_interval
         return (
             f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at "
             f"{time.ctime(time.time() + cooldown)} after {cooldown}s"

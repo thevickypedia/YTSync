@@ -3,7 +3,7 @@ import logging
 import threading
 import time
 from concurrent.futures import Future, ProcessPoolExecutor
-from typing import Callable
+from typing import Callable, Tuple
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -31,9 +31,9 @@ class Processor:
 
     """
 
-    def __init__(self, max_workers: int = 1, cooldown_interval: int = 3):
+    def __init__(self, cooldown_interval: int = 3):
         """Instantiates the processor object."""
-        self.process_pool = ProcessPoolExecutor(max_workers=max_workers)
+        self.process_pool = ProcessPoolExecutor(max_workers=1)
         self.cooldown_interval = cooldown_interval
         self.total_submissions = 0
 
@@ -61,7 +61,7 @@ class Processor:
             self.last_completion_time = time.monotonic()
         LOGGER.info("Task '%s' has completed at %.3f", name, self.last_completion_time)
 
-    def submit(self, identifier: str, function: Callable, *args, **kwargs):
+    def submit(self, identifier: str, function: Callable, *args, **kwargs) -> Tuple[Future, int | float]:
         """Submits the function for background execution.
 
         Each task waits for the remaining cooldown period since the previous task's completion.
@@ -69,14 +69,27 @@ class Processor:
         Args:
             identifier: Name for the task.
             function: Function to execute.
+
+        Returns:
+            Tuple[Future, int]:
+            Returns a tuple with a future object and cooldown period the task will wait.
         """
         with self._lock:
             now = time.monotonic()
 
-            if self.last_completion_time is None:
-                # First task runs immediately.
+            # No submissions were made and last completion is None - so true first task
+            if self.last_completion_time is None and self.total_submissions == 0:
+                # First task runs immediately
                 cooldown = 0
                 LOGGER.info("Submitting %s now", identifier)
+            # There are submission(s) but last completion is None - ONE task is still running
+            elif self.last_completion_time is None:
+                # Number of submissions times the cool down interval
+                # Stagger queued tasks so they remain serialized by cooldown
+                # A task is currently running and no completion has been observed yet
+                # Since no completion is observed, there is no accurate way to determine next cooldown
+                cooldown = self.cooldown_interval * self.total_submissions
+            # There are submission(s) and last completion is recorded - calculate cooldown based on it
             else:
                 elapsed = now - self.last_completion_time
                 cooldown = max(0, self.cooldown_interval - elapsed)
@@ -94,7 +107,7 @@ class Processor:
                 **kwargs,
             )
             future.add_done_callback(functools.partial(self.tracker, name=identifier))
-            return future
+            return future, cooldown
 
     def shutdown(self, wait: bool = True, cancel_futures: bool = False):
         """Shutdown the entire process pool."""
