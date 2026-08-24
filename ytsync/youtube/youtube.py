@@ -221,7 +221,7 @@ async def queue_download(
             f"`{intended_path}`"
         )
 
-    future, cooldown = processor.submit(
+    future, scheduled_time = processor.submit(
         identifier=playlist_name,
         function=download_playlist,
         **dict(name=playlist_name, urls=urls, destination=destination),
@@ -244,10 +244,11 @@ async def queue_download(
         )
     )
 
-    if cooldown == 0:
+    scheduled_time = max(0, scheduled_time - time.monotonic())
+    if scheduled_time == 0:
         return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
-        future_utc = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
+        future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         return (

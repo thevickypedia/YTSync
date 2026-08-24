@@ -94,11 +94,11 @@ class Processor:
             if self.total_submissions == 0:
                 if self.delayed_start:
                     # If 'delayed_start' is set, wait until cooldown for first run
-                    cooldown = self.cooldown_interval
-                    LOGGER.info("Submitting %s with %.2fs delayed cooldown", identifier, cooldown)
+                    scheduled_time = now + self.cooldown_interval
+                    LOGGER.info("Submitting %s after %.2fs of delayed start", identifier, scheduled_time)
                 else:
                     # First task runs immediately
-                    cooldown = 0
+                    scheduled_time = now
                     LOGGER.info("Submitting %s now", identifier)
                 # Reserve the next available slot.
                 self.next_available_time = now + self.cooldown_interval + self.buffer
@@ -110,13 +110,14 @@ class Processor:
             # while a task is still running. We therefore reserve slots based
             # on the previous scheduled slot adding a buffer to it.
             else:
-                cooldown = max(0, self.next_available_time - now)
-                LOGGER.info("Submitting %s with %.2fs remaining cooldown", identifier, cooldown)
-                # Reserve the next slot as well.
-                #
-                # Assuming task execution itself takes zero time for scheduling
-                # Every submission moves the next slot by the cooldown interval + safety buffer
-                self.next_available_time += self.cooldown_interval + self.buffer
+                scheduled_time = self.next_available_time
+                LOGGER.info("Submitting %s with %.2fs remaining cooldown", identifier, scheduled_time)
+            cooldown = max(0, scheduled_time - now)
+            # Reserve the next slot as well.
+            #
+            # Assuming task execution itself takes zero time for scheduling
+            # Every submission moves the next slot by the cooldown interval + safety buffer
+            self.next_available_time = scheduled_time + self.cooldown_interval + self.buffer
             self.total_submissions += 1
             self.status()
             future = self.process_pool.submit(
@@ -132,7 +133,7 @@ class Processor:
                     name=identifier,
                 )
             )
-            return future, cooldown
+            return future, scheduled_time
 
     def shutdown(self, wait: bool = True, cancel_futures: bool = False):
         """Shutdown the entire process pool."""
