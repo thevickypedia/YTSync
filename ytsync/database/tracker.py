@@ -19,15 +19,16 @@ class DBSchema(BaseModel):
 
     """
 
+    index: int
     url: HttpUrl
     name: str
     schedule: str
 
 
-def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
+def row_to_schema(index: int, row: Tuple[str, str, str]) -> DBSchema:
     """Convert a row of tuple into a DBSchema object."""
     fields = DBSchema.model_fields.keys()
-    return DBSchema(**dict(zip(fields, row)))
+    return DBSchema(**{"index": index, **dict(zip(fields, row))})
 
 
 def get() -> Generator[DBSchema]:
@@ -35,8 +36,8 @@ def get() -> Generator[DBSchema]:
     with config.db.connection as connection:
         cursor = connection.cursor()
         data = cursor.execute("SELECT * FROM ytsync").fetchall()
-    for row in data:
-        yield row_to_schema(row)
+    for idx, row in enumerate(data):
+        yield row_to_schema(idx, row)
 
 
 def insert(playlist_url: str, return_code: bool = False) -> str | int:
@@ -63,7 +64,7 @@ def insert(playlist_url: str, return_code: bool = False) -> str | int:
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
         if row := cursor.fetchone():
-            tracked = row_to_schema(row)
+            tracked = row_to_schema(0, row)
             if return_code:
                 return 409
             return (
