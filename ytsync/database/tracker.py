@@ -17,18 +17,21 @@ class DBSchema(BaseModel):
 
     >>> DBSchema
 
+    Must follow insertion order: "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);"
     """
 
-    index: int
     url: HttpUrl
     name: str
     schedule: str
+    index: int
 
 
 def row_to_schema(index: int, row: Tuple[str, str, str]) -> DBSchema:
     """Convert a row of tuple into a DBSchema object."""
     fields = DBSchema.model_fields.keys()
-    return DBSchema(**{"index": index, **dict(zip(fields, row))})
+    wrapped = dict(zip(fields, row))
+    wrapped["index"] = index
+    return DBSchema(**wrapped)
 
 
 def get() -> Generator[DBSchema]:
