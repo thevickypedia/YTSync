@@ -59,7 +59,14 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # Concurrency
     # Maximum number of parallel transfers to remote server
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
+
+    # Sequential download factors
     # Cooldown period (in seconds) between every download (always sequential)
+    delayed_start: bool = False
+    # Next available time cannot be accurately determined before it begins
+    # 'next_buffer' with # of seconds is used to simulate an actual download duration
+    next_buffer: PositiveInt = Field(60, ge=30, le=300)  # 30s to 5m; default: 60s
+    # 'cooldown_interval' with # of seconds is used to propagate delay between each download
     cooldown_interval: PositiveInt = Field(300, ge=30, le=10_800)  # 30s to 3h; default: 5m
 
     # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist

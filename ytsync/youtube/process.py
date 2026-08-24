@@ -31,10 +31,11 @@ class Processor:
 
     """
 
-    def __init__(self, cooldown_interval: int = 3, buffer: int = 60):
+    def __init__(self, cooldown_interval: int = 300, buffer: int = 60, delayed_start: bool = False):
         """Instantiates the processor object."""
         self.process_pool = ProcessPoolExecutor(max_workers=1)
         self.cooldown_interval = cooldown_interval
+        self.delayed_start = delayed_start
         self.buffer = buffer
         self.total_submissions = 0
 
@@ -91,11 +92,16 @@ class Processor:
 
             # No submissions were made - this is the true first task
             if self.total_submissions == 0:
-                # First task runs immediately
-                cooldown = 0
+                if self.delayed_start:
+                    # If 'delayed_start' is set, wait until cooldown for first run
+                    cooldown = self.cooldown_interval
+                    LOGGER.info("Submitting %s with %.2fs delayed cooldown", identifier, cooldown)
+                else:
+                    # First task runs immediately
+                    cooldown = 0
+                    LOGGER.info("Submitting %s now", identifier)
                 # Reserve the next available slot.
                 self.next_available_time = now + self.cooldown_interval + self.buffer
-                LOGGER.info("Submitting %s now", identifier)
 
             # There are already submissions. Use the scheduled next available
             # time rather than last_completion_time.

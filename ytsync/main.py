@@ -89,11 +89,45 @@ def webhook_is_usable() -> bool:
     return bool(result.get("url") and pending_update_count < max_pending_updates and age > max_error_age_seconds)
 
 
+def log_config() -> None:
+    """Log all safe env configuration."""
+    LOGGER.debug("***************************** CONFIGURATION START *****************************")
+    LOGGER.debug("Host: %s", config.env.host)
+    LOGGER.debug("Port: %s", config.env.port)
+    LOGGER.debug("Timezone: %s", config.env.tz)
+    LOGGER.debug("Max retries: %d", config.env.max_retries)
+    LOGGER.debug("Backoff factor: %d", config.env.backoff_factor)
+    LOGGER.debug("Max transfers: %d", config.env.max_transfers)
+    LOGGER.debug("Delayed start: %s", config.env.delayed_start)
+    LOGGER.debug("Next buffer: %d", config.env.next_buffer)
+    LOGGER.debug("Cooldown interval: %d", config.env.cooldown_interval)
+    LOGGER.debug("Max error threshold: %d", config.env.max_error_threshold)
+    LOGGER.debug("Data directory: %s", config.env.data_dir)
+    LOGGER.debug("Logs directory: %s", config.env.logs_dir)
+    LOGGER.debug("Download directory: %s", config.env.download_dir)
+    LOGGER.debug("Database: %s", config.env.database)
+    LOGGER.debug("Allowed bot IDs: %s", config.env.bot_chat_ids)
+    LOGGER.debug("Allowed bot users: %s", config.env.bot_users)
+    LOGGER.debug("Poll interval: %s", config.env.poll_interval)
+    LOGGER.debug("Default tracker: %s", config.env.default_tracker)
+    LOGGER.debug("Remote host: %s", config.env.remote_host)
+    LOGGER.debug("Remote user: %s", config.env.remote_user)
+    LOGGER.debug("Remote path: %s", config.env.remote_path)
+    LOGGER.debug("Delete after sync: %s", config.env.delete_after_sync)
+    LOGGER.debug("Bot webhook: %s", config.env.bot_webhook)
+    LOGGER.debug("Bot webhook IP: %s", config.env.bot_webhook_ip)
+    LOGGER.debug("Bot endpoint: %s", config.env.bot_endpoint)
+    LOGGER.debug("Bot certificate: %s", config.env.bot_certificate)
+    LOGGER.debug("***************************** CONFIGURATION END *****************************")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
     # noinspection HttpUrlsUsage
     LOGGER.info("Hosting at http://%s:%s", config.env.host, config.env.port)
+    if LOGGER.isEnabledFor(logging.DEBUG):
+        log_config()
     LOGGER.info("Initiating background tasks...")
     bg_task = asyncio.create_task(agent.executor())
     if not webhook_is_usable():

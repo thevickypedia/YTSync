@@ -17,7 +17,11 @@ from ytsync.remote import transfer
 from ytsync.youtube import process
 
 LOGGER = logging.getLogger("ytsync")
-processor = process.Processor(cooldown_interval=config.env.cooldown_interval)
+processor = process.Processor(
+    cooldown_interval=config.env.cooldown_interval,
+    buffer=config.env.next_buffer,
+    delayed_start=config.env.delayed_start,
+)
 rsync = transfer.Rsync()
 FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
