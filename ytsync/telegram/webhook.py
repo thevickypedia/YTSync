@@ -18,7 +18,7 @@ def get_webhook() -> Dict[str, str] | None:
         https://core.telegram.org/bots/api#getwebhookinfo
     """
     get_info = f"{bot.BASE_URL}/getWebhookInfo"
-    response = requests.get(url=get_info)
+    response = requests.get(url=get_info, timeout=(3, 10))
     if response.ok:
         LOGGER.info(response.json())
         return response.json()

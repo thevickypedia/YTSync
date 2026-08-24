@@ -3,7 +3,6 @@ import logging
 from collections.abc import Generator
 from typing import Callable, Tuple
 
-import yt_dlp
 from pydantic import BaseModel, HttpUrl
 
 from ytsync.modules import config, settings
@@ -22,7 +21,7 @@ class DBSchema(BaseModel):
 
     url: HttpUrl
     name: str
-    schedule: str
+    schedule: config.AllowedCronSchedule
     index: int
 
 
@@ -31,6 +30,7 @@ def row_to_schema(index: int, row: Tuple[str, str, str]) -> DBSchema:
     fields = DBSchema.model_fields.keys()
     wrapped = dict(zip(fields, row))
     wrapped["index"] = index
+    wrapped["schedule"] = getattr(config.AllowedCronSchedule, wrapped["schedule"])
     return DBSchema(**wrapped)
 
 
@@ -43,50 +43,37 @@ def get() -> Generator[DBSchema]:
         yield row_to_schema(idx, row)
 
 
-def insert(playlist_url: str, return_code: bool = False) -> str | int:
+def insert(playlist_url: str, schedule: config.AllowedCronSchedule, return_code: bool = False) -> str | int:
     """Handles tracker for a playlist URL.
 
     Args:
         playlist_url: URL to sync on schedule.
+        schedule: Schedule to follow for tracking the given playlist.
         return_code: Boolean flag to return HTTP code instead of structured text.
 
     Returns:
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
-    with yt_dlp.YoutubeDL() as ydl:
-        info = ydl.extract_info(
-            playlist_url,
-            download=False,
-            process=False,
-        )
-    assert all((info, info.get("title"))), "Failed to get the playlist title"
-    title = info["title"]
-    # TODO: Schedule should be user-input
     with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
         if row := cursor.fetchone():
             tracked = row_to_schema(0, row)
-            if return_code:
-                return 409
-            return (
-                "❌ *Already scheduled*\n\n"
-                f"*{tracked.name}* is already scheduled for sync.\n\n"
-                f"*URL:* `{tracked.url}`\n\n"
-                f"*Schedule:* `{tracked.schedule}`\n\n"
-                "Use `/status` to get the schedule index, then "
-                "`/delete <index>` to remove it before adding a new schedule."
-            )
+            LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
+            title = tracked.name
+        else:
+            _, yt_info = youtube.get_info(playlist_url)
+            assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
+            title = yt_info["title"]
         cursor.execute(
-            "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);",
-            (playlist_url, title, config.env.default_tracker),
+            "INSERT OR REPLACE INTO ytsync (url, name, schedule) VALUES (?,?,?);",
+            (playlist_url, title, schedule.name),
         )
         connection.commit()
     if return_code:
         return 200
-    # TODO: Expand schedule to meaningful statement
-    return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced on schedule:\n" f"`{config.env.default_tracker}`"
+    return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced {schedule.name.lower()}"
 
 
 def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None = None) -> str:
@@ -94,6 +81,8 @@ def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None 
 
     Args:
         idx: Index to be synced.
+        chat: Chat object to send a notification as callback.
+        callback: Callback function call once the task has completed.
 
     Returns:
         str:
@@ -110,8 +99,9 @@ def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None 
             "Use `/status` to see the available tracker indexes."
         )
     tracker = trackers[idx]
-    LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, tracker.url)
-    asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=tracker.url, callback=callback))
+    url = str(tracker.url)
+    LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
+    asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
     return f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be synced shortly."
 
 
@@ -140,11 +130,12 @@ def delete(idx: int, return_code: bool = False) -> str | int:
             "Use `/status` to see the available tracker indexes."
         )
     tracker = trackers[idx]
+    url = str(tracker.url)
     with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
             "DELETE FROM ytsync WHERE url = ?;",
-            (tracker.url,),
+            (url,),
         )
         connection.commit()
     if return_code:
@@ -152,6 +143,6 @@ def delete(idx: int, return_code: bool = False) -> str | int:
     return (
         "✅ *Tracker deleted*\n\n"
         f"*{tracker.name}* has been removed from the sync schedule.\n\n"
-        f"*URL:* `{tracker.url}`\n"
+        f"*URL:* `{url}`\n"
         f"*Schedule:* `{tracker.schedule}`"
     )

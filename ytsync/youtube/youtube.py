@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Tuple
 
 import yt_dlp
 from pydantic import BaseModel
+from yt_dlp import YoutubeDL
 
 from ytsync.modules import config, settings
 from ytsync.remote import transfer
@@ -184,6 +185,25 @@ def get_missing_playlist_entries(
     return urls, counter
 
 
+def get_info(playlist_url: str) -> Tuple[YoutubeDL, Dict[str, Any]]:
+    """Get info based on the playlist URL.
+
+    Args:
+        playlist_url: Playlist URL.
+
+    Returns:
+        Tuple[YoutubeDL, Dict[str, Any]]:
+        Returns a tuple of YoutubeDL object, and a dictionary of information block.
+    """
+    with yt_dlp.YoutubeDL() as ydl:
+        info = ydl.extract_info(
+            playlist_url,
+            download=False,
+            process=False,
+        )
+    return ydl, info
+
+
 async def queue_download(
     chat: settings.Chat | None = None,
     callback: Callable | None = None,
@@ -198,13 +218,7 @@ async def queue_download(
     else:
         raise ValueError("Either 'playlist_url' [OR] 'playlist_id' is required!!")
 
-    with yt_dlp.YoutubeDL() as ydl:
-        info = ydl.extract_info(
-            playlist_url,
-            download=False,
-            process=False,
-        )
-
+    ydl, info = get_info(playlist_url)
     playlist_name = info.get("title")
     assert playlist_name, "Failed to extract the playlist's title"
 

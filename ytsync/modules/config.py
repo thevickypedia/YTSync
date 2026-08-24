@@ -2,11 +2,9 @@ import math
 import os
 import pathlib
 import socket
-import warnings
 from datetime import datetime, tzinfo
 from enum import StrEnum
 from ipaddress import IPv4Address
-from multiprocessing import current_process
 from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
@@ -34,10 +32,10 @@ PLAYLIST_URL = "https://music.youtube.com/playlist?list={playlist_id}"
 class AllowedCronSchedule(StrEnum):
     """Allowed cron schedule to track playlists."""
 
-    HOURLY = "0 * * * *"
-    DAILY = "0 0 * * *"
-    WEEKLY = "0 0 * * 0"
-    MONTHLY = "0 0 1 * *"
+    HOURLY = "@hourly"
+    DAILY = "@daily"
+    WEEKLY = "@weekly"
+    MONTHLY = "@monthly"
 
 
 class EnvConfig(pydantic_config.PydanticEnvConfig):
@@ -76,14 +74,12 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
     logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
     download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
-    database: str | pathlib.Path = Field("database.db", pattern=r"^[A-Za-z0-9]+\.db$")
 
     # Telegram config
     bot_token: str
     bot_chat_ids: List[int]
     bot_users: List[str]
     poll_interval: PositiveInt | PositiveFloat = Field(2, le=10, ge=1)
-    default_tracker: AllowedCronSchedule = AllowedCronSchedule.DAILY
 
     # Remote config
     remote_host: str | None = None
@@ -140,12 +136,10 @@ if env.bot_webhook and env.bot_webhook.path != env.bot_endpoint:
             ),
         ],
     )
-if not all((env.remote_host, env.remote_path, env.remote_user)) and current_process().name == "MainProcess":
-    warnings.warn("No remote connections have been setup, all downloaded media will be stored locally.")
+
 env.data_dir.mkdir(exist_ok=True)
 env.download_dir.mkdir(exist_ok=True)
-env.database = env.data_dir.joinpath(env.database)
-db = database.Database(database=env.database)
+db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule"], primary_key="url")
 if not env.apikey:
     env.apikey = env.bot_token

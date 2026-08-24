@@ -211,12 +211,14 @@ class Trackers(BaseModel):
 
 async def api_add_trackers(
     body: Trackers,
+    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to ADD new trackers.
 
     Args:
         body: Takes the required tracker parameters as body.
+        schedule: Schedule to track the given playlist.
         apikey: API key as header for authentication.
     """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
@@ -226,7 +228,7 @@ async def api_add_trackers(
     stats = {}
     for url in body.urls:
         try:
-            code = tracker.insert(str(url), return_code=True)
+            code = tracker.insert(str(url), schedule, return_code=True)
         except Exception as error:
             LOGGER.exception(error)
             code = 500

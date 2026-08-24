@@ -15,6 +15,7 @@ from enum import StrEnum
 from typing import Callable, Dict, List
 
 import requests
+from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
@@ -357,7 +358,7 @@ def trackers_text() -> str:
     if trackers := list(tracker.get()):
         txt += "\n\n*Trackers:*\n"
         for idx, tracked in enumerate(trackers, start=1):
-            txt += f"{idx}. *{tracked.name}* — `{tracked.schedule}`\n"
+            txt += f"{idx}. *{tracked.name}* — *{tracked.schedule.name.capitalize()}*\n"
     else:
         LOGGER.info("No trackers found.")
     return txt
@@ -410,7 +411,11 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         return
     if text_lower in ("status", "stats", "test"):
         txt = get_channel()
-        txt += trackers_text()
+        try:
+            txt += trackers_text()
+        except Exception as error:
+            LOGGER.exception(error)
+            txt += "\n\n*Trackers:* Failed to get trackers.\n"
         final = (
             f"🕐 *Server Timestamp:* `{config.now().strftime('%c')} {config.tzname()}`\n\n{txt}\n\n{get_process_pool()}"
         )
@@ -448,12 +453,32 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
             return
+    # TODO: Allow /track /sync and /delete to execute with playlist name instead of index
     elif command.startswith("/track"):
+        invalid_msg = (
+            "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, followed by `/track`\n\n"
+            f"Optionally you can also add a schedule with one of {list(config.AllowedCronSchedule.__members__)}"
+        )
         if (statement := command.replace("/track", "").strip()).startswith("http"):
-            response = str(tracker.insert(statement))
+            payload = statement.split()
+            LOGGER.info(payload)
+            try:
+                if len(payload) == 1:
+                    url = HttpUrl(payload[0])
+                    schedule = config.AllowedCronSchedule.DAILY
+                elif len(payload) == 2:
+                    url = HttpUrl(payload[0])
+                    schedule = getattr(config.AllowedCronSchedule, payload[1])
+                else:
+                    reply_to(chat, invalid_msg.format(pretext=""))
+                    return
+            except (AttributeError, ValidationError) as error:
+                reply_to(chat, invalid_msg.format(pretext=f"{error}\n\n"))
+                return
+            response = str(tracker.insert(str(url), schedule))
             reply_to(chat, response)
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required, followed by `/track`.")
+            reply_to(chat, invalid_msg.format(pretext=""))
         return
     elif command.startswith("/sync"):
         if index := command.replace("/sync", "").strip():
