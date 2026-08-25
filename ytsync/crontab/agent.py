@@ -5,6 +5,7 @@ from datetime import datetime
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
+from ytsync.telegram import bot
 from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
@@ -47,6 +48,11 @@ async def executor() -> None:
             if expression.CronExpression(track.schedule.value).check_trigger():
                 url = str(track.url)
                 LOGGER.info("Executing sync for '%s' with '%s'", track.name, url)
-                task = asyncio.create_task(youtube.queue_download(playlist_url=url))
+                # Background task; so no timeout required
+                task = asyncio.create_task(
+                    youtube.queue_download(
+                        playlist_url=url, callback=bot.reply_to, chat_id=track.chat_id, schedule=track.schedule
+                    )
+                )
                 task.set_name(f"{track.name}||{int(time.time())}")
                 task.add_done_callback(callback)

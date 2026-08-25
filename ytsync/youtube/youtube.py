@@ -13,7 +13,7 @@ import yt_dlp
 from pydantic import BaseModel
 from yt_dlp import YoutubeDL
 
-from ytsync.modules import config, settings
+from ytsync.modules import config
 from ytsync.remote import transfer
 from ytsync.youtube import process
 
@@ -62,43 +62,75 @@ def process_callback(
     name: str,
     preflight_stats: Dict[str, int],
     callback: Callable | None = None,
-    chat: settings.Chat | None = None,
+    chat_id: int | None = None,
+    message_id: int | None = None,
+    schedule: config.AllowedCronSchedule | None = None,
 ):
-    """Called when the playlist process finishes."""
+    """Callback function triggered when the playlist process finishes.
+
+    Args:
+        future: Future object.
+        name: Playlist name.
+        preflight_stats: Preflight status dict.
+        callback: Callback function. This must always be `bot.reply_to` as a callable object.
+        chat_id: Telegram Chat ID.
+        message_id: Telegram message ID.
+        schedule: Cron schedule enum to indicate a scheduled run.
+    """
+    if schedule:
+        schedule = schedule.value.lstrip("@").capitalize()
     if error := future.exception():
-        # TODO: North star: Only chat should be optional - callback should be an ntfy [OR] telegram without 'chat' param
-        if callback and chat:
-            callback(
-                chat=chat,
-                response=f"❌ *Download failed*\n\n{error}",
-            )
-        LOGGER.error("Process failed for %s: %s", name, error)
+        if callback and chat_id:
+            # NOTE: callback function must always be 'bot.reply_to' with an explicit 'message_id' - 'None' or otherwise
+            if schedule:
+                txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
+            else:
+                txt = f"❌ *Download failed for {name!r}*\n\n{error}"
+            callback(chat_id=chat_id, message_id=message_id, response=txt)
+        LOGGER.exception(error)
+        LOGGER.error("Process failed for %s", name)
         return
 
     result: Dict[str, int] = future.result()
     runtime = result.pop("runtime")
-    response = f"✅ *Download completed*\n\n" f"*{name}* completed in `{runtime:.2f}s`.\n\n"
+    if schedule:
+        response = f"✅ *{schedule} download completed for {name!r}*\n\n" f"Process completed in `{runtime:.2f}s`.\n\n"
+    else:
+        response = f"✅ *Download completed for {name!r}*\n\n" f"Process completed in `{runtime:.2f}s`.\n\n"
     # preflight_status is set to None if checks fail
     if preflight_stats:
         p_stats = "\n".join(stats_to_markdown(preflight_stats))
         response += f"*Pre-flight result:*\n{p_stats}\n\n"
     t_stats = "\n".join(stats_to_markdown(result))
     response += f"*Download/Transfer result:*\n{t_stats}"
-    if callback and chat:
+    LOGGER.info(response)
+    if callback and chat_id:
         callback(
-            chat=chat,
+            chat_id=chat_id,
+            message_id=message_id,
             response=response,
         )
 
 
 def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
-    """Extract filename for a potential entry."""
-    # noinspection bad-argument-type
-    return (
-        pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(FILENAME_TEMPLATE))))
-        .with_suffix(".mp3")
-        .name
-    )
+    """Extract filename for a potential entry.
+
+    Args:
+        ydl: YoutubeDL object.
+        entry: Entry object found in each 'info' block.
+        destination: Destination filepath where the file has to be saved.
+
+    Returns:
+        str:
+        Returns the potential filename.
+    """
+    with ydl:
+        # noinspection bad-argument-type
+        return (
+            pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(FILENAME_TEMPLATE))))
+            .with_suffix(".mp3")
+            .name
+        )
 
 
 def get_missing_playlist_entries(
@@ -205,12 +237,14 @@ def get_info(playlist_url: str) -> Tuple[YoutubeDL, Dict[str, Any]]:
 
 
 async def queue_download(
-    chat: settings.Chat | None = None,
+    chat_id: int | None = None,
+    message_id: int | None = None,
     callback: Callable | None = None,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
     raw_text: bool = False,
-) -> str:
+    schedule: config.AllowedCronSchedule | None = None,
+) -> str | None:
     """Queue a playlist download in the process pool."""
     if playlist_url:
         LOGGER.debug("Playlist URL: %s", playlist_url)
@@ -232,11 +266,14 @@ async def queue_download(
         intended_path = posixpath.join(rsync.remote_path, playlist_name) if rsync.is_enabled else destination
         if raw_text:
             return f"{playlist_name!r} with {preflight_stats['total']} file(s) is already available at: {intended_path}"
-        return (
-            "ℹ️ *Already available*\n\n"
+        callback(
+            chat_id=chat_id,
+            message_id=message_id,
+            response="ℹ️ *Already available*\n\n"
             f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
-            f"`{intended_path}`"
+            f"`{intended_path}`",
         )
+        return None
 
     future, scheduled_time = processor.submit(
         identifier=playlist_name,
@@ -249,7 +286,9 @@ async def queue_download(
         name=playlist_name,
         preflight_stats=preflight_stats,
         callback=callback,
-        chat=chat,
+        chat_id=chat_id,
+        message_id=message_id,
+        schedule=schedule,
     )
 
     future.add_done_callback(wrapped_callback)
@@ -264,17 +303,35 @@ async def queue_download(
     scheduled_time = max(0, scheduled_time - time.monotonic())
     if scheduled_time == 0:
         if raw_text:
-            return f"{playlist_name!r} with {len(urls)} file(s) has been queued for download."
-        return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
+            txt = f"{playlist_name!r} with {len(urls)} file(s) has been queued for download."
+        else:
+            txt = f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         if raw_text:
-            return f"{playlist_name!r} with {len(urls)} file(s) will be queued for download at {t_string!r}"
-        return (
-            f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at {t_string}"
-        )
+            txt = f"{playlist_name!r} with {len(urls)} file(s) will be queued for download at {t_string!r}"
+        else:
+            txt = (
+                f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) "
+                f"will be queued for download at {t_string}"
+            )
+
+    # Add a text block about callback notification when 'chat_id' is provided
+    if chat_id:
+        spacer = " " if raw_text else "\n\n"
+        txt += f"{spacer}You will receive a notification to {chat_id!r} when the process completes."
+
+    if raw_text:
+        return txt
+
+    # Skip start notification for scheduled runs, to avoid too much noise
+    if schedule:
+        LOGGER.info(txt)
+    else:
+        callback(chat_id=chat_id, message_id=message_id, response=txt)
+    return None
 
 
 def transfer_file(local_path: str) -> None:

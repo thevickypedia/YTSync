@@ -1,8 +1,6 @@
 import asyncio
 import logging
-import secrets
 from http import HTTPStatus
-from ipaddress import IPv4Address
 from json.decoder import JSONDecodeError
 from typing import List
 
@@ -10,53 +8,19 @@ import requests
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, HttpUrl
 from yt_dlp.utils import DownloadError
 
+from ytsync.api import auth, models
 from ytsync.database import tracker
 from ytsync.modules import config
 from ytsync.telegram import bot, poll, webhook
 from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
-SECURITY = HTTPBearer(description="Enter your telegram username")
+SECURITY = HTTPBearer(
+    description="Enter the telegram bot token (for webhook operations) or apikey (for YTSync interactions)"
+)
 POLL_LOCK = asyncio.Lock()
-
-
-def authenticator(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
-    """Function to authenticate inbound requests.
-
-    Args:
-        apikey: API key to validate an ingress request.
-        bot_request: Boolean flag to indicate bot operation.
-    """
-    secret = config.env.bot_token if bot_request else config.env.apikey
-    if not secrets.compare_digest(apikey.credentials, secret):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
-
-
-def two_factor(request: Request) -> bool:
-    """Two factor verification for messages coming via webhook.
-
-    Args:
-        request: Request object from FastAPI.
-
-    Returns:
-        bool:
-        Flag to indicate the calling function if the auth was successful.
-    """
-    if config.env.bot_secret:
-        if secrets.compare_digest(
-            request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""),
-            config.env.bot_secret,
-        ):
-            return True
-    else:
-        LOGGER.warning("Use the env var bot_secret to secure the webhook interaction")
-        return True
-    return False
 
 
 async def telegram_webhook(request: Request):
@@ -85,7 +49,7 @@ async def telegram_webhook(request: Request):
             detail=HTTPStatus.BAD_REQUEST.phrase,
         )
     # Ensure only the owner who set the webhook can interact with the Bot
-    if not two_factor(request):
+    if not auth.two_factor(request):
         LOGGER.error("Request received from a non-webhook source")
         LOGGER.error(response)
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
@@ -99,16 +63,8 @@ async def telegram_webhook(request: Request):
         )
 
 
-class SetWebhook(BaseModel):
-    """Request payload for POST webhook endpoint."""
-
-    webhook: HttpUrl
-    secret_token: str
-    webhook_ip: IPv4Address | None = None
-
-
 async def api_set_webhook(
-    body: SetWebhook,
+    body: models.SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to POST a webhook.
@@ -117,7 +73,7 @@ async def api_set_webhook(
         body: Takes the required webhook parameters as body.
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, True)
+    auth.validate(apikey, True)
     # No webhook received
     if not body.webhook:
         raise HTTPException(
@@ -161,7 +117,7 @@ async def api_get_webhook(
     Args:
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, True)
+    auth.validate(apikey, True)
     try:
         return webhook.get_webhook()
     except requests.RequestException as error:
@@ -179,7 +135,7 @@ async def api_delete_webhook(
     Args:
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, True)
+    auth.validate(apikey, True)
     try:
         response = webhook.delete_webhook()
         async with POLL_LOCK:
@@ -201,21 +157,14 @@ async def api_get_trackers(
     Args:
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, False)
+    auth.validate(apikey, False)
     if trackers := [track.model_dump(mode="json") for track in tracker.get()]:
         return trackers
     raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
 
 
-class Trackers(BaseModel):
-    """Payload to add trackers through API."""
-
-    url: HttpUrl
-    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY
-
-
 async def api_add_trackers(
-    body: List[Trackers],
+    body: List[models.Trackers],
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to ADD new trackers.
@@ -224,11 +173,11 @@ async def api_add_trackers(
         body: Takes the required tracker parameters as body.
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, False)
+    auth.validate(apikey, False)
     stats = {}
     for idx, track in enumerate(body):
         try:
-            code = tracker.insert(str(track.url), track.schedule, return_code=True, delay=idx * 1)
+            code = tracker.insert(str(track.url), track.schedule, track.chat_id, return_code=True, delay=idx * 1)
         except Exception as error:
             LOGGER.exception(error)
             code = 500
@@ -237,33 +186,38 @@ async def api_add_trackers(
 
 
 async def api_delete_trackers(
-    names: str,
+    body: List[models.DeleteTrackers],
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to DELETE given trackers.
 
     Args:
-        names: Comma separated list of playlist names to remove from scheduled trackers.
+        body: Takes the required tracker parameters as body.
         apikey: API key as header for authentication.
     """
-    authenticator(apikey, False)
-    names = names.split(",")
-    if not names:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required.")
+    auth.validate(apikey, False)
+    if not body:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real)
     trackers = list(tracker.get())
     stats = {}
-    for name in names:
+    for track in body:
+        if not any((track.name, track.url)):
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required for each entry."
+            )
         try:
-            code = tracker.delete(name=name, return_code=True, trackers=trackers)
+            code = tracker.delete(
+                name=track.name, url=track.url, chat_id=track.chat_id, return_code=True, trackers=trackers
+            )
         except Exception as error:
             LOGGER.exception(error)
             code = 500
-        stats[name] = HTTPStatus(value=code)
+        stats[track.name or track.url] = HTTPStatus(value=code)
     return stats
 
 
 async def api_sync_trackers(
-    body: List[HttpUrl],
+    body: List[models.SyncTrack],
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to SYNC playlists as an on-demand request.
@@ -272,14 +226,23 @@ async def api_sync_trackers(
         body: List of URL objects as request body.
         apikey: APIkey to authenticate the request.
     """
-    authenticator(apikey, False)
+    auth.validate(apikey, False)
+    # TODO: Bad request should provide detail or give a link to the '/docs' page based on the request.url
     if not body:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real)
     stat = {}
-    for url in body:
+    for track in body:
         try:
-            stat[url] = dict(status_code=200, detail=await youtube.queue_download(playlist_url=str(url), raw_text=True))
+            stat[track.url] = dict(
+                status_code=200,
+                detail=await asyncio.wait_for(
+                    youtube.queue_download(
+                        playlist_url=str(track.url), chat_id=track.chat_id, callback=bot.reply_to, raw_text=True
+                    ),
+                    timeout=config.env.response_timeout,
+                ),
+            )
         except (ValueError, AssertionError, DownloadError) as error:
             LOGGER.exception(error)
-            stat[url] = dict(status_code=500, detail=str(error))
+            stat[track.url] = dict(status_code=500, detail=str(error))
     return stat

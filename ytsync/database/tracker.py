@@ -23,6 +23,7 @@ class DBSchema(BaseModel):
     url: HttpUrl
     name: str
     schedule: config.AllowedCronSchedule
+    chat_id: int | None = None
 
 
 def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
@@ -43,13 +44,14 @@ def get() -> Generator[DBSchema]:
 
 
 def insert(
-    playlist_url: str, schedule: config.AllowedCronSchedule, return_code: bool = False, delay: int = 0
+    playlist_url: str, schedule: config.AllowedCronSchedule, chat_id: int, return_code: bool = False, delay: int = 0
 ) -> str | int:
     """Handles tracker for a playlist URL.
 
     Args:
         playlist_url: URL to sync on schedule.
         schedule: Schedule to follow for tracking the given playlist.
+        chat_id: Chat ID to notify when the scheduled run has completed/failed.
         return_code: Boolean flag to return HTTP code instead of structured text.
         delay: Number of seconds to sleep, since API supports multiple additions in a single request.
 
@@ -59,19 +61,30 @@ def insert(
     """
     with config.db.connection as connection:
         cursor = connection.cursor()
-        cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
+        # Selecting with 'chat_id' prevents cross user access OR data corruption
+        # However, selecting with 'chat_id' means the API should also pass the original 'chat_id',
+        # when an entry is made via Telegram but updated through the API; 'GET /get-trackers' will give the 'chat_id'
+        cursor.execute(
+            "SELECT * FROM ytsync WHERE url = ? AND chat_id = ? LIMIT 1;",
+            (
+                playlist_url,
+                chat_id,
+            ),
+        )
         if row := cursor.fetchone():
             tracked = row_to_schema(row)
             LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
             title = tracked.name
+            # Since there is no primary key, 'INSERT OR REPLACE' will NOT prevent duplicates
+            cursor.execute("DELETE FROM ytsync WHERE url = ? AND chat_id = ?;")
         else:
             _, yt_info = youtube.get_info(playlist_url)
             assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
             title = yt_info["title"]
             time.sleep(delay)
         cursor.execute(
-            "INSERT OR REPLACE INTO ytsync (url, name, schedule) VALUES (?,?,?);",
-            (playlist_url, title, schedule.name),
+            "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);",
+            (playlist_url, title, schedule.name, chat_id),
         )
         connection.commit()
     if return_code:
@@ -96,7 +109,7 @@ def stringified_get(trackers: List[DBSchema] | None = None) -> str:
 
 
 async def sync(
-    name: str | None = None, url: str | None = None, chat: settings.Chat | None = None, callback: Callable | None = None
+    chat: settings.Chat, name: str | None = None, url: str | None = None, callback: Callable | None = None
 ) -> None:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
@@ -119,15 +132,17 @@ async def sync(
         url = str(tracker.url)
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
-            youtube.queue_download(chat=chat, playlist_url=url, callback=callback), timeout=config.env.response_timeout
+            youtube.queue_download(chat_id=chat.id, message_id=chat.message_id, playlist_url=url, callback=callback),
+            timeout=config.env.response_timeout,
         )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
-        # NOTE: This should never happen since insertion follows INSERT OR REPLACE INTO SQL logic
+        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id matches
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
-            youtube.queue_download(chat=chat, playlist_url=url, callback=callback), timeout=config.env.response_timeout
+            youtube.queue_download(chat_id=chat.id, message_id=chat.message_id, playlist_url=url, callback=callback),
+            timeout=config.env.response_timeout,
         )
     elif trackers:
         callback(chat, f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}")
@@ -136,13 +151,18 @@ async def sync(
 
 
 def delete(
-    name: str | None = None, url: str | None = None, return_code: bool = False, trackers: List[DBSchema] | None = None
+    name: str | None = None,
+    url: str | None = None,
+    chat_id: int = 0,
+    return_code: bool = False,
+    trackers: List[DBSchema] | None = None,
 ) -> str | int:
     """Delete a tracker by its 1-based status index.
 
     Args:
         name: Name of the playlist.
         url: URL for the playlist.
+        chat_id: Telegram chat ID.
         return_code: Boolean flag to return HTTP code instead of structured text.
         trackers: API supports multiple deletion at once, hence the API function gathers all trackers before looping.
 
@@ -156,7 +176,7 @@ def delete(
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
-        # NOTE: This should never happen since insertion follows INSERT OR REPLACE INTO SQL logic
+        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id matches
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
     elif trackers:
         if return_code:
@@ -170,7 +190,16 @@ def delete(
     url = str(tracker.url)
     with config.db.connection as connection:
         cursor = connection.cursor()
-        cursor.execute("DELETE FROM ytsync WHERE url = ?;", (url,))
+        # Using 'chat_id' condition prevents cross user access OR data corruption
+        # However, deleting with 'chat_id' means the API should also pass the original 'chat_id',
+        # when an entry is made via Telegram but deleted through the API; 'GET /get-trackers' will give the 'chat_id'
+        cursor.execute(
+            "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
+            (
+                url,
+                chat_id,
+            ),
+        )
         connection.commit()
     if return_code:
         return 200

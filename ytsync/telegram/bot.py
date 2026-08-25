@@ -295,7 +295,8 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     processed_time = current_dt.strftime("%m-%d-%Y %H:%M:%S")
     LOGGER.warning("Request timed out [%s] for %s", request_time, chat.username)
     reply_to(
-        chat.id, chat.message_id,
+        chat.id,
+        chat.message_id,
         f"Request timed out\nRequested: {request_time}\n" f"Processed: {processed_time}",
     )
     return False
@@ -437,18 +438,28 @@ async def executor(command: str, chat: settings.Chat) -> None:
     #   Write unit tests and code coverage pipeline in GHA
     #   Feature to allow cookies
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    kwargs: Dict[str, str | int | None | Callable] = dict(chat_id=chat.id, message_id=chat.message_id, callback=reply_to)
+    kwargs: Dict[str, str | int | None | Callable] = dict(
+        chat_id=chat.id, message_id=chat.message_id, callback=reply_to
+    )
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
         else:
-            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`")
+            reply_to(
+                chat.id,
+                chat.message_id,
+                "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`",
+            )
             return
     elif command.startswith("/url"):
         if playlist_url := command.replace("/url", "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
-            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
+            reply_to(
+                chat.id,
+                chat.message_id,
+                "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`",
+            )
             return
     elif command.startswith("/track"):
         invalid_msg = (
@@ -471,7 +482,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
             except (AttributeError, ValidationError) as error:
                 reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
                 return
-            response = str(tracker.insert(str(url), schedule))
+            response = str(tracker.insert(str(url), schedule, chat.id))
             reply_to(chat.id, chat.message_id, response)
         else:
             reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
@@ -479,11 +490,15 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith("/sync"):
         if identifier := command.replace("/sync", "").strip():
             if identifier.startswith("http"):
-                await tracker.sync(url=identifier, chat=chat, callback=reply_to)
+                await tracker.sync(chat=chat, url=identifier, callback=reply_to)
             else:
-                await tracker.sync(name=identifier, chat=chat, callback=reply_to)
+                await tracker.sync(chat=chat, name=identifier, callback=reply_to)
         else:
-            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.")
+            reply_to(
+                chat.id,
+                chat.message_id,
+                "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.",
+            )
         return
     elif command.startswith("/delete"):
         if identifier := command.replace("/delete", "").strip():
@@ -493,7 +508,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 resp = tracker.delete(name=identifier)
             reply_to(chat.id, chat.message_id, str(resp))
         else:
-            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.")
+            reply_to(
+                chat.id,
+                chat.message_id,
+                "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.",
+            )
         return
     else:
         send_message(
@@ -506,7 +525,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
         )
         return
     try:
-        response = await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=config.env.response_timeout)
+        await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=config.env.response_timeout)
     except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
         if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")
@@ -518,4 +537,4 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             LOGGER.error(error)
             response = error.__str__()
-    reply_to(chat.id, chat.message_id, response)
+        reply_to(chat.id, chat.message_id, response)

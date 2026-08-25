@@ -92,7 +92,6 @@ def webhook_is_usable() -> bool:
 def log_config() -> None:
     """Log all safe env configuration."""
     LOGGER.debug("***************************** CONFIGURATION START *****************************")
-    # TODO: Hard-coded; find a better way
     sensitive = ("log_config", "bot_token", "bot_secret", "apikey", "bot_users", "bot_chat_ids")
     for key, value in config.env.model_dump().items():
         if key in sensitive:
