@@ -82,7 +82,8 @@ def _make_request(
 
 
 def reply_to(
-    chat: settings.Chat,
+    chat_id: int,
+    message_id: int | None,
     response: str,
     parse_mode: str | None = "markdown",
     retry: bool = False,
@@ -90,7 +91,8 @@ def reply_to(
     """Generates a payload to reply to a message received.
 
     Args:
-        chat: Required section of the payload as Chat object.
+        chat_id: ChatId to respond to.
+        message_id: MessageId to mark as reply.
         response: Message to be sent to the user.
         parse_mode: Parse mode. Defaults to ``markdown``
         retry: Retry reply in case reply failed because of parsing.
@@ -99,11 +101,13 @@ def reply_to(
         Response:
         Response class.
     """
+    if not message_id:
+        return send_message(chat_id, response, parse_mode)
     result = _make_request(
         url=BASE_URL + "/sendMessage",
         payload={
-            "chat_id": chat.id,
-            "reply_to_message_id": chat.message_id,
+            "chat_id": chat_id,
+            "reply_to_message_id": message_id,
             "text": response,
             "parse_mode": parse_mode,
         },
@@ -111,7 +115,7 @@ def reply_to(
     # Retry with response as plain text
     if result.status_code == 400 and parse_mode and not retry:
         LOGGER.warning("Retrying response as plain text with no parsing")
-        reply_to(chat, response, None, True)
+        reply_to(chat_id, message_id, response, None, True)
     return result
 
 
@@ -232,11 +236,13 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         # noinspection not-mapping,not-iterable
         await process_photo(chat, [settings.PhotoFragment(**d) for d in payload["photo"]])
     else:
-        reply_to(chat, "Payload type is not allowed.")
+        reply_to(chat.id, chat.message_id, "Payload type is not allowed.")
 
 
-def username_is_valid(username: str) -> bool:
+def username_is_valid(username: str | None) -> bool:
     """Compares username and returns True if username is allowed."""
+    if not username:
+        return False
     for user in config.env.bot_users:
         if secrets.compare_digest(user, username):
             return True
@@ -279,6 +285,8 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     """
     if int(time.time()) - chat.date < 60:
         return True
+    if not chat.date:
+        return False
     # Convert Unix timestamp to datetime in the specific timezone
     local_dt = datetime.fromtimestamp(chat.date, tz=config.env.tz)
     current_dt = datetime.now(tz=config.env.tz)
@@ -287,7 +295,7 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     processed_time = current_dt.strftime("%m-%d-%Y %H:%M:%S")
     LOGGER.warning("Request timed out [%s] for %s", request_time, chat.username)
     reply_to(
-        chat,
+        chat.id, chat.message_id,
         f"Request timed out\nRequested: {request_time}\n" f"Processed: {processed_time}",
     )
     return False
@@ -302,7 +310,8 @@ async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFrag
     """
     LOGGER.info(data_class)
     reply_to(
-        chat,
+        chat.id,
+        chat.message_id,
         "Image fragments are not supported. If you're sending a compressed image, "
         "please try sending it without compression.",
     )
@@ -336,7 +345,7 @@ async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None
         data_class: Required section of the payload as Voice object.
     """
     assert data_class, "Requested to process voice, but no voice note was received!"
-    reply_to(chat, "Audio inputs are not supported at the moment. Please try text input.")
+    reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
 
 
 async def process_document(
@@ -349,7 +358,7 @@ async def process_document(
         data_class: Required section of the payload as Document object.
     """
     assert data_class, "Requested to process document, but no document was received!"
-    reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
+    reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
 def get_process_pool() -> str:
@@ -407,13 +416,13 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         final = (
             f"🕐 *Server Timestamp:* `{config.now().strftime('%c')} {config.tzname()}`\n\n{txt}\n\n{get_process_pool()}"
         )
-        reply_to(chat, final)
+        reply_to(chat.id, chat.message_id, final)
         return
     try:
         await executor(data_class.text, chat)
     except Exception as error:
         LOGGER.exception(error)
-        reply_to(chat, f"❌ *Error*\n\n`{error}`")
+        reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
 async def executor(command: str, chat: settings.Chat) -> None:
@@ -428,18 +437,18 @@ async def executor(command: str, chat: settings.Chat) -> None:
     #   Write unit tests and code coverage pipeline in GHA
     #   Feature to allow cookies
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    kwargs: Dict[str, str | Callable | settings.Chat] = dict(chat=chat, callback=reply_to)
+    kwargs: Dict[str, str | int | None | Callable] = dict(chat_id=chat.id, message_id=chat.message_id, callback=reply_to)
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():
             kwargs["playlist_id"] = playlist_id
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`")
+            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`")
             return
     elif command.startswith("/url"):
         if playlist_url := command.replace("/url", "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
+            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
             return
     elif command.startswith("/track"):
         invalid_msg = (
@@ -457,15 +466,15 @@ async def executor(command: str, chat: settings.Chat) -> None:
                     url = HttpUrl(payload[0])
                     schedule = getattr(config.AllowedCronSchedule, payload[1])
                 else:
-                    reply_to(chat, invalid_msg.format(pretext=""))
+                    reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
                     return
             except (AttributeError, ValidationError) as error:
-                reply_to(chat, invalid_msg.format(pretext=f"{error}\n\n"))
+                reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
                 return
             response = str(tracker.insert(str(url), schedule))
-            reply_to(chat, response)
+            reply_to(chat.id, chat.message_id, response)
         else:
-            reply_to(chat, invalid_msg.format(pretext=""))
+            reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
         return
     elif command.startswith("/sync"):
         if identifier := command.replace("/sync", "").strip():
@@ -474,7 +483,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
             else:
                 await tracker.sync(name=identifier, chat=chat, callback=reply_to)
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.")
+            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.")
         return
     elif command.startswith("/delete"):
         if identifier := command.replace("/delete", "").strip():
@@ -482,9 +491,9 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 resp = tracker.delete(url=identifier)
             else:
                 resp = tracker.delete(name=identifier)
-            reply_to(chat, str(resp))
+            reply_to(chat.id, chat.message_id, str(resp))
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.")
+            reply_to(chat.id, chat.message_id, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.")
         return
     else:
         send_message(
@@ -509,4 +518,4 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             LOGGER.error(error)
             response = error.__str__()
-    reply_to(chat, response)
+    reply_to(chat.id, chat.message_id, response)
