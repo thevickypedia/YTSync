@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 
 from ytsync.crontab import expression
@@ -8,6 +9,27 @@ from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
 LAST_CHECK: datetime | None = None
+
+
+def callback(task: asyncio.Task) -> None:
+    """Callback for background tasks.
+
+    Args:
+        task: Takes the async task object as a parameter.
+    """
+    name, start_time = task.get_name().rsplit("||", maxsplit=1)
+    start_time = int(start_time)
+    end_time = int(time.time() - start_time)
+    approx_start = datetime.fromtimestamp(start_time).strftime("%a %b %d %H:%M %Y %Z")
+    approx_end = datetime.fromtimestamp(end_time).strftime("%a %b %d %H:%M %Y %Z")
+    LOGGER.info("Task [%s] running since: %s, completed at: [%s]", name, approx_start, approx_end)
+    try:
+        result = task.result()
+        LOGGER.info("Background task [%s] completed successfully", name)
+        LOGGER.info(result)
+    except Exception as error:
+        LOGGER.exception(error)
+        LOGGER.error("Background task [%s] failed to finish", name)
 
 
 async def executor() -> None:
@@ -25,5 +47,6 @@ async def executor() -> None:
             if expression.CronExpression(track.schedule.value).check_trigger():
                 url = str(track.url)
                 LOGGER.info("Executing sync for '%s' with '%s'", track.name, url)
-                # TODO: Implement alternate notifications or just pass chat into this
-                asyncio.create_task(youtube.queue_download(playlist_url=url))
+                task = asyncio.create_task(youtube.queue_download(playlist_url=url))
+                task.set_name(f"{track.name}||{int(time.time())}")
+                task.add_done_callback(callback)
