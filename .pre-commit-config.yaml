@@ -40,7 +40,8 @@ repos:
         # SFS101: String literal formatting using percent operator.
         # SFS201: String literal formatting using .format method.
         # SFS301: String literal formatting using f-string.
-        args: [--max-line-length=120, --extend-ignore=SFS3 D107 D100 D104 D401 D412 SFS101 SFS201]
+        # D400: First line should end with a period.
+        args: [--max-line-length=120, --extend-ignore=SFS3 D107 D100 D104 D401 D412 SFS101 SFS201 D400]
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.13.2

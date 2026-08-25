@@ -6,7 +6,11 @@ from ytsync.modules import config
 
 
 class SetWebhook(BaseModel):
-    """Request payload for POST webhook endpoint."""
+    """Request payload for POST webhook endpoint.
+
+    >>> SetWebhook
+
+    """
 
     webhook: HttpUrl
     secret_token: str
@@ -14,7 +18,11 @@ class SetWebhook(BaseModel):
 
 
 class Trackers(BaseModel):
-    """Payload to add trackers through API."""
+    """Payload to add trackers through API.
+
+    >>> Trackers
+
+    """
 
     url: HttpUrl
     schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY
@@ -22,15 +30,23 @@ class Trackers(BaseModel):
 
 
 class DeleteTrackers(BaseModel):
-    """Payload to delete trackers through API."""
+    """Payload to delete trackers through API.
+
+    >>> DeleteTrackers
+
+    """
 
     name: str | None = None
     url: str | None = None
     chat_id: int = 0
 
 
-class SyncTrack(BaseModel):
-    """Payload to sync a track on-demand."""
+class Download(BaseModel):
+    """Payload to sync a track on-demand.
+
+    >>> Download
+
+    """
 
     url: HttpUrl
     chat_id: int = 0

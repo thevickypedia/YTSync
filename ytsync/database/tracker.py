@@ -1,9 +1,10 @@
 import asyncio
 import logging
-import time
 from collections.abc import Generator
+from http import HTTPStatus
 from typing import Callable, List, Tuple
 
+from fastapi import HTTPException
 from pydantic import BaseModel, HttpUrl
 
 from ytsync.modules import config, settings
@@ -44,7 +45,7 @@ def get() -> Generator[DBSchema]:
 
 
 def insert(
-    playlist_url: str, schedule: config.AllowedCronSchedule, chat_id: int, return_code: bool = False, delay: int = 0
+    playlist_url: str, schedule: config.AllowedCronSchedule, chat_id: int, raise_for_exception: bool = False
 ) -> str | int:
     """Handles tracker for a playlist URL.
 
@@ -52,8 +53,7 @@ def insert(
         playlist_url: URL to sync on schedule.
         schedule: Schedule to follow for tracking the given playlist.
         chat_id: Chat ID to notify when the scheduled run has completed/failed.
-        return_code: Boolean flag to return HTTP code instead of structured text.
-        delay: Number of seconds to sleep, since API supports multiple additions in a single request.
+        raise_for_exception: Boolean flag to raise an HTTPException with the appropriate status.
 
     Returns:
         str:
@@ -81,14 +81,13 @@ def insert(
             _, yt_info = youtube.get_info(playlist_url)
             assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
             title = yt_info["title"]
-            time.sleep(delay)
         cursor.execute(
             "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);",
             (playlist_url, title, schedule.name, chat_id),
         )
         connection.commit()
-    if return_code:
-        return 200
+    if raise_for_exception:
+        raise HTTPException(status_code=HTTPStatus.OK.real, detail=f"{title!r} will be synced {schedule.name.lower()}")
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced {schedule.name.lower()}"
 
 
@@ -154,8 +153,7 @@ def delete(
     name: str | None = None,
     url: str | None = None,
     chat_id: int = 0,
-    return_code: bool = False,
-    trackers: List[DBSchema] | None = None,
+    raise_for_exception: bool = False,
 ) -> str | int:
     """Delete a tracker by its 1-based status index.
 
@@ -163,15 +161,13 @@ def delete(
         name: Name of the playlist.
         url: URL for the playlist.
         chat_id: Telegram chat ID.
-        return_code: Boolean flag to return HTTP code instead of structured text.
-        trackers: API supports multiple deletion at once, hence the API function gathers all trackers before looping.
+        raise_for_exception: Boolean flag to raise an HTTPException with the appropriate status.
 
     Returns:
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
-    if trackers is None:
-        trackers = list(get())
+    trackers = list(get())
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
@@ -179,12 +175,15 @@ def delete(
         # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id matches
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
     elif trackers:
-        if return_code:
-            return 400
+        if raise_for_exception:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST.real,
+                detail=f"Invalid tracker received: {name or url!r}. Select one from {trackers}",
+            )
         return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}"
     else:
-        if return_code:
-            return 404
+        if raise_for_exception:
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail="No trackers found on the server")
         return "⚠️ No trackers found!"
     tracker = tracker[0]
     url = str(tracker.url)
@@ -201,8 +200,10 @@ def delete(
             ),
         )
         connection.commit()
-    if return_code:
-        return 200
+    if raise_for_exception:
+        raise HTTPException(
+            status_code=HTTPStatus.OK.real, detail=f"{tracker.name!r} has been removed from the sync schedule."
+        )
     return (
         "✅ *Tracker deleted*\n\n"
         f"*{tracker.name}* has been removed from the sync schedule.\n\n"

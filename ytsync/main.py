@@ -172,9 +172,9 @@ api_routes = [
         path="/delete-trackers",
     ),
     APIRoute(
-        endpoint=routes.api_sync_trackers,
+        endpoint=routes.download,
         methods=["POST"],
-        path="/sync",
+        path="/download",
     ),
 ]
 

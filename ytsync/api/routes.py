@@ -2,7 +2,6 @@ import asyncio
 import logging
 from http import HTTPStatus
 from json.decoder import JSONDecodeError
-from typing import List
 
 import requests
 from fastapi import Depends, Request
@@ -67,18 +66,27 @@ async def api_set_webhook(
     body: models.SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to POST a webhook.
+    """**API endpoint to POST a webhook.**
 
-    Args:
-        body: Takes the required webhook parameters as body.
-        apikey: API key as header for authentication.
+    **Args**
+
+        ‣‣ body: Takes the required webhook parameters as body.
+
+    **Notes**
+
+        ‣‣ 'webhook' endpoint should match the 'bot_endpoint' environment variable set during startup.
+        ‣‣ 'secret_token' is required to authenticate the incoming request to avoid man-in-the-middle attacks.
+        ‣‣ 'webhook_ip' is optional; useful for bots behind a NAT or complex network configurations.
+
+    **Examples**
+
+        {
+            "webhook": "https://webhook.example.com/telegram-webhook",
+            "secret_token": "TelegramWillIncludeThisInTheWebhookRequest",
+            "webhook_ip": "198.51.100.42"
+        }
     """
     auth.validate(apikey, True)
-    # No webhook received
-    if not body.webhook:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.real,
-        )
     # Invalid URL scheme - only 'https' is accepted
     if body.webhook.scheme != "https":
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL scheme")
@@ -112,11 +120,7 @@ async def api_set_webhook(
 async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to GET a webhook.
-
-    Args:
-        apikey: API key as header for authentication.
-    """
+    """**API endpoint to GET a webhook.**"""
     auth.validate(apikey, True)
     try:
         return webhook.get_webhook()
@@ -130,11 +134,7 @@ async def api_get_webhook(
 async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to DELETE a webhook.
-
-    Args:
-        apikey: API key as header for authentication.
-    """
+    """**API endpoint to DELETE a webhook.**"""
     auth.validate(apikey, True)
     try:
         response = webhook.delete_webhook()
@@ -152,97 +152,114 @@ async def api_delete_webhook(
 async def api_get_trackers(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to GET all trackers.
-
-    Args:
-        apikey: API key as header for authentication.
-    """
+    """**API endpoint to GET all trackers.**"""
     auth.validate(apikey, False)
     if trackers := [track.model_dump(mode="json") for track in tracker.get()]:
-        return trackers
+        # Include 'chat_id' in the payload ONLY when authenticated with telegram bot token
+        if apikey.credentials == config.env.apikey:
+            return trackers
+        cleaned = []
+        for tr in trackers:
+            tr.pop("chat_id", None)
+            cleaned.append(tr)
+        return cleaned
     raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
 
 
 async def api_add_trackers(
-    body: List[models.Trackers],
+    body: models.Trackers,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to ADD new trackers.
+    """**API endpoint to ADD new trackers.**
 
-    Args:
-        body: Takes the required tracker parameters as body.
-        apikey: API key as header for authentication.
+    **Args**
+
+        ‣‣ body: Takes the required tracker parameters as body.
+
+    **Notes**
+
+        ‣‣ Body must be a list of dict - with url, schedule, and chat id (optional) as key-value pairs.
+        ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
+        ‣‣ 'schedule' must be @hourly, @daily, @weekly, or @monthly as a string.
+        ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
+
+    **Examples**
+
+        {
+            "url": "https://music.youtube.com/playlist?list=OLAK5uy_nQY-UERFpsL1d5UTPVMjX7mtnVlKg7D4w",
+            "schedule": "@weekly",
+            "chat_id": 1234567890
+        }
     """
     auth.validate(apikey, False)
-    stats = {}
-    for idx, track in enumerate(body):
-        try:
-            code = tracker.insert(str(track.url), track.schedule, track.chat_id, return_code=True, delay=idx * 1)
-        except Exception as error:
-            LOGGER.exception(error)
-            code = 500
-        stats[str(track.url)] = HTTPStatus(value=code)
-    return stats
+    tracker.insert(str(body.url), body.schedule, body.chat_id, raise_for_exception=True)
 
 
 async def api_delete_trackers(
-    body: List[models.DeleteTrackers],
+    body: models.DeleteTrackers,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to DELETE given trackers.
+    """**API endpoint to DELETE given trackers.**
 
-    Args:
-        body: Takes the required tracker parameters as body.
-        apikey: API key as header for authentication.
+    **Args**
+
+        ‣‣ body: Takes the required tracker parameters as body.
+
+    **Notes**
+
+        ‣‣ Body must be a dictionary with (name or url), and chat id (optional) as key-value pairs.
+        ‣‣ Either 'name' or 'url' can be used as identifier.
+        ‣‣ 'name' to identify and delete the tracker.
+        ‣‣ 'url' to identify and delete the tracker.
+        ‣‣ 'chat_id' the tracker was requested with. If the original request was an API call, set it to 0.
+
+    **Examples**
+
+        {
+            "name": "Encore",
+            "chat_id" 0
+        }
     """
     auth.validate(apikey, False)
-    if not body:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real)
-    trackers = list(tracker.get())
-    stats = {}
-    for track in body:
-        if not any((track.name, track.url)):
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required for each entry."
-            )
-        try:
-            code = tracker.delete(
-                name=track.name, url=track.url, chat_id=track.chat_id, return_code=True, trackers=trackers
-            )
-        except Exception as error:
-            LOGGER.exception(error)
-            code = 500
-        stats[track.name or track.url] = HTTPStatus(value=code)
-    return stats
+    if not any((body.name, body.url)):
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required for each entry."
+        )
+    tracker.delete(name=body.name, url=body.url, chat_id=body.chat_id, raise_for_exception=True)
 
 
-async def api_sync_trackers(
-    body: List[models.SyncTrack],
+async def download(
+    body: models.Download,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
-    """API endpoint to SYNC playlists as an on-demand request.
+    """**API endpoint to download playlists as an on-demand request.**
 
-    Args:
-        body: List of URL objects as request body.
-        apikey: APIkey to authenticate the request.
+    **Args**
+
+        ‣‣ body: List of Download object as request body.
+
+    **Notes**
+
+        ‣‣ Body must be a dictionary with url, and chat id (optional) as key-value pairs.
+        ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
+        ‣‣ 'chat_id' is optional to send a telegram notification when the download completes/fails.
+
+    **Examples**
+
+        {
+            "url": "https://music.youtube.com/playlist?list=OLAK5uy_nQY-UERFpsL1d5UTPVMjX7mtnVlKg7D4w",
+            "chat_id": 1234567890
+        }
     """
     auth.validate(apikey, False)
-    # TODO: Bad request should provide detail or give a link to the '/docs' page based on the request.url
-    if not body:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real)
-    stat = {}
-    for track in body:
-        try:
-            stat[track.url] = dict(
-                status_code=200,
-                detail=await asyncio.wait_for(
-                    youtube.queue_download(
-                        playlist_url=str(track.url), chat_id=track.chat_id, callback=bot.reply_to, raw_text=True
-                    ),
-                    timeout=config.env.response_timeout,
-                ),
-            )
-        except (ValueError, AssertionError, DownloadError) as error:
-            LOGGER.exception(error)
-            stat[track.url] = dict(status_code=500, detail=str(error))
-    return stat
+    try:
+        response = await asyncio.wait_for(
+            youtube.queue_download(
+                playlist_url=str(body.url), chat_id=body.chat_id, callback=bot.reply_to, raw_text=True
+            ),
+            timeout=config.env.response_timeout,
+        )
+        raise HTTPException(status_code=HTTPStatus.OK.real, detail=response)
+    except (ValueError, AssertionError, DownloadError) as error:
+        LOGGER.exception(error)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.real, detail=str(error))
