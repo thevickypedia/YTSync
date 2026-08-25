@@ -352,18 +352,6 @@ async def process_document(
     reply_to(chat, "Document inputs are not supported at the moment. Please try text input.")
 
 
-def trackers_text() -> str:
-    """Get trackers in a Markdown friendly format."""
-    txt = ""
-    if trackers := list(tracker.get()):
-        txt += "\n\n*Trackers:*\n"
-        for idx, tracked in enumerate(trackers, start=1):
-            txt += f"{idx}. *{tracked.name}* — *{tracked.schedule.name.capitalize()}*\n"
-    else:
-        LOGGER.info("No trackers found.")
-    return txt
-
-
 def get_process_pool() -> str:
     """Get the status text for process pool."""
     pending = youtube.processor.status()
@@ -412,7 +400,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     if text_lower in ("status", "stats", "test"):
         txt = get_channel()
         try:
-            txt += trackers_text()
+            txt += tracker.stringified_get()
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
@@ -453,7 +441,6 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`")
             return
-    # TODO: Allow /track /sync and /delete to execute with playlist name instead of index
     elif command.startswith("/track"):
         invalid_msg = (
             "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, followed by `/track`\n\n"
@@ -481,27 +468,23 @@ async def executor(command: str, chat: settings.Chat) -> None:
             reply_to(chat, invalid_msg.format(pretext=""))
         return
     elif command.startswith("/sync"):
-        if index := command.replace("/sync", "").strip():
-            if index.isdigit():
-                response = tracker.sync(idx=int(index), chat=chat, callback=reply_to)
-                reply_to(chat, response)
+        if identifier := command.replace("/sync", "").strip():
+            if identifier.startswith("http"):
+                tracker.sync(url=identifier, chat=chat, callback=reply_to)
             else:
-                reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")
-            return
+                tracker.sync(name=identifier, chat=chat, callback=reply_to)
         else:
-            reply_to(chat, "❌ *Invalid entry*\n\nAn index ID is required, followed by `/sync`.")
+            reply_to(chat, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.")
         return
     elif command.startswith("/delete"):
-        if index := command.replace("/delete", "").strip():
-            if index.isdigit():
-                # NOTE: enumeration in trackers_text fn starts at 1, hence the negation here
-                response = str(tracker.delete(int(index) - 1))
-                reply_to(chat, response)
+        if identifier := command.replace("/delete", "").strip():
+            if identifier.startswith("http"):
+                resp = tracker.delete(url=identifier)
             else:
-                reply_to(chat, f"❌ *Error*\n\nInvalid index received: {index}{trackers_text()}")
-            return
+                resp = tracker.delete(name=identifier)
+            reply_to(chat, str(resp))
         else:
-            reply_to(chat, f"❌ *Invalid entry*\n\nAn index ID is required, followed by `/delete`.{trackers_text()}")
+            reply_to(chat, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.")
         return
     else:
         send_message(

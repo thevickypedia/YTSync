@@ -198,7 +198,7 @@ async def api_get_trackers(
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
-    if trackers := list(tracker.get()):
+    if trackers := [track.model_dump(mode="json") for track in tracker.get()]:
         return trackers
     raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
 
@@ -206,19 +206,19 @@ async def api_get_trackers(
 class Trackers(BaseModel):
     """Payload to add trackers through API."""
 
-    urls: List[HttpUrl]
+    url: HttpUrl
+    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY
 
 
+# TODO: Make this PUT and create a new POST endpoint to duplicate /sync feature regardless of tracker status
 async def api_add_trackers(
-    body: Trackers,
-    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY,
+    body: List[Trackers],
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to ADD new trackers.
 
     Args:
         body: Takes the required tracker parameters as body.
-        schedule: Schedule to track the given playlist.
         apikey: API key as header for authentication.
     """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
@@ -226,40 +226,40 @@ async def api_add_trackers(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
     stats = {}
-    for url in body.urls:
+    for idx, track in enumerate(body):
         try:
-            code = tracker.insert(str(url), schedule, return_code=True)
+            code = tracker.insert(str(track.url), track.schedule, return_code=True, delay=idx * 1)
         except Exception as error:
             LOGGER.exception(error)
             code = 500
-        stats[url] = HTTPStatus(value=code)
+        stats[str(track.url)] = HTTPStatus(value=code)
     return stats
 
 
 async def api_delete_trackers(
-    indices: str,
+    names: str,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """API endpoint to DELETE given trackers.
 
     Args:
-        indices: Comma separated list of indices to remove from scheduled trackers.
+        names: Comma separated list of playlist names to remove from scheduled trackers.
         apikey: API key as header for authentication.
     """
     if not secrets.compare_digest(apikey.credentials, config.env.apikey):
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
-    try:
-        indices = [int(idx) for idx in indices.split(",")]
-    except ValueError:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST)
+    names = names.split(",")
+    if not names:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required.")
+    trackers = list(tracker.get())
     stats = {}
-    for idx in indices:
+    for name in names:
         try:
-            code = tracker.delete(idx, return_code=True)
+            code = tracker.delete(name=name, return_code=True, trackers=trackers)
         except Exception as error:
             LOGGER.exception(error)
             code = 500
-        stats[idx] = HTTPStatus(value=code)
+        stats[name] = HTTPStatus(value=code)
     return stats

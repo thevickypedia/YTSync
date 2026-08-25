@@ -1,7 +1,9 @@
 import asyncio
 import logging
+import time
 from collections.abc import Generator
-from typing import Callable, Tuple
+import random
+from typing import Callable, List, Tuple
 
 from pydantic import BaseModel, HttpUrl
 
@@ -22,14 +24,12 @@ class DBSchema(BaseModel):
     url: HttpUrl
     name: str
     schedule: config.AllowedCronSchedule
-    index: int
 
 
-def row_to_schema(index: int, row: Tuple[str, str, str]) -> DBSchema:
+def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
     """Convert a row of tuple into a DBSchema object."""
     fields = DBSchema.model_fields.keys()
     wrapped = dict(zip(fields, row))
-    wrapped["index"] = index
     wrapped["schedule"] = getattr(config.AllowedCronSchedule, wrapped["schedule"])
     return DBSchema(**wrapped)
 
@@ -39,17 +39,20 @@ def get() -> Generator[DBSchema]:
     with config.db.connection as connection:
         cursor = connection.cursor()
         data = cursor.execute("SELECT * FROM ytsync").fetchall()
-    for idx, row in enumerate(data):
-        yield row_to_schema(idx, row)
+    for row in data:
+        yield row_to_schema(row)
 
 
-def insert(playlist_url: str, schedule: config.AllowedCronSchedule, return_code: bool = False) -> str | int:
+def insert(
+    playlist_url: str, schedule: config.AllowedCronSchedule, return_code: bool = False, delay: int = 0
+) -> str | int:
     """Handles tracker for a playlist URL.
 
     Args:
         playlist_url: URL to sync on schedule.
         schedule: Schedule to follow for tracking the given playlist.
         return_code: Boolean flag to return HTTP code instead of structured text.
+        delay: Number of seconds to sleep, since API supports multiple additions in a single request.
 
     Returns:
         str:
@@ -59,13 +62,14 @@ def insert(playlist_url: str, schedule: config.AllowedCronSchedule, return_code:
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM ytsync WHERE url = ? LIMIT 1;", (playlist_url,))
         if row := cursor.fetchone():
-            tracked = row_to_schema(0, row)
+            tracked = row_to_schema(row)
             LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
             title = tracked.name
         else:
             _, yt_info = youtube.get_info(playlist_url)
             assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
             title = yt_info["title"]
+            time.sleep(delay)
         cursor.execute(
             "INSERT OR REPLACE INTO ytsync (url, name, schedule) VALUES (?,?,?);",
             (playlist_url, title, schedule.name),
@@ -76,11 +80,30 @@ def insert(playlist_url: str, schedule: config.AllowedCronSchedule, return_code:
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced {schedule.name.lower()}"
 
 
-def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None = None) -> str:
+def stringified_get(trackers: List[DBSchema] | None = None) -> str:
+    """Get trackers in a Markdown friendly format."""
+    txt = ""
+    if trackers is None:
+        trackers = list(get())
+    if trackers:
+        txt += "\n\n*Trackers:*\n"
+        for tracked in trackers:
+            # icon = random.choice(("🎵", "📁", "📻", "🎶", "🎼", "🔊"))
+            txt += f"🎶 *{tracked.name}* — *{tracked.schedule.name.capitalize()}*\n"
+    else:
+        txt += "\n\n*Trackers:* No trackers found.\n"
+        LOGGER.info("No trackers found.")
+    return txt
+
+
+def sync(
+    name: str | None = None, url: str | None = None, chat: settings.Chat | None = None, callback: Callable | None = None
+) -> None:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
     Args:
-        idx: Index to be synced.
+        name: Name of the playlist.
+        url: URL for the playlist.
         chat: Chat object to send a notification as callback.
         callback: Callback function call once the task has completed.
 
@@ -88,55 +111,67 @@ def sync(idx: int, chat: settings.Chat | None = None, callback: Callable | None 
         str:
         Returns the response string for Telegram.
     """
-    idx -= 1
     trackers = list(get())
-    if not trackers:
-        return "⚠️ No trackers found!"
-    if idx < 0 or idx >= len(trackers):
-        return (
-            "❌ *Invalid tracker index*\n\n"
-            f"Tracker `{idx + 1}` does not exist.\n\n"
-            "Use `/status` to see the available tracker indexes."
-        )
-    tracker = trackers[idx]
-    url = str(tracker.url)
-    LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
-    asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
-    return f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be synced shortly."
+    if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
+        if len(tracker) > 1:
+            callback(chat, f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL")
+            return
+        tracker = tracker[0]
+        url = str(tracker.url)
+        LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
+        # TODO: Redundant notifications here, 'queue_download' with a chat payload will notify name and timestamp
+        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
+        callback(chat, f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be processed shortly.")
+    elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
+        # NOTE: This should never happen since insertion follows INSERT OR REPLACE INTO SQL logic
+        assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+        tracker = tracker[0]
+        LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
+        # TODO: Redundant notifications here, 'queue_download' with a chat payload will notify name and timestamp
+        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
+        callback(chat, f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be processed shortly.")
+    elif trackers:
+        callback(chat, f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}")
+    else:
+        callback(chat, "⚠️ *Warning*\n\nNo trackers found on the server.")
 
 
-def delete(idx: int, return_code: bool = False) -> str | int:
+def delete(
+    name: str | None = None, url: str | None = None, return_code: bool = False, trackers: List[DBSchema] | None = None
+) -> str | int:
     """Delete a tracker by its 1-based status index.
 
     Args:
-        idx: Index of the list to be cleared.
+        name: Name of the playlist.
+        url: URL for the playlist.
         return_code: Boolean flag to return HTTP code instead of structured text.
+        trackers: API supports multiple deletion at once, hence the API function gathers all trackers before looping.
 
     Returns:
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
-    trackers = list(get())
-    if not trackers:
+    if trackers is None:
+        trackers = list(get())
+    if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
+        if len(tracker) > 1:
+            return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
+    elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
+        # NOTE: This should never happen since insertion follows INSERT OR REPLACE INTO SQL logic
+        assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+    elif trackers:
+        if return_code:
+            return 400
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}"
+    else:
         if return_code:
             return 404
         return "⚠️ No trackers found!"
-    if idx < 0 or idx >= len(trackers):
-        if return_code:
-            return 400
-        return (
-            "❌ *Invalid tracker index*\n\n"
-            f"Tracker `{idx + 1}` does not exist.\n\n"
-            "Use `/status` to see the available tracker indexes."
-        )
-    tracker = trackers[idx]
+    tracker = tracker[0]
     url = str(tracker.url)
     with config.db.connection as connection:
         cursor = connection.cursor()
-        cursor.execute(
-            "DELETE FROM ytsync WHERE url = ?;",
-            (url,),
-        )
+        cursor.execute("DELETE FROM ytsync WHERE url = ?;", (url,))
         connection.commit()
     if return_code:
         return 200
@@ -144,5 +179,5 @@ def delete(idx: int, return_code: bool = False) -> str | int:
         "✅ *Tracker deleted*\n\n"
         f"*{tracker.name}* has been removed from the sync schedule.\n\n"
         f"*URL:* `{url}`\n"
-        f"*Schedule:* `{tracker.schedule}`"
+        f"*Schedule:* {tracker.schedule.name.capitalize()}"
     )

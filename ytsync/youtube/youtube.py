@@ -219,8 +219,8 @@ async def queue_download(
         raise ValueError("Either 'playlist_url' [OR] 'playlist_id' is required!!")
 
     ydl, info = get_info(playlist_url)
-    playlist_name = info.get("title")
-    assert playlist_name, "Failed to extract the playlist's title"
+    playlist_name = info.get("title", None) or None
+    assert playlist_name and isinstance(playlist_name, str), "Failed to extract the playlist's title"
 
     destination = config.env.download_dir.joinpath(playlist_name)
     destination.mkdir(exist_ok=True)
