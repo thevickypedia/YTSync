@@ -11,14 +11,30 @@ from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, HttpUrl
+from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
 from ytsync.modules import config
 from ytsync.telegram import bot, poll, webhook
+from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(description="Enter your telegram username")
 POLL_LOCK = asyncio.Lock()
+
+
+def authenticator(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
+    """Function to authenticate inbound requests.
+
+    Args:
+        apikey: API key to validate an ingress request.
+        bot_request: Boolean flag to indicate bot operation.
+    """
+    secret = config.env.bot_token if bot_request else config.env.apikey
+    if not secrets.compare_digest(apikey.credentials, secret):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
 
 
 def two_factor(request: Request) -> bool:
@@ -101,10 +117,7 @@ async def api_set_webhook(
         body: Takes the required webhook parameters as body.
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, True)
     # No webhook received
     if not body.webhook:
         raise HTTPException(
@@ -148,10 +161,7 @@ async def api_get_webhook(
     Args:
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, True)
     try:
         return webhook.get_webhook()
     except requests.RequestException as error:
@@ -169,10 +179,7 @@ async def api_delete_webhook(
     Args:
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.bot_token):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, True)
     try:
         response = webhook.delete_webhook()
         async with POLL_LOCK:
@@ -194,10 +201,7 @@ async def api_get_trackers(
     Args:
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, False)
     if trackers := [track.model_dump(mode="json") for track in tracker.get()]:
         return trackers
     raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
@@ -210,7 +214,6 @@ class Trackers(BaseModel):
     schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY
 
 
-# TODO: Make this PUT and create a new POST endpoint to duplicate /sync feature regardless of tracker status
 async def api_add_trackers(
     body: List[Trackers],
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
@@ -221,10 +224,7 @@ async def api_add_trackers(
         body: Takes the required tracker parameters as body.
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, False)
     stats = {}
     for idx, track in enumerate(body):
         try:
@@ -246,10 +246,7 @@ async def api_delete_trackers(
         names: Comma separated list of playlist names to remove from scheduled trackers.
         apikey: API key as header for authentication.
     """
-    if not secrets.compare_digest(apikey.credentials, config.env.apikey):
-        raise HTTPException(
-            status_code=HTTPStatus.UNAUTHORIZED.real,
-        )
+    authenticator(apikey, False)
     names = names.split(",")
     if not names:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required.")
@@ -263,3 +260,26 @@ async def api_delete_trackers(
             code = 500
         stats[name] = HTTPStatus(value=code)
     return stats
+
+
+async def api_sync_trackers(
+    body: List[HttpUrl],
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """API endpoint to SYNC playlists as an on-demand request.
+
+    Args:
+        body: List of URL objects as request body.
+        apikey: APIkey to authenticate the request.
+    """
+    authenticator(apikey, False)
+    if not body:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real)
+    stat = {}
+    for url in body:
+        try:
+            stat[url] = dict(status_code=200, detail=await youtube.queue_download(playlist_url=str(url), raw_text=True))
+        except (ValueError, AssertionError, DownloadError) as error:
+            LOGGER.exception(error)
+            stat[url] = dict(status_code=500, detail=str(error))
+    return stat

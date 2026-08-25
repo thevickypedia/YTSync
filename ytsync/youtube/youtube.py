@@ -209,6 +209,7 @@ async def queue_download(
     callback: Callable | None = None,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
+    raw_text: bool = False,
 ) -> str:
     """Queue a playlist download in the process pool."""
     if playlist_url:
@@ -229,6 +230,8 @@ async def queue_download(
     if not urls:
         assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
         intended_path = posixpath.join(rsync.remote_path, playlist_name) if rsync.is_enabled else destination
+        if raw_text:
+            return f"{playlist_name!r} with {preflight_stats['total']} file(s) is already available at: {intended_path}"
         return (
             "ℹ️ *Already available*\n\n"
             f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
@@ -260,11 +263,15 @@ async def queue_download(
 
     scheduled_time = max(0, scheduled_time - time.monotonic())
     if scheduled_time == 0:
+        if raw_text:
+            return f"{playlist_name!r} with {len(urls)} file(s) has been queued for download."
         return f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
     else:
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
+        if raw_text:
+            return f"{playlist_name!r} with {len(urls)} file(s) will be queued for download at {t_string!r}"
         return (
             f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) will be queued for download at {t_string}"
         )

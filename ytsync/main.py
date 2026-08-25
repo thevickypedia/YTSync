@@ -164,13 +164,18 @@ api_routes = [
     ),
     APIRoute(
         endpoint=routes.api_add_trackers,
-        methods=["POST"],
+        methods=["PUT"],
         path="/add-trackers",
     ),
     APIRoute(
         endpoint=routes.api_delete_trackers,
         methods=["DELETE"],
         path="/delete-trackers",
+    ),
+    APIRoute(
+        endpoint=routes.api_sync_trackers,
+        methods=["POST"],
+        path="/sync",
     ),
 ]
 
