@@ -79,7 +79,8 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     bot_token: str
     bot_chat_ids: List[int]
     bot_users: List[str]
-    poll_interval: PositiveInt | PositiveFloat = Field(2, le=10, ge=1)
+    poll_interval: PositiveInt = Field(2, le=10, ge=1)
+    response_timeout: PositiveInt = Field(30, ge=10, le=60)
 
     # Remote config
     remote_host: str | None = None

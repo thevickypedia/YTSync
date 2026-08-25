@@ -2,7 +2,6 @@ import asyncio
 import logging
 import time
 from collections.abc import Generator
-import random
 from typing import Callable, List, Tuple
 
 from pydantic import BaseModel, HttpUrl
@@ -96,7 +95,7 @@ def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     return txt
 
 
-def sync(
+async def sync(
     name: str | None = None, url: str | None = None, chat: settings.Chat | None = None, callback: Callable | None = None
 ) -> None:
     """Syncs a tracker (on-demand) by its 1-based status index.
@@ -119,17 +118,17 @@ def sync(
         tracker = tracker[0]
         url = str(tracker.url)
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
-        # TODO: Redundant notifications here, 'queue_download' with a chat payload will notify name and timestamp
-        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
-        callback(chat, f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be processed shortly.")
+        await asyncio.wait_for(
+            youtube.queue_download(chat=chat, playlist_url=url, callback=callback), timeout=config.env.response_timeout
+        )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
         # NOTE: This should never happen since insertion follows INSERT OR REPLACE INTO SQL logic
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
-        # TODO: Redundant notifications here, 'queue_download' with a chat payload will notify name and timestamp
-        asyncio.create_task(youtube.queue_download(chat=chat, playlist_url=url, callback=callback))
-        callback(chat, f"✅ *Sync queued*\n\n" f"*{tracker.name}* will be processed shortly.")
+        await asyncio.wait_for(
+            youtube.queue_download(chat=chat, playlist_url=url, callback=callback), timeout=config.env.response_timeout
+        )
     elif trackers:
         callback(chat, f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}")
     else:

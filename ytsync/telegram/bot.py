@@ -470,9 +470,9 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith("/sync"):
         if identifier := command.replace("/sync", "").strip():
             if identifier.startswith("http"):
-                tracker.sync(url=identifier, chat=chat, callback=reply_to)
+                await tracker.sync(url=identifier, chat=chat, callback=reply_to)
             else:
-                tracker.sync(name=identifier, chat=chat, callback=reply_to)
+                await tracker.sync(name=identifier, chat=chat, callback=reply_to)
         else:
             reply_to(chat, "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.")
         return
@@ -497,7 +497,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
         )
         return
     try:
-        response = await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=10)
+        response = await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=config.env.response_timeout)
     except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
         if isinstance(error, asyncio.TimeoutError):
             LOGGER.warning("Request timed out")
