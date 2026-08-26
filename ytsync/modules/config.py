@@ -98,6 +98,13 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # API config
     apikey: str | None = None
 
+    # Optional cookie file
+    # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
+    # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#http-error-429-too-many-requests-or-402-payment-required
+    cookie_file: FilePath | None = None
+    source_address: IPv4Address | None = None
+    proxy_url: HttpUrl | None = None
+
     class Config:
         """Environment variables configuration."""
 

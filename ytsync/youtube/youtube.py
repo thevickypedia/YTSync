@@ -441,6 +441,12 @@ def download_playlist(
             )
         ],
     }
+    if config.env.cookie_file:
+        options["cookiefile"] = str(config.env.cookie_file)
+    if config.env.source_address:
+        options["source_address"] = str(config.env.source_address)
+    if config.env.proxy_url:
+        options["proxy"] = str(config.env.proxy_url)
 
     transfer_pool = None
     if rsync.is_enabled:
