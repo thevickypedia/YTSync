@@ -16,9 +16,11 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 ## Features
 
 * Supports both webhooks and long-polling
-* Built-in exponential back off for remote transfers
+* Users can switch between webhooks and long-polling through API
 * Sequential downloads (to prevent requests being throttled/blocked)
-* Optional flag to delete local files after transferring to a remote server
+* Cold start (delayed) for the first download with a custom cooldown interval
+* Built-in retry mechanism with an exponential back off factor for remote transfers
+* Automatically deletes [Optional] local files after transferring to a remote server
 * Built-in support to check file presence on the remote server before requesting download/file-transfer
 
 ### Environment variables
@@ -41,12 +43,12 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 * **bot_certificate**: Certificate filepath for webhook server (in case of self-signed certificate) [Optional]
 
 ###### API Settings
-* **apikey**: Key to access via API. _Required for API access_
+* **apikey**: Key to access via API. _Required for API access; defaults to `bot_token`_
 
-###### yt-dlp Settings
-* **cookie_file**: Path to the cookie file. [Optional]
-* **source_address**: IP address for the requesting source. [Optional]
-* **proxy_url**: URL of the proxy server. [Optional]
+###### yt-dlp Settings [Optional]
+* **cookie_file**: Path to the cookie file.
+* **source_address**: IP address for the requesting source.
+* **proxy_url**: URL of the proxy server.
 
 ###### FileIO Settings
 * **data_dir**: Directory to store the database. _Defaults to `data`_
@@ -65,11 +67,11 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 * **next_buffer**: Number of seconds to simulate time taken for a download. _Defaults to `60`_
 * **cooldown_interval**: Number of seconds to wait before processing next in queue. _Defaults to `300`_
 
-###### Remote Settings
-* **remote_host**: Hostname [OR] IP address of the remote server. [Optional]
-* **remote_user**: Username to connect to the remote server. [Optional]
-* **remote_path**: Directory path on the remote server, to transfer downloaded files to. [Optional]
-* **delete_after_sync**: Boolean flag to delete local files after transferring to the remote server. [Optional]
+###### Remote Settings [Optional]
+* **remote_host**: Hostname [OR] IP address of the remote server.
+* **remote_user**: Username to connect to the remote server.
+* **remote_path**: Directory path on the remote server, to transfer downloaded files to.
+* **delete_after_sync**: Boolean flag to delete local files after transferring to the remote server.
 
 ### SSH setup
 

@@ -64,7 +64,7 @@ class Rsync:
         )
 
     def exist_check(self, checks: str, local_paths: List[pathlib.Path]) -> Set[str]:
-        """Checks if a list of files exist on the remote server and returns the existing ones."""
+        """Checks if a list of files exists on the remote server and returns the existing ones."""
         result = subprocess.run(
             [
                 "ssh",

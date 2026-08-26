@@ -92,7 +92,7 @@ class VaultSettings(PydanticBaseSettingsSource):
 
         Returns:
             Tuple[Any, str, bool]
-            A tuple containing the key, value and a flag to determine whether value is complex.
+            A tuple containing the key, value, and a flag to determine whether a value is complex.
         """
         return None, field_name, False
 
