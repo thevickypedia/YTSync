@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Tuple
 
 import yt_dlp
 from pydantic import BaseModel
-from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError, YoutubeDLError
 
 from ytsync.modules import config
 from ytsync.remote import transfer
@@ -87,7 +87,6 @@ def process_callback(
             else:
                 txt = f"❌ *Download failed for {name!r}*\n\n{error}"
             callback(chat_id=chat_id, message_id=message_id, response=txt)
-        LOGGER.exception(error)
         LOGGER.error("Process failed for %s", name)
         return
 
@@ -109,27 +108,6 @@ def process_callback(
             chat_id=chat_id,
             message_id=message_id,
             response=response,
-        )
-
-
-def get_filename(ydl: yt_dlp.YoutubeDL, entry: dict, destination: pathlib.Path) -> str:
-    """Extract filename for a potential entry.
-
-    Args:
-        ydl: YoutubeDL object.
-        entry: Entry object found in each 'info' block.
-        destination: Destination filepath where the file has to be saved.
-
-    Returns:
-        str:
-        Returns the potential filename.
-    """
-    with ydl:
-        # noinspection bad-argument-type
-        return (
-            pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(FILENAME_TEMPLATE))))
-            .with_suffix(".mp3")
-            .name
         )
 
 
@@ -165,8 +143,14 @@ def get_missing_playlist_entries(
             counter["error"] += 1
             continue
         try:
-            filename = get_filename(ydl, entry, destination)
-        except Exception as error:
+            with ydl:
+                # noinspection bad-argument-type
+                filename = (
+                    pathlib.Path(ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(FILENAME_TEMPLATE))))
+                    .with_suffix(".mp3")
+                    .name
+                )
+        except YoutubeDLError as error:
             LOGGER.exception(error)
             counter["error"] += 1
             continue
@@ -217,14 +201,14 @@ def get_missing_playlist_entries(
     return urls, counter
 
 
-def get_info(playlist_url: str) -> Tuple[YoutubeDL, Dict[str, Any]]:
+def get_info(playlist_url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     """Get info based on the playlist URL.
 
     Args:
         playlist_url: Playlist URL.
 
     Returns:
-        Tuple[YoutubeDL, Dict[str, Any]]:
+        Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Returns a tuple of YoutubeDL object, and a dictionary of information block.
     """
     with yt_dlp.YoutubeDL() as ydl:
@@ -432,6 +416,7 @@ def download_playlist(
     }
     options: Dict[str, Any] = {
         "logger": LOGGER,
+        "quiet": True,
         "format": "bestaudio/best",
         "ignoreerrors": False,
         "postprocessors": [
@@ -488,7 +473,7 @@ def download_playlist(
                 # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
                 # This monotonic loop is to properly capture individual errors and attach custom handlers
                 ydl.download([url])
-            except Exception as error:
+            except DownloadError as error:
                 LOGGER.exception(error)
                 stats["download_failed"] += 1
 

@@ -1,6 +1,7 @@
 """This is an entrypoint specific for docker containers."""
 
 import json
+import logging.config
 import os
 import pathlib
 from datetime import datetime
@@ -24,7 +25,7 @@ assert log_level in (
 
 log_config = {
     "version": 1,
-    "disable_existing_loggers": True,
+    "disable_existing_loggers": False,
     "formatters": {
         "default": {
             "()": "uvicorn.logging.DefaultFormatter",
@@ -83,6 +84,7 @@ log_config = {
     },
 }
 
+logging.config.dictConfig(log_config)
 os.environ["log_config"] = json.dumps(log_config)
 
 
