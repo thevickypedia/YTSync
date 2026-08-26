@@ -45,50 +45,18 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
     """
 
+    # Server config
     host: str = socket.gethostbyname("localhost")
     port: PositiveInt = 4483
     tz: ZoneInfo | tzinfo | None = datetime.now().astimezone().tzinfo
     log_config: FilePath | Dict[str, Any] | None = None
-
-    # Applies to rsync and telegram polling
-    max_retries: PositiveInt = Field(10, le=30, ge=1)
-    backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
-
-    # Concurrency
-    # Maximum number of parallel transfers to remote server
-    max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
-
-    # Sequential download factors
-    # Cooldown period (in seconds) between every download (always sequential)
-    delayed_start: bool = False
-    # Next available time cannot be accurately determined before it begins
-    # 'next_buffer' with # of seconds is used to simulate an actual download duration
-    next_buffer: PositiveInt = Field(60, ge=30, le=300)  # 30s to 5m; default: 60s
-    # 'cooldown_interval' with # of seconds is used to propagate delay between each download
-    cooldown_interval: PositiveInt = Field(300, ge=30, le=10_800)  # 30s to 3h; default: 5m
-
-    # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist
-    max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
-
-    # Data
-    data_dir: NewPath | DirectoryPath = pathlib.Path("data")
-    logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
-    download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
 
     # Telegram config
     bot_token: str
     bot_chat_ids: List[int]
     bot_users: List[str]
     poll_interval: PositiveInt = Field(2, le=10, ge=1)
-    response_timeout: PositiveInt = Field(30, ge=10, le=60)
 
-    # Remote config
-    remote_host: str | None = None
-    remote_user: str | None = None
-    remote_path: str | None = None
-    delete_after_sync: bool = True
-
-    # Telegram Webhook specific
     bot_webhook: HttpUrl | None = None
     bot_webhook_ip: IPv4Address | None = None
     bot_endpoint: str = Field("/telegram-webhook", pattern=r"^\/")
@@ -98,12 +66,40 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # API config
     apikey: str | None = None
 
-    # Optional cookie file
+    # yt-dlp config
     # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
     # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#http-error-429-too-many-requests-or-402-payment-required
     cookie_file: FilePath | None = None
     source_address: IPv4Address | None = None
     proxy_url: HttpUrl | None = None
+
+    # FileIO config
+    data_dir: NewPath | DirectoryPath = pathlib.Path("data")
+    logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
+    download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
+
+    # Maximum number of parallel transfers to remote server
+    max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
+    # Applies to rsync and telegram polling
+    max_retries: PositiveInt = Field(10, le=30, ge=1)
+    backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
+    # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist
+    max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
+    response_timeout: PositiveInt = Field(30, ge=10, le=60)
+
+    # Sequential download factors
+    delayed_start: bool = False
+    # Next available time cannot be accurately determined before it begins
+    # 'next_buffer' with # of seconds is used to simulate an actual download duration
+    next_buffer: PositiveInt = Field(60, ge=30, le=300)  # 30s to 5m; default: 60s
+    # 'cooldown_interval' with # of seconds is used to propagate delay between each download
+    cooldown_interval: PositiveInt = Field(300, ge=30, le=10_800)  # 30s to 3h; default: 5m
+
+    # Remote config
+    remote_host: str | None = None
+    remote_user: str | None = None
+    remote_path: str | None = None
+    delete_after_sync: bool = True
 
     class Config:
         """Environment variables configuration."""
