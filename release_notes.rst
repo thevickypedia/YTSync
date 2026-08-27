@@ -1,6 +1,40 @@
 Release Notes
 =============
 
+v0.1.0 (08/26/2026)
+-------------------
+- `cd513d5 <https://github.com/thevickypedia/YTSync/commit/cd513d5a5e5421dd031b8dcff4ea343ef0fe406b>`_ chore: Release ``v0.1.0``
+- `246a7ef <https://github.com/thevickypedia/YTSync/commit/246a7ef1c4cf15fff4a62ded9bbe6cfa60ca5088>`_ chore: Remove completed TODOs
+- `509806a <https://github.com/thevickypedia/YTSync/commit/509806a49ea8c7469d9cf50a8120cba4c18d1824>`_ perf: Include a circular dependency health check for webhook setup and polling
+- `6e89835 <https://github.com/thevickypedia/YTSync/commit/6e89835e516f3e44655edd650e0424f4fdf01b76>`_ chore: Minor updates to docstrings and README.md
+- `ee00c1c <https://github.com/thevickypedia/YTSync/commit/ee00c1c98917fa762db7d438457dd26d5efe396f>`_ docs: Update README.md and sort env vars in config model
+- `121c86a <https://github.com/thevickypedia/YTSync/commit/121c86a2a7e125ec14ce423a58825c6e79264077>`_ feat: Add config options for cookies, source-address, and proxy
+- `eee249c <https://github.com/thevickypedia/YTSync/commit/eee249cc6b3deeeb4ea71a54c15072a9c547f48e>`_ refactor: Modify error handling and log config
+- `2fef11c <https://github.com/thevickypedia/YTSync/commit/2fef11c36f0668b80958317080b9c5179e4e2185>`_ perf: Restrict all API endpoints for trackers to a single object instead of a list; update trackers to raise HTTP errors optionally; change ``/sync`` endpoint to ``/download`` for API schema
+- `c767dcd <https://github.com/thevickypedia/YTSync/commit/c767dcddb1206b44d71ed0408dfc9a03f77159ab>`_ feat: Add callback notifications with stored ChatID in database; prevent cross-user access; implement notifications for API callbacks
+- `a4ea127 <https://github.com/thevickypedia/YTSync/commit/a4ea12767de981658c13eb5bc001122fb9505167>`_ refactor: Make ``message_id`` an optional parameter for reply with fallback to a new message with ``chat_id``
+- `1bd00e4 <https://github.com/thevickypedia/YTSync/commit/1bd00e48f19445dc742fed9315b9bbf2fd298705>`_ perf: Remove redundant notifications for ``/sync`` and implement a common request timeout throughout the project
+- `879dbef <https://github.com/thevickypedia/YTSync/commit/879dbef650907affdd29f233318db21ccfb50cdb>`_ perf: Add a callback for background tasks to track completion and result
+- `abfb07b <https://github.com/thevickypedia/YTSync/commit/abfb07bd7d0994fbd53d059d6523eca864212f7e>`_ feat: Include a new feature to sync URLs via API
+- `0948700 <https://github.com/thevickypedia/YTSync/commit/0948700354375b26d5516300d2011469d4c5aaf2>`_ feat: Allow ``/sync`` and ``/delete`` to work off of playlist name and url instead of index IDs
+- `5636bdc <https://github.com/thevickypedia/YTSync/commit/5636bdca40d4b8518f10bb8806fecbeec88ebfff>`_ feat: Allow users to pick a schedule for ``/track`` and simplify user inputs for scheduling
+- `36c1d28 <https://github.com/thevickypedia/YTSync/commit/36c1d28929369e190e5fca70f55a7fe89f7444bf>`_ fix: Avoid twice-per-minute problem with background task scanning trackers
+- `1b61f50 <https://github.com/thevickypedia/YTSync/commit/1b61f50919f75eb47cdfa51455428c38b41e1485>`_ fix: Fix exponential cooldown being used as scheduled time
+- `1d6e0e6 <https://github.com/thevickypedia/YTSync/commit/1d6e0e6dc84de909eaadd9024cb68ecb5344bf71>`_ fix: Fix unordered ``row_to_schema`` logic that was breaking pydantic validation
+- `a856341 <https://github.com/thevickypedia/YTSync/commit/a85634125513aa6b37e0264151c60289f7e6dfdc>`_ perf: Simplify logging startup configuration
+- `4216822 <https://github.com/thevickypedia/YTSync/commit/4216822b58079e8d7f6c5308a52870762f763a6e>`_ perf: Add a ``delayed_start`` option and log all safe config during startup
+- `1f77c69 <https://github.com/thevickypedia/YTSync/commit/1f77c69d8b2e7cd5bff9849d6d578d6307bbfd7b>`_ perf: Expand ``DBSchema`` to include index
+- `00d51fb <https://github.com/thevickypedia/YTSync/commit/00d51fb5fa213be5f85029f5a7ee2f3bd19c8363>`_ perf: Create a structured ``DBSchema`` model for all database interactions
+- `eaa4147 <https://github.com/thevickypedia/YTSync/commit/eaa4147ac01a09c1c41279aa2d44fc1e69153132>`_ perf: Address an edge case where queued tasks may run at the same time
+- `81592a2 <https://github.com/thevickypedia/YTSync/commit/81592a2d0357fe4175316facb8a767932bde33d7>`_ feat: Include a ``TZ`` parameter to maintain server timezone in/out of docker context
+- `040c10c <https://github.com/thevickypedia/YTSync/commit/040c10c0b7953a4cf07261a7632e24f40f24ddfc>`_ perf: Adjust cooldown logic to handle an edge-case where ``last_completion_time`` is ``None`` but ``total_submissions`` are more than 1
+- `f68c3e9 <https://github.com/thevickypedia/YTSync/commit/f68c3e92aefc204b42a890b05b0e76036189285c>`_ perf: Include a callback to await from last completion time instead of a new await in process pool
+- `9e9dd2e <https://github.com/thevickypedia/YTSync/commit/9e9dd2e299e4e38e8a4fd2144ca5eb697c9b8933>`_ perf: Log exceptions with traceback; fix intended path when all download URLs are available
+- `90d8e27 <https://github.com/thevickypedia/YTSync/commit/90d8e271d561c3be79ca7112817cef5d1358dcef>`_ feat: Implement notifications for on-demand sync request via telegram
+- `4e84ed5 <https://github.com/thevickypedia/YTSync/commit/4e84ed524a7c8753385274b5000a7ad83615dce4>`_ feat: Implement a cool down interval concept between sequential downloads in the queued process pool
+- `c864f07 <https://github.com/thevickypedia/YTSync/commit/c864f07c57ead81fedf94239002d976b794b15c2>`_ perf: Remove retry logic for YT downloads
+- `be2cd42 <https://github.com/thevickypedia/YTSync/commit/be2cd428d0607e78258a908779d7c390d24bfb95>`_ chore: Update release notes for v0.0.2
+
 v0.0.2 (08/22/2026)
 -------------------
 - `7f8ffc5 <https://github.com/thevickypedia/YTSync/commit/7f8ffc5e12593d24a95d0e160cdba3e77a8186e3>`_ chore: Release ``0.0.2``
