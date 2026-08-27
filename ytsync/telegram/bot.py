@@ -436,15 +436,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
     LOGGER.info("Request: %s", command)
     # TODO:
     #   Write unit tests and code coverage pipeline in GHA
-    #   Health check the webhook endpoint before setting it during startup - intentional circular dependency
     #   Add a 'GET /notifications' endpoint for all queued updates instead of / in addition to chat_id for API
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    #   Wider home network setup (config.env.bot_webhook must support full URL):
-    #       1. Register all bots to the same base URL but append a unique identifier,
-    #           such as https://example.com/webhook?bot_id=1 and https://example.com/webhook?bot_id=2
-    #       2. Register each bot with a unique path on the same domain,
-    #           such as https://example.com/bot1 and https://example.com/bot2
-    #   Backend script parses the bot_id parameter to determine which bot instance should process the update
     kwargs: Dict[str, str | int | None | Callable] = dict(
         chat_id=chat.id, message_id=chat.message_id, callback=reply_to
     )

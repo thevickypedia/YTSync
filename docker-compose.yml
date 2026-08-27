@@ -14,7 +14,7 @@ services:
     volumes:
       # NOTE: Variables for docker context are case-sensitive
       # WORKDIR is set to /app in the Dockerfile, so the app's default "data" and "logs" will always work
-      # LOGS_PATH and DATA_PATH are consumed  only by docker context
+      # LOGS_PATH and DATA_PATH are consumed only by docker context
       # The application only reads logs_dir and data_dir - this is a design choice for separation
       - ${LOGS_PATH:-./logs}:${logs_dir:-/app/logs}
       - ${DATA_PATH:-./data}:${data_dir:-/app/data}

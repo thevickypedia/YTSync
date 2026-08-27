@@ -80,7 +80,6 @@ def webhook_is_usable() -> bool:
         Returns a boolean flag to indicate webhook availability.
     """
     # 1. Set the webhook and verify it's working
-    # TODO: Run the circular health check in a loop and fallback to polling it fails enough (env var) times
     if all((config.env.bot_webhook, config.env.bot_secret, config.env.bot_webhook_ip)):
         webhook.set_webhook(
             webhook=config.env.bot_webhook,
