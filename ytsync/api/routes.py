@@ -52,6 +52,9 @@ async def telegram_webhook(request: Request):
         LOGGER.error("Request received from a non-webhook source")
         LOGGER.error(response)
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
+    if response.get("healthcheck", False) is True:
+        LOGGER.info("Received a healthcheck request")
+        return {"status": "ok"}
     if payload := response.get("message"):
         LOGGER.debug(response)
         await bot.process_request(payload)

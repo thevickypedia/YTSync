@@ -5,23 +5,8 @@ import requests.exceptions
 
 from ytsync.modules import config, exceptions
 from ytsync.telegram import bot
-from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
-
-
-def shutdown_event() -> None:
-    """Shuts down all the threads and gracefully terminates the processes."""
-    youtube.processor.shutdown()
-    for controller in youtube.controllers:
-        LOGGER.info("Shutting down controller for: %s", controller.name)
-        try:
-            result = controller.future.result()
-        except Exception as exc:
-            LOGGER.error("Controller failed for %s: %s", controller.name, exc)
-            LOGGER.exception(exc)
-        else:
-            LOGGER.info("Controller completed for %s: %s", controller.name, result)
 
 
 async def stop_polling() -> None:

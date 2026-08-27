@@ -1,8 +1,11 @@
 import asyncio
 import logging
 import pathlib
+import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from multiprocessing.pool import ThreadPool
 
 import requests
 import uvicorn
@@ -17,6 +20,23 @@ from ytsync.telegram import poll, webhook
 from ytsync.version import __version__
 
 LOGGER = logging.getLogger("ytsync")
+
+
+def circular_healthcheck() -> bool:
+    """Health check function to check if the API is running."""
+    try:
+        # 2s timeout is pretty generous, considering the fact that this is a circular call to the API hosted
+        response = requests.post(
+            config.env.bot_webhook,
+            json={"healthcheck": True},
+            timeout=(2, 2),
+            headers={"X-Telegram-Bot-Api-Secret-Token": config.env.bot_secret},
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        LOGGER.exception(error)
+        return False
+    return response.status_code == 200
 
 
 def webhook_is_usable() -> bool:
@@ -59,6 +79,23 @@ def webhook_is_usable() -> bool:
         bool:
         Returns a boolean flag to indicate webhook availability.
     """
+    # 1. Set the webhook and verify it's working
+    # TODO: Run the circular health check in a loop and fallback to polling it fails enough (env var) times
+    if all((config.env.bot_webhook, config.env.bot_secret, config.env.bot_webhook_ip)):
+        webhook.set_webhook(
+            webhook=config.env.bot_webhook,
+            secret_token=config.env.bot_secret,
+            webhook_ip=config.env.bot_webhook_ip,
+        )
+        time.sleep(30)  # Wait for the webhook to be set up
+        thread = ThreadPool(processes=1).apply_async(circular_healthcheck)
+        if thread.get(timeout=5):
+            LOGGER.info("Webhook healthcheck passed, assuming usable...")
+            return True
+        LOGGER.warning("Webhook healthcheck failed, deleting it...")
+        webhook.delete_webhook()
+        return False
+    # 2. Check if there is one setup and look for the error count and how old they were
     max_pending_updates = 100
     max_error_age_seconds = 60
     try:
@@ -101,6 +138,17 @@ def log_config() -> None:
     LOGGER.debug("***************************** CONFIGURATION END *****************************")
 
 
+def webhook_manager() -> None:
+    """Manage the webhook setup and polling."""
+    LOGGER.info("Starting webhook manager...")
+    if not webhook_is_usable():
+        try:
+            webhook.delete_webhook()
+        except requests.RequestException:
+            pass
+        poll.start_polling()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
@@ -110,16 +158,21 @@ async def lifespan(_: FastAPI):
         log_config()
     LOGGER.info("Initiating background tasks...")
     bg_task = asyncio.create_task(agent.executor())
-    if not webhook_is_usable():
-        try:
-            webhook.delete_webhook()
-        except requests.RequestException:
-            pass
-        poll.start_polling()
+    timer = threading.Timer(interval=10, function=webhook_manager)
+    timer.start()
     yield
+    # Stop the timer, in case the server is shutdown before the timer is done
+    timer.join(timeout=3)
+    if timer.is_alive():
+        LOGGER.warning("Webhook manager is still running, cancelling it...")
+        timer.cancel()
+    LOGGER.info("Webhook manager has been cancelled")
+    # Stop the polling task (if any)
     await poll.stop_polling()
+    # Stop the background task
     bg_task.cancel()
-    poll.shutdown_event()
+    # Clear the process pool
+    agent.shutdown_event()
     LOGGER.info("Shutting down API server.")
 
 
