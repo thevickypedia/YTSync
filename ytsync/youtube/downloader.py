@@ -111,12 +111,14 @@ def download_playlist(
             name,
         )
         transfer_pool.shutdown(wait=True)
-        LOGGER.info(
-            "All transfers completed for %s " "(successful=%d, failed=%d)",
-            name,
-            len(stats["transferred"]),
-            len(stats["transfer_failed"]),
-        )
+        transferred = len(stats["transferred"])
+        transfer_failed = len(stats["transfer_failed"])
+        if not any((transferred, transfer_failed)):
+            raise RuntimeError(f"No files transferred for {name!r}")
+        if not transferred and transfer_failed:
+            joined = "\n".join(f"• {item}" for item in stats["transfer_failed"])
+            raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
+        LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
         transfer.rsync.create_playlist(name)
     else:
         create_local_playlist(destination)
