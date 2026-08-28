@@ -150,3 +150,6 @@ class Rsync:
             )
         except subprocess.CalledProcessError as error:
             LOGGER.error("Failed to create playlist for %r: %s", name, error)
+
+
+rsync = Rsync()
