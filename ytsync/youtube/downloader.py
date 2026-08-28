@@ -11,7 +11,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.modules import config
 from ytsync.remote import transfer
-from ytsync.youtube import hooks
+from ytsync.youtube import cli, hooks
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -94,8 +94,24 @@ def download_playlist(
                 # This monotonic loop is to properly capture individual errors and attach custom handlers
                 ydl.download([url])
             except DownloadError as error:
+                LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
+                cli_attempt = cli.download_track(url, destination)
+                if cli_attempt and transfer_pool:
+                    stats["downloaded"].append(filepath.name)
+                    LOGGER.info("CLI attempt was successful, file saved at: %s; initiating rsync...", str(filepath))
+                    hooks.postprocess_hook(
+                        local_path=str(filepath),
+                        transfer_pool=transfer_pool,
+                        stats=stats,
+                    )
+                    continue
+                elif cli_attempt:
+                    stats["downloaded"].append(filepath.name)
+                    LOGGER.info("CLI attempt was successful, file saved at: %s", str(filepath))
+                    continue
+                else:
+                    LOGGER.warning("CLI attempt failed, assuming download failed")
                 LOGGER.error(error)
-                LOGGER.warning("%s -> %s", url, filepath.name)
                 stats["download_failed"].append(filepath.name)
 
     if len(stats["download_failed"]) == len(url_file_map):

@@ -11,7 +11,7 @@ LOGGER = logging.getLogger("ytsync")
 def postprocess_hook(
     local_path: str,
     transfer_pool: ThreadPoolExecutor,
-    stats: Dict[str, int],
+    stats: Dict[str, List[str]],
 ) -> None:
     """Submit a completed file to the thread pool."""
     local_path = local_path.strip()
