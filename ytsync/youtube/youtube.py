@@ -51,10 +51,14 @@ def snake_to_pascal(snake_str: str) -> str:
     return "".join(word.capitalize() for word in snake_str.split("_"))
 
 
-def stats_to_markdown(stats: Dict[str, int]) -> Generator[str, None, None]:
+def stats_to_markdown(stats: Dict[str, int | List[str]]) -> Generator[str]:
     """Format statistics as Telegram Markdown."""
     for key, value in stats.items():
-        yield f"*{snake_to_pascal(key)}*: {value}"
+        if isinstance(value, int):
+            yield f"*{snake_to_pascal(key)}*: {value}"
+        elif isinstance(value, list):
+            joined = "\n".join(f"• {item}" for item in value)
+            yield f"*{snake_to_pascal(key)}*:\n{joined}\n"
 
 
 def process_callback(
@@ -65,7 +69,7 @@ def process_callback(
     chat_id: int | None = None,
     message_id: int | None = None,
     schedule: config.AllowedCronSchedule | None = None,
-):
+) -> None:
     """Callback function triggered when the playlist process finishes.
 
     Args:
@@ -90,7 +94,7 @@ def process_callback(
         LOGGER.error("Process failed for %s", name)
         return
 
-    result: Dict[str, int] = future.result()
+    result = future.result()
     runtime = result.pop("runtime")
     if schedule:
         response = f"✅ *{schedule} download completed for {name!r}*\n\n" f"Process completed in `{runtime:.2f}s`.\n\n"
@@ -115,15 +119,13 @@ def get_missing_playlist_entries(
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
     destination: pathlib.Path,
-    playlist_url: str,
-) -> Tuple[List[str], Dict[str, int] | None]:
+) -> Tuple[Dict[str, pathlib.Path] | None, Dict[str, int] | None]:
     """Get missing entries in a playlist URL when rsync is requested.
 
     Args:
         ydl: YouTube download object.
         info: Block of entries needed.
         destination: Local path to the destination.
-        playlist_url: Playlist URL provided by the user.
 
     Returns:
         List[str]:
@@ -133,8 +135,7 @@ def get_missing_playlist_entries(
     entries = info.get("entries")
     if not entries:
         LOGGER.warning("'info' block does not contain valid 'entries': %s", info)
-        return [playlist_url], None
-    urls = []
+        return None, None
     url_file_map: Dict[str, pathlib.Path] = {}
     for entry in info["entries"]:
         counter["total"] += 1
@@ -157,7 +158,7 @@ def get_missing_playlist_entries(
         url_file_map[entry["url"]] = destination.joinpath(filename)
 
     if not url_file_map:
-        return [playlist_url], None
+        return None, None
     if rsync.is_enabled:
         # Check files' presence in remote server
         existing = rsync.remote_files_exist(list(url_file_map.values()))
@@ -166,6 +167,8 @@ def get_missing_playlist_entries(
         existing = {file for file in url_file_map.values() if file.exists()}
 
     # Redundant loop, but it's a necessary evil because of a cleaner remote check
+    # Avoid modifying the original dict since python doesn't support dropping values from dict while looping on it
+    url_file_map_copy: Dict[str, pathlib.Path] = {}
     for url, local_path in url_file_map.items():
         if local_path in existing:
             LOGGER.info(
@@ -178,14 +181,14 @@ def get_missing_playlist_entries(
             "'%s' does not exist on the remote server",
             local_path,
         )
-        urls.append(url)
+        url_file_map_copy[url] = local_path
         counter["unavailable"] += 1
 
     LOGGER.info(counter)
-    # If there are items marked as unavailable
-    # Don't care about error count since they'll likely fail to download for the same reason
+    # If there are items marked as unavailable,
+    # don't care about error count since they'll likely fail to download for the same reason
     if counter["unavailable"]:
-        return urls, counter
+        return url_file_map_copy, counter
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
     if counter["error"] > counter["total"] * (config.env.max_error_threshold / 100):
         LOGGER.info(
@@ -193,12 +196,12 @@ def get_missing_playlist_entries(
             counter["error"],
             config.env.max_error_threshold,
         )
-        return [playlist_url], counter
+        return None, counter
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", counter["error"], config.env.max_error_threshold
     )
-    return urls, counter
+    return url_file_map_copy, counter
 
 
 def get_info(playlist_url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
@@ -244,8 +247,13 @@ async def queue_download(
     destination = config.env.download_dir.joinpath(playlist_name)
     destination.mkdir(exist_ok=True)
 
-    urls, preflight_stats = get_missing_playlist_entries(ydl, info, destination, playlist_url)
-    if not urls:
+    url_file_loc, preflight_stats = get_missing_playlist_entries(ydl, info, destination)
+    if url_file_loc is None:
+        url_file_loc = {playlist_url: destination}
+        total_files = None
+    else:
+        total_files = len(url_file_loc)
+    if not url_file_loc:
         assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
         intended_path = posixpath.join(rsync.remote_path, playlist_name) if rsync.is_enabled else destination
         if raw_text:
@@ -262,7 +270,7 @@ async def queue_download(
     future, scheduled_time = processor.submit(
         identifier=playlist_name,
         function=download_playlist,
-        **dict(name=playlist_name, urls=urls, destination=destination),
+        **dict(name=playlist_name, url_file_map=url_file_loc, total_files=total_files, destination=destination),
     )
 
     wrapped_callback = functools.partial(
@@ -285,22 +293,23 @@ async def queue_download(
     )
 
     scheduled_time = max(0, scheduled_time - time.monotonic())
+    if total_files is None:
+        parsed_len = " "
+    else:
+        parsed_len = f" - {total_files} file(s) "
     if scheduled_time == 0:
         if raw_text:
-            txt = f"{playlist_name!r} with {len(urls)} file(s) has been queued for download."
+            txt = f"{playlist_name!r}{parsed_len}has been queued for download."
         else:
-            txt = f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) queued for download."
+            txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}queued for download."
     else:
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         if raw_text:
-            txt = f"{playlist_name!r} with {len(urls)} file(s) will be queued for download at {t_string!r}"
+            txt = f"{playlist_name!r}{parsed_len}will be queued for download at {t_string!r}"
         else:
-            txt = (
-                f"✅ *Download queued*\n\n*{playlist_name}* — {len(urls)} file(s) "
-                f"will be queued for download at {t_string}"
-            )
+            txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}" f"will be queued for download at {t_string}"
 
     # Add a text block about callback notification when 'chat_id' is provided
     if chat_id:
@@ -310,7 +319,7 @@ async def queue_download(
     if raw_text:
         return txt
 
-    # Skip start notification for scheduled runs, to avoid too much noise
+    # Skip start notification for scheduled runs to avoid too much noise
     if schedule:
         LOGGER.info(txt)
     else:
@@ -334,29 +343,19 @@ def transfer_file(local_path: str) -> None:
 def transfer_callback(
     future: Future,
     filepath: str,
-    stats: Dict[str, int],
+    stats: Dict[str, List[str]],
 ) -> None:
     """Called when an individual transfer thread completes."""
+    filepath = pathlib.Path(filepath)
     try:
         future.result()
     except Exception as exc:
-        stats["transfer_failed"] += 1
-        LOGGER.exception(
-            "Transfer failed for %s: %s",
-            filepath,
-            exc,
-        )
+        stats["transfer_failed"].append(filepath.name)
+        LOGGER.exception("Transfer failed for %s: %s", filepath, exc)
     else:
-        stats["transferred"] += 1
-        LOGGER.info(
-            "Transfer completed: %s",
-            filepath,
-        )
-    LOGGER.debug(
-        "Transfers: successful=%d failed=%d",
-        stats["transferred"],
-        stats["transfer_failed"],
-    )
+        stats["transferred"].append(filepath.name)
+        LOGGER.info("Transfer completed: %s", filepath)
+    LOGGER.info("Transfers: successful=%d failed=%d", len(stats["transferred"]), len(stats["transfer_failed"]))
 
 
 def postprocess_hook(
@@ -367,10 +366,7 @@ def postprocess_hook(
     """Submit a completed file to the thread pool."""
     local_path = local_path.strip()
     if local_path.endswith(".webm") or local_path.endswith(".part"):
-        LOGGER.debug(
-            "Transient download complete; awaiting final - %s",
-            local_path,
-        )
+        LOGGER.debug("Transient download complete; awaiting final - %s", local_path)
         return
     LOGGER.info("Ready to transfer: %s", local_path)
     future = transfer_pool.submit(transfer_file, local_path)
@@ -385,34 +381,30 @@ def postprocess_hook(
 
 def download_progress_hook(
     data: Dict[str, Any],
-    stats: Dict[str, int],
+    stats: Dict[str, List[str]],
 ) -> None:
     """Track yt-dlp download completion."""
     status = data.get("status", "")
+    filename = data.get("filename", "unknown")
     if status == "finished":
-        stats["downloaded"] += 1
-        LOGGER.info(
-            "Download completed: %s",
-            data.get("filename"),
-        )
+        stats["downloaded"].append(filename)
+        LOGGER.info("Download completed: %s", filename)
     elif status == "error":
-        stats["download_failed"] += 1
-        LOGGER.error(
-            "Download failed: %s",
-            data.get("filename"),
-        )
+        stats["download_failed"].append(filename)
+        LOGGER.error("Download failed: %s", filename)
 
 
 def download_playlist(
     name: str,
-    urls: List[str],
+    url_file_map: Dict[str, pathlib.Path],
+    total_files: int | None,
     destination: pathlib.Path,
-) -> Dict[str, Any]:
+) -> Dict[str, float | int | List[str]]:
     """Downloads a playlist and returns download/transfer statistics."""
     start = time.time()
-    stats: Dict[str, int] = {
-        "downloaded": 0,
-        "download_failed": 0,
+    stats: Dict[str, List[str]] = {
+        "downloaded": [],
+        "download_failed": [],
     }
     options: Dict[str, Any] = {
         "logger": LOGGER,
@@ -456,13 +448,13 @@ def download_playlist(
         )
         stats.update(
             {
-                "transferred": 0,
-                "transfer_failed": 0,
+                "transferred": [],
+                "transfer_failed": [],
             }
         )
 
         def hook(local_path: str) -> None:
-            """Function to create a post process hook to initiate rsync in the background."""
+            """Function to create a post-process hook to initiate rsync in the background."""
             # noinspection bad-argument-type
             postprocess_hook(
                 local_path=local_path,
@@ -474,17 +466,21 @@ def download_playlist(
 
     # noinspection bad-argument-type
     with yt_dlp.YoutubeDL(options) as ydl:
-        for url in urls:
+        for url, filepath in url_file_map.items():
             try:
                 # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
                 # This monotonic loop is to properly capture individual errors and attach custom handlers
                 ydl.download([url])
             except DownloadError as error:
                 LOGGER.exception(error)
-                stats["download_failed"] += 1
+                stats["download_failed"].append(filepath.name)
 
-    if stats["download_failed"] == len(urls):
-        raise RuntimeError(f"{len(urls)} download(s) failed for {name!r}")
+    if len(stats["download_failed"]) == len(url_file_map):
+        if total_files is None:
+            raise RuntimeError(f"Failed to download {name!r}")
+        else:
+            joined = "\n".join(f"• {item}" for item in stats["download_failed"])
+            raise RuntimeError(f"{len(url_file_map)} download(s) failed for {name!r}\n{joined}")
 
     if transfer_pool:
         LOGGER.info(
@@ -495,8 +491,8 @@ def download_playlist(
         LOGGER.info(
             "All transfers completed for %s " "(successful=%d, failed=%d)",
             name,
-            stats["transferred"],
-            stats["transfer_failed"],
+            len(stats["transferred"]),
+            len(stats["transfer_failed"]),
         )
         rsync.create_playlist(name)
     else:
