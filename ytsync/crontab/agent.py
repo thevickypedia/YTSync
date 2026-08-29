@@ -57,7 +57,6 @@ async def executor() -> None:
         if now == LAST_CHECK:
             continue
         LAST_CHECK = now
-        # TODO: Group by URL (since multiple names, schedules, and chat_ids can be associated with the same URL)
         for track in tracker.get():
             # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
             # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly

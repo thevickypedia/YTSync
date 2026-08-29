@@ -84,15 +84,10 @@ def process_callback(
     else:
         response = f"✅ *Download completed for {name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`.\n\n"
     # preflight_status is set to None if checks fail
-    # TODO: Remove squire.stats_to_markdown() - construct manually
     if result.preflight:
         p_stats = "\n".join(squire.stats_to_markdown(result.preflight.model_dump(mode="json")))
         response += f"*Pre-flight result:*\n{p_stats}\n\n"
-    stats: Dict[str, Any] = {
-        "downloaded": result.downloaded,
-        "download_failed": result.download_failed,
-    }
-    # TODO: Remove squire.stats_to_markdown() - construct manually
+    stats: Dict[str, Any] = {"downloaded": result.downloaded, "download_failed": result.download_failed}
     t_stats = "\n".join(squire.stats_to_markdown(stats))
     response += f"*Download/Transfer result:*\n{t_stats}"
     stats["download_end"] = config.now()
@@ -114,7 +109,7 @@ def save_checkpoint(final_checkpoint: checkpoint.Checkpoint) -> None:
         final_checkpoint: Final checkpoint object.
     """
     LOGGER.debug(final_checkpoint)
-    checkpoint_dir = config.env.data_dir / "checkpoints" / datetime.now(config.env.tz).strftime("%b_%d_%Y")
+    checkpoint_dir = config.checkpoints_dir / datetime.now(config.env.tz).strftime(config.checkpoint_dir_format)
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_path = checkpoint_dir / f"checkpoint_{int(time.time())}.json"
     with open(checkpoint_path, "w") as file:

@@ -1,7 +1,10 @@
 import asyncio
+import json
 import logging
+import re
 from http import HTTPStatus
 from json.decoder import JSONDecodeError
+from typing import Dict, List
 
 import requests
 from fastapi import Depends, Request
@@ -68,7 +71,7 @@ async def telegram_webhook(request: Request):
 async def api_set_webhook(
     body: models.SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> None:
     """**API endpoint to POST a webhook.**
 
     **Args**
@@ -80,14 +83,6 @@ async def api_set_webhook(
         ‣‣ 'webhook' endpoint should match the 'bot_endpoint' environment variable set during startup.
         ‣‣ 'secret_token' is required to authenticate the incoming request to avoid man-in-the-middle attacks.
         ‣‣ 'webhook_ip' is optional; useful for bots behind a NAT or complex network configurations.
-
-    **Examples**
-
-        {
-            "webhook": "https://webhook.example.com/telegram-webhook",
-            "secret_token": "TelegramWillIncludeThisInTheWebhookRequest",
-            "webhook_ip": "198.51.100.42"
-        }
     """
     auth.validate(apikey, True)
     # Invalid URL scheme - only 'https' is accepted
@@ -122,7 +117,7 @@ async def api_set_webhook(
 
 async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> Dict[str, str] | None:
     """**API endpoint to GET a webhook.**"""
     auth.validate(apikey, True)
     try:
@@ -136,7 +131,7 @@ async def api_get_webhook(
 
 async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> Dict[str, str] | None:
     """**API endpoint to DELETE a webhook.**"""
     auth.validate(apikey, True)
     try:
@@ -154,25 +149,16 @@ async def api_delete_webhook(
 
 async def api_get_trackers(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> List[tracker.DBSchema]:
     """**API endpoint to GET all trackers.**"""
     auth.validate(apikey, False)
-    if trackers := [track.model_dump(mode="json") for track in tracker.get()]:
-        # Include 'chat_id' in the payload ONLY when authenticated with telegram bot token
-        if apikey.credentials == config.env.apikey:
-            return trackers
-        cleaned = []
-        for tr in trackers:
-            tr.pop("chat_id", None)
-            cleaned.append(tr)
-        return cleaned
-    raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real)
+    return list(tracker.get())
 
 
 async def api_add_trackers(
     body: models.Trackers,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> None:
     """**API endpoint to ADD new trackers.**
 
     **Args**
@@ -185,14 +171,6 @@ async def api_add_trackers(
         ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
         ‣‣ 'schedule' must be @hourly, @daily, @weekly, or @monthly as a string.
         ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
-
-    **Examples**
-
-        {
-            "url": "https://music.youtube.com/playlist?list=OLAK5uy_nQY-UERFpsL1d5UTPVMjX7mtnVlKg7D4w",
-            "schedule": "@weekly",
-            "chat_id": 1234567890
-        }
     """
     auth.validate(apikey, False)
     tracker.insert(str(body.url), body.schedule, body.chat_id, raise_for_exception=True)
@@ -215,13 +193,6 @@ async def api_delete_trackers(
         ‣‣ 'name' to identify and delete the tracker.
         ‣‣ 'url' to identify and delete the tracker.
         ‣‣ 'chat_id' the tracker was requested with. If the original request was an API call, set it to 0.
-
-    **Examples**
-
-        {
-            "name": "Encore",
-            "chat_id" 0
-        }
     """
     auth.validate(apikey, False)
     if not any((body.name, body.url)):
@@ -235,7 +206,7 @@ async def download(
     request: Request,
     body: models.Download,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-):
+) -> str:
     """**API endpoint to download playlists as an on-demand request.**
 
     **Args**
@@ -247,13 +218,6 @@ async def download(
         ‣‣ Body must be a dictionary with url, and chat id (optional) as key-value pairs.
         ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
         ‣‣ 'chat_id' is optional to send a telegram notification when the download completes/fails.
-
-    **Examples**
-
-        {
-            "url": "https://music.youtube.com/playlist?list=OLAK5uy_nQY-UERFpsL1d5UTPVMjX7mtnVlKg7D4w",
-            "chat_id": 1234567890
-        }
     """
     auth.validate(apikey, False)
     try:
@@ -274,3 +238,49 @@ async def download(
     except (ValueError, AssertionError, DownloadError) as error:
         LOGGER.exception(error)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.real, detail=str(error))
+
+
+async def list_checkpoints(
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+) -> Dict[str, List[int]]:
+    """**API endpoint to list all checkpoints.**
+
+    **Sample Response**
+
+        {
+          "Aug_29_2026": [
+            "1788010080",
+            "1788013828",
+            "1788024673"
+          ]
+        }
+    """
+    auth.validate(apikey, False)
+    return {
+        parent.name: [
+            int(re.search(r"\d+", child.name).group()) for child in parent.iterdir() if child.suffix == ".json"
+        ]
+        for parent in config.checkpoints_dir.iterdir()
+        if parent.is_dir() and config.is_valid_checkpoint_dir(parent.name)
+    }
+
+
+async def get_checkpoint(
+    datestamp: str,
+    timestamp: str,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+) -> checkpoint.Checkpoint:
+    """**API endpoint to get a specific checkpoint.**
+
+    **Args**
+
+        ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
+        ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
+    """
+    auth.validate(apikey, False)
+    target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
+    if not target.exists():
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=f"Checkpoint {target.name} not found")
+    with open(target) as file:
+        data = json.load(file)
+    return checkpoint.Checkpoint(**data)

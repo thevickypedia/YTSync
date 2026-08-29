@@ -434,7 +434,6 @@ async def executor(command: str, chat: settings.Chat) -> None:
     LOGGER.info("Request: %s", command)
     # TODO:
     #   Write unit tests and code coverage pipeline in GHA
-    #   Add a 'GET /checkpoints' endpoint
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
     source_system = checkpoint.SourceSystem(telegram=chat)
     kwargs: Dict[str, str | int | checkpoint.SourceSystem | Callable] = dict(

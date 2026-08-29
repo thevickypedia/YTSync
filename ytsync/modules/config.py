@@ -148,3 +148,14 @@ db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
 if not env.apikey:
     env.apikey = env.bot_token
+checkpoints_dir = env.data_dir / "checkpoints"
+checkpoint_dir_format = "%b_%d_%Y"
+
+
+def is_valid_checkpoint_dir(value):
+    """Checks if a string is a valid checkpoint directory name."""
+    try:
+        datetime.strptime(value, checkpoint_dir_format)
+        return True
+    except ValueError:
+        return False

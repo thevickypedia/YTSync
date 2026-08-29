@@ -228,6 +228,16 @@ api_routes = [
         methods=["POST"],
         path="/download",
     ),
+    APIRoute(
+        endpoint=routes.list_checkpoints,
+        methods=["GET"],
+        path="/list-checkpoints",
+    ),
+    APIRoute(
+        endpoint=routes.get_checkpoint,
+        methods=["GET"],
+        path="/get-checkpoint",
+    ),
 ]
 
 app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=api_routes)

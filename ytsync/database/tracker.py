@@ -61,7 +61,7 @@ def insert(
     """
     with config.db.connection as connection:
         cursor = connection.cursor()
-        # Selecting with 'chat_id' prevents cross user access OR data corruption
+        # Selecting with 'chat_id' prevents cross-user access OR data corruption
         # However, selecting with 'chat_id' means the API should also pass the original 'chat_id',
         # when an entry is made via Telegram but updated through the API; 'GET /get-trackers' will give the 'chat_id'
         cursor.execute(
@@ -76,7 +76,13 @@ def insert(
             LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
             title = tracked.name
             # Since there is no primary key, 'INSERT OR REPLACE' will NOT prevent duplicates
-            cursor.execute("DELETE FROM ytsync WHERE url = ? AND chat_id = ?;")
+            cursor.execute(
+                "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
+                (
+                    playlist_url,
+                    chat_id,
+                ),
+            )
         else:
             _, yt_info = squire.get_info(playlist_url)
             assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
@@ -92,7 +98,7 @@ def insert(
 
 
 def stringified_get(trackers: List[DBSchema] | None = None) -> str:
-    """Get trackers in a Markdown friendly format."""
+    """Get trackers in a markdown-friendly format."""
     txt = ""
     if trackers is None:
         trackers = list(get())
@@ -212,7 +218,7 @@ def delete(
     url = str(tracker.url)
     with config.db.connection as connection:
         cursor = connection.cursor()
-        # Using 'chat_id' condition prevents cross user access OR data corruption
+        # Using 'chat_id' condition prevents cross-user access OR data corruption
         # However, deleting with 'chat_id' means the API should also pass the original 'chat_id',
         # when an entry is made via Telegram but deleted through the API; 'GET /get-trackers' will give the 'chat_id'
         cursor.execute(
