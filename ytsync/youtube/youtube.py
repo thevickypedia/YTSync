@@ -1,14 +1,15 @@
 import functools
 import logging
+import pathlib
 import posixpath
 import time
 from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
 from typing import Callable, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, HttpUrl
 
-from ytsync.modules import config
+from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
 from ytsync.youtube import callbacks, downloader, process, squire
 
@@ -40,12 +41,12 @@ controllers: List[Controller] = []
 
 
 async def queue_download(
+    source_system: checkpoint.SourceSystem,
     chat_id: int | None = None,
     message_id: int | None = None,
     callback: Callable | None = None,
     playlist_url: str | None = None,
     playlist_id: str | None = None,
-    raw_text: bool = False,
     schedule: config.AllowedCronSchedule | None = None,
 ) -> str | None:
     """Queue a playlist download in the process pool."""
@@ -69,32 +70,47 @@ async def queue_download(
         total_files = None
     else:
         total_files = len(url_file_loc)
+    intended_path = (
+        posixpath.join(transfer.rsync.remote_path, playlist_name) if transfer.rsync.is_enabled else destination
+    )
     if not url_file_loc:
         assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
-        intended_path = (
-            posixpath.join(transfer.rsync.remote_path, playlist_name) if transfer.rsync.is_enabled else destination
-        )
-        if raw_text:
-            return f"{playlist_name!r} with {preflight_stats['total']} file(s) is already available at: {intended_path}"
+        if source_system.api:
+            return f"{playlist_name!r} with {preflight_stats.total} file(s) is already available at: {intended_path}"
         callback(
             chat_id=chat_id,
             message_id=message_id,
             response="ℹ️ *Already available*\n\n"
-            f"*{playlist_name}* with {preflight_stats['total']} file(s) is already available at:\n"
+            f"*{playlist_name}* with {preflight_stats.total} file(s) is already available at:\n"
             f"`{intended_path}`",
         )
         return None
 
+    checkpoint_stats = checkpoint.Checkpoint(
+        source_system=source_system,
+        input_url=HttpUrl(playlist_url),
+        resolved_urls=list(map(HttpUrl, url_file_loc.keys())),
+        initial_destination=destination,
+        final_destination=pathlib.Path(intended_path),
+        name=playlist_name,
+        preflight=preflight_stats,
+    )
+
     future, scheduled_time = processor.submit(
         identifier=playlist_name,
         function=downloader.download_playlist,
-        **dict(name=playlist_name, url_file_map=url_file_loc, total_files=total_files, destination=destination),
+        **dict(
+            checkpoint_stats=checkpoint_stats,
+            name=playlist_name,
+            url_file_map=url_file_loc,
+            total_files=total_files,
+            destination=destination,
+        ),
     )
 
     wrapped_callback = functools.partial(
         callbacks.process_callback,
         name=playlist_name,
-        preflight_stats=preflight_stats,
         callback=callback,
         chat_id=chat_id,
         message_id=message_id,
@@ -116,7 +132,7 @@ async def queue_download(
     else:
         parsed_len = f" - {total_files} file(s) "
     if scheduled_time == 0:
-        if raw_text:
+        if source_system.api:
             txt = f"{playlist_name!r}{parsed_len}has been queued for download."
         else:
             txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}queued for download."
@@ -124,17 +140,17 @@ async def queue_download(
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
-        if raw_text:
+        if source_system.api:
             txt = f"{playlist_name!r}{parsed_len}will be queued for download at {t_string!r}"
         else:
             txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}" f"will be queued for download at {t_string}"
 
     # Add a text block about callback notification when 'chat_id' is provided
     if chat_id:
-        spacer = " " if raw_text else "\n\n"
+        spacer = " " if source_system.api else "\n\n"
         txt += f"{spacer}You will receive a notification to {chat_id!r} when the process completes."
 
-    if raw_text:
+    if source_system.api:
         return txt
 
     # Skip start notification for scheduled runs to avoid too much noise

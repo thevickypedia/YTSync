@@ -129,7 +129,7 @@ class Rsync:
 
         retry.retry(function=runner, raise_error=True, **dict(cmd=cmd, source=source))
 
-    def create_playlist(self, name: str) -> None:
+    def create_playlist(self, name: str) -> str:
         """Create a .m3u file on the remote machine."""
         remote_loc = posixpath.join(self.remote_path, name)
         filepath = posixpath.join(self.remote_path, name, f"{name}.m3u")
@@ -150,6 +150,7 @@ class Rsync:
             )
         except subprocess.CalledProcessError as error:
             LOGGER.error("Failed to create playlist for %r: %s", name, error)
+        return filepath
 
 
 rsync = Rsync()

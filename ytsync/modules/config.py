@@ -122,9 +122,9 @@ def tzname() -> str:
     return datetime.now(env.tz).tzname() or ""
 
 
-def now() -> datetime:
+def now() -> str:
     """Returns the datetime object in the current timezone."""
-    return datetime.now(env.tz)
+    return datetime.now(env.tz).strftime("%a %b %d %Y %H:%M %Z")
 
 
 # 'bot_webhook' is optional but 'bot_endpoint' is mandatory

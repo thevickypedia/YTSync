@@ -7,8 +7,8 @@ from typing import Callable, List, Tuple
 from fastapi import HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from ytsync.modules import config, settings
-from ytsync.youtube import youtube
+from ytsync.modules import checkpoint, config, settings
+from ytsync.youtube import squire, youtube
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -78,7 +78,7 @@ def insert(
             # Since there is no primary key, 'INSERT OR REPLACE' will NOT prevent duplicates
             cursor.execute("DELETE FROM ytsync WHERE url = ? AND chat_id = ?;")
         else:
-            _, yt_info = youtube.get_info(playlist_url)
+            _, yt_info = squire.get_info(playlist_url)
             assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
             title = yt_info["title"]
         cursor.execute(
@@ -123,15 +123,26 @@ async def sync(
         Returns the response string for Telegram.
     """
     trackers = list(get())
+    source_system = checkpoint.SourceSystem(telegram=chat)
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
-            callback(chat, f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL")
+            callback(
+                chat_id=chat.id,
+                message_id=chat.message_id,
+                response=f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL",
+            )
             return
         tracker = tracker[0]
         url = str(tracker.url)
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
-            youtube.queue_download(chat_id=chat.id, message_id=chat.message_id, playlist_url=url, callback=callback),
+            youtube.queue_download(
+                source_system=source_system,
+                chat_id=chat.id,
+                message_id=chat.message_id,
+                playlist_url=url,
+                callback=callback,
+            ),
             timeout=config.env.response_timeout,
         )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
@@ -140,13 +151,25 @@ async def sync(
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
-            youtube.queue_download(chat_id=chat.id, message_id=chat.message_id, playlist_url=url, callback=callback),
+            youtube.queue_download(
+                source_system=source_system,
+                chat_id=chat.id,
+                message_id=chat.message_id,
+                playlist_url=url,
+                callback=callback,
+            ),
             timeout=config.env.response_timeout,
         )
     elif trackers:
-        callback(chat, f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}")
+        callback(
+            chat_id=chat.id,
+            message_id=chat.message_id,
+            response=f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}",
+        )
     else:
-        callback(chat, "⚠️ *Warning*\n\nNo trackers found on the server.")
+        callback(
+            chat_id=chat.id, message_id=chat.message_id, response="⚠️ *Warning*\n\nNo trackers found on the server."
+        )
 
 
 def delete(

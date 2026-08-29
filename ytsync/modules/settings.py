@@ -6,17 +6,17 @@ from pydantic import BaseModel
 class Chat(BaseModel):
     """Base class for Chat model."""
 
-    message_id: int | None = None
+    message_id: int
     message_type: str | None = None
-    date: int | None = None
+    date: int
 
-    first_name: str | None = None
-    last_name: str | None = None
+    first_name: str
+    last_name: str
     id: int
-    type: str | None = None
-    username: str | None = None
-    is_bot: bool | None = None
-    language_code: str | None = None
+    type: str
+    username: str
+    is_bot: bool
+    language_code: str
 
 
 # Below are the DataClass objects

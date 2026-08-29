@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 import yt_dlp
 from yt_dlp.utils import DownloadError
 
-from ytsync.modules import config
+from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
 from ytsync.youtube import cli, hooks
 
@@ -17,13 +17,15 @@ LOGGER = logging.getLogger("ytsync")
 
 
 def download_playlist(
+    checkpoint_stats: checkpoint.Checkpoint,
     name: str,
     url_file_map: Dict[str, pathlib.Path],
     total_files: int | None,
     destination: pathlib.Path,
-) -> Dict[str, float | int | List[str]]:
+) -> checkpoint.Checkpoint:
     """Downloads a playlist and returns download/transfer statistics."""
     start = time.time()
+    checkpoint_stats.download_start = config.now()
     stats: Dict[str, List[str]] = {
         "downloaded": [],
         "download_failed": [],
@@ -120,13 +122,16 @@ def download_playlist(
         else:
             joined = "\n".join(f"• {item}" for item in stats["download_failed"])
             raise RuntimeError(f"{len(url_file_map)} download(s) failed for {name!r}\n{joined}")
-
+    checkpoint_stats.downloaded = stats["downloaded"]
+    checkpoint_stats.download_failed = stats["download_failed"]
     if transfer_pool:
         LOGGER.info(
             "Waiting for transfers for %s",
             name,
         )
         transfer_pool.shutdown(wait=True)
+        checkpoint_stats.transferred = stats["transferred"]
+        checkpoint_stats.transfer_failed = stats["transfer_failed"]
         transferred = len(stats["transferred"])
         transfer_failed = len(stats["transfer_failed"])
         if not any((transferred, transfer_failed)):
@@ -135,21 +140,20 @@ def download_playlist(
             joined = "\n".join(f"• {item}" for item in stats["transfer_failed"])
             raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
         LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
-        transfer.rsync.create_playlist(name)
+        playlist_id = transfer.rsync.create_playlist(name)
     else:
-        create_local_playlist(destination)
-
-    return {
-        "runtime": time.time() - start,
-        **stats,
-    }
+        playlist_id = create_local_playlist(destination)
+    checkpoint_stats.playlist_id = playlist_id
+    checkpoint_stats.runtime = time.time() - start
+    return checkpoint_stats
 
 
-def create_local_playlist(destination: pathlib.Path) -> None:
+def create_local_playlist(destination: pathlib.Path) -> str | None:
     """Create a .m3u file on the local machine."""
     filepath = destination.joinpath(f"{destination.name}.m3u")
     if files := [file for file in os.listdir(destination) if file.endswith(".mp3")]:
         with open(filepath, "w") as playlist_file:
             playlist_file.write("\n".join(files) + "\n")
-        return
+        return None
     LOGGER.warning(f"No eligible files found in {destination}")
+    return str(filepath)

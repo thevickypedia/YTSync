@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 from ytsync.youtube import callbacks
 
 LOGGER = logging.getLogger("ytsync")
+TRANSIENT_FILES = (".webm", ".part")
 
 
 def postprocess_hook(
@@ -15,7 +16,7 @@ def postprocess_hook(
 ) -> None:
     """Submit a completed file to the thread pool."""
     local_path = local_path.strip()
-    if local_path.endswith(".webm") or local_path.endswith(".part"):
+    if local_path.endswith(TRANSIENT_FILES):
         LOGGER.debug("Transient download complete; awaiting final - %s", local_path)
         return
     LOGGER.info("Ready to transfer: %s", local_path)
@@ -34,11 +35,16 @@ def download_progress_hook(
     stats: Dict[str, List[str]],
 ) -> None:
     """Track yt-dlp download completion."""
-    status = data.get("status", "")
+    status = data.get("status", "unknown")
     filename = data.get("filename", "unknown")
+    if filename.endswith(TRANSIENT_FILES):
+        LOGGER.debug("Transient download status: %s - %s", filename, status)
+        return
     if status == "finished":
         stats["downloaded"].append(filename)
         LOGGER.info("Download completed: %s", filename)
     elif status == "error":
         stats["download_failed"].append(filename)
         LOGGER.error("Download failed: %s", filename)
+    else:
+        LOGGER.debug("Download status: %s - %s", filename, status)

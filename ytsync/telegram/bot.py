@@ -19,7 +19,7 @@ from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
-from ytsync.modules import config, exceptions, settings
+from ytsync.modules import checkpoint, config, exceptions, settings
 from ytsync.youtube import youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
@@ -414,9 +414,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
-        final = (
-            f"🕐 *Server Timestamp:* `{config.now().strftime('%c')} {config.tzname()}`\n\n{txt}\n\n{get_process_pool()}"
-        )
+        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n{txt}\n\n{get_process_pool()}"
         reply_to(chat.id, chat.message_id, final)
         return
     try:
@@ -436,10 +434,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
     LOGGER.info("Request: %s", command)
     # TODO:
     #   Write unit tests and code coverage pipeline in GHA
-    #   Add a 'GET /notifications' endpoint for all queued updates instead of / in addition to chat_id for API
+    #   Add a 'GET /checkpoints' endpoint
     #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    kwargs: Dict[str, str | int | None | Callable] = dict(
-        chat_id=chat.id, message_id=chat.message_id, callback=reply_to
+    source_system = checkpoint.SourceSystem(telegram=chat)
+    kwargs: Dict[str, str | int | checkpoint.SourceSystem | Callable] = dict(
+        source_system=source_system, chat_id=chat.id, message_id=chat.message_id, callback=reply_to
     )
     if command.startswith("/id"):
         if playlist_id := command.replace("/id", "").strip():

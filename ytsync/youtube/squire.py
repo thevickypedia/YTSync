@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Tuple
 import yt_dlp
 from yt_dlp.utils import YoutubeDLError
 
-from ytsync.modules import config
+from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
 
 LOGGER = logging.getLogger("ytsync")
@@ -31,7 +31,7 @@ def get_missing_playlist_entries(
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
     destination: pathlib.Path,
-) -> Tuple[Dict[str, pathlib.Path] | None, Dict[str, int] | None]:
+) -> Tuple[Dict[str, pathlib.Path] | None, checkpoint.PreFlight | None]:
     """Get missing entries in a playlist URL when rsync is requested.
 
     Args:
@@ -43,7 +43,7 @@ def get_missing_playlist_entries(
         List[str]:
         Returns a list of all the missing entries.
     """
-    counter = {"error": 0, "total": 0, "available": 0, "unavailable": 0}
+    preflight = checkpoint.PreFlight()
     entries = info.get("entries")
     if not entries:
         # This is a valid scenario for individual song files, instead of a playlist
@@ -51,10 +51,10 @@ def get_missing_playlist_entries(
         return None, None
     url_file_map: Dict[str, pathlib.Path] = {}
     for entry in info["entries"]:
-        counter["total"] += 1
+        preflight.total += 1
         if not entry or not entry.get("url"):
             LOGGER.warning("Invalid entry found: %s", entry or "None")
-            counter["error"] += 1
+            preflight.error += 1
             continue
         try:
             with ydl:
@@ -68,7 +68,7 @@ def get_missing_playlist_entries(
                 )
         except YoutubeDLError as error:
             LOGGER.exception(error)
-            counter["error"] += 1
+            preflight.error += 1
             continue
         url_file_map[entry["url"]] = destination.joinpath(filename)
 
@@ -90,33 +90,31 @@ def get_missing_playlist_entries(
                 "'%s' already exists on the remote server; skipping...",
                 local_path,
             )
-            counter["available"] += 1
+            preflight.available += 1
             continue
         LOGGER.info(
             "'%s' does not exist on the remote server",
             local_path,
         )
         url_file_map_copy[url] = local_path
-        counter["unavailable"] += 1
+        preflight.unavailable += 1
 
-    LOGGER.info(counter)
+    LOGGER.info(preflight.model_dump(mode="json"))
     # If there are items marked as unavailable,
     # don't care about error count since they'll likely fail to download for the same reason
-    if counter["unavailable"]:
-        return url_file_map_copy, counter
+    if preflight.unavailable:
+        return url_file_map_copy, preflight
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
-    if counter["error"] > counter["total"] * (config.env.max_error_threshold / 100):
+    if preflight.error > preflight.total * (config.env.max_error_threshold / 100):
         LOGGER.info(
-            "Error count %d EXCEEDS the acceptable threshold of %d pct",
-            counter["error"],
-            config.env.max_error_threshold,
+            "Error count %d EXCEEDS the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
         )
-        return None, counter
+        return None, preflight
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
-        "Error count %d is within the acceptable threshold of %d pct", counter["error"], config.env.max_error_threshold
+        "Error count %d is within the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
     )
-    return url_file_map_copy, counter
+    return url_file_map_copy, preflight
 
 
 def get_info(playlist_url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:

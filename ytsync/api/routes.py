@@ -11,7 +11,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.api import auth, models
 from ytsync.database import tracker
-from ytsync.modules import config
+from ytsync.modules import checkpoint, config
 from ytsync.telegram import bot, poll, webhook
 from ytsync.youtube import youtube
 
@@ -232,6 +232,7 @@ async def api_delete_trackers(
 
 
 async def download(
+    request: Request,
     body: models.Download,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
@@ -256,9 +257,16 @@ async def download(
     """
     auth.validate(apikey, False)
     try:
+        api_source = checkpoint.APISource(
+            host=request.client.host,
+            host_header=request.headers.get("host"),
+        )
         response = await asyncio.wait_for(
             youtube.queue_download(
-                playlist_url=str(body.url), chat_id=body.chat_id, callback=bot.reply_to, raw_text=True
+                source_system=checkpoint.SourceSystem(api=api_source),
+                playlist_url=str(body.url),
+                chat_id=body.chat_id,
+                callback=bot.reply_to,
             ),
             timeout=config.env.response_timeout,
         )

@@ -1,10 +1,13 @@
+import json
 import logging
 import os
 import pathlib
+import time
 from concurrent.futures import Future
-from typing import Callable, Dict, List
+from datetime import datetime
+from typing import Any, Callable, Dict, List
 
-from ytsync.modules import config
+from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
 from ytsync.youtube import squire
 
@@ -45,7 +48,6 @@ def transfer_callback(
 def process_callback(
     future: Future,
     name: str,
-    preflight_stats: Dict[str, int],
     callback: Callable | None = None,
     chat_id: int | None = None,
     message_id: int | None = None,
@@ -56,7 +58,6 @@ def process_callback(
     Args:
         future: Future object.
         name: Playlist name.
-        preflight_stats: Preflight status dict.
         callback: Callback function. This must always be `bot.reply_to` as a callable object.
         chat_id: Telegram Chat ID.
         message_id: Telegram message ID.
@@ -75,18 +76,28 @@ def process_callback(
         LOGGER.error("Process failed for %s", name)
         return
 
-    result = future.result()
-    runtime = result.pop("runtime")
+    result: checkpoint.Checkpoint = future.result()
     if schedule:
-        response = f"✅ *{schedule} download completed for {name!r}*\n\n" f"Process completed in `{runtime:.2f}s`.\n\n"
+        response = (
+            f"✅ *{schedule} download completed for {name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`.\n\n"
+        )
     else:
-        response = f"✅ *Download completed for {name!r}*\n\n" f"Process completed in `{runtime:.2f}s`.\n\n"
+        response = f"✅ *Download completed for {name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`.\n\n"
     # preflight_status is set to None if checks fail
-    if preflight_stats:
-        p_stats = "\n".join(squire.stats_to_markdown(preflight_stats))
+    # TODO: Remove squire.stats_to_markdown() - construct manually
+    if result.preflight:
+        p_stats = "\n".join(squire.stats_to_markdown(result.preflight.model_dump(mode="json")))
         response += f"*Pre-flight result:*\n{p_stats}\n\n"
-    t_stats = "\n".join(squire.stats_to_markdown(result))
+    stats: Dict[str, Any] = {
+        "downloaded": result.downloaded,
+        "download_failed": result.download_failed,
+    }
+    # TODO: Remove squire.stats_to_markdown() - construct manually
+    t_stats = "\n".join(squire.stats_to_markdown(stats))
     response += f"*Download/Transfer result:*\n{t_stats}"
+    stats["download_end"] = config.now()
+    final_checkpoint = checkpoint.Checkpoint(**{**result.model_dump(mode="json"), **stats}).model_dump(mode="json")
+    save_checkpoint(final_checkpoint)
     LOGGER.info(response)
     if callback and chat_id:
         callback(
@@ -94,3 +105,19 @@ def process_callback(
             message_id=message_id,
             response=response,
         )
+
+
+def save_checkpoint(final_checkpoint: checkpoint.Checkpoint) -> None:
+    """Save a checkpoint to a file.
+
+    Args:
+        final_checkpoint: Final checkpoint object.
+    """
+    LOGGER.debug(final_checkpoint)
+    checkpoint_dir = config.env.data_dir / "checkpoints" / datetime.now(config.env.tz).strftime("%b_%d_%Y")
+    checkpoint_dir.mkdir(exist_ok=True, parents=True)
+    checkpoint_path = checkpoint_dir / f"checkpoint_{int(time.time())}.json"
+    with open(checkpoint_path, "w") as file:
+        json.dump(final_checkpoint, file, indent=2)
+        file.flush()
+    LOGGER.info("Checkpoint saved to: %s", checkpoint_path)
