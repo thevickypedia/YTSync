@@ -41,22 +41,15 @@ controllers: List[Controller] = []
 
 
 async def queue_download(
+    playlist_url: str,
     source_system: checkpoint.SourceSystem,
     chat_id: int | None = None,
     message_id: int | None = None,
     callback: Callable | None = None,
-    playlist_url: str | None = None,
-    playlist_id: str | None = None,
     schedule: config.AllowedCronSchedule | None = None,
 ) -> str | None:
     """Queue a playlist download in the process pool."""
-    if playlist_url:
-        LOGGER.debug("Playlist URL: %s", playlist_url)
-    elif playlist_id:
-        playlist_url = config.PLAYLIST_URL.format(playlist_id=playlist_id)
-    else:
-        raise ValueError("Either 'playlist_url' [OR] 'playlist_id' is required!!")
-
+    LOGGER.debug("Playlist URL: %s", playlist_url)
     ydl, info = squire.get_info(playlist_url)
     playlist_name = info.get("title", None) or None
     assert playlist_name and isinstance(playlist_name, str), "Failed to extract the playlist's title"

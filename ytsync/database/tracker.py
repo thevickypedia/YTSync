@@ -18,7 +18,7 @@ class DBSchema(BaseModel):
 
     >>> DBSchema
 
-    Must follow insertion order: "INSERT INTO ytsync (url, name, schedule) VALUES (?,?,?);"
+    Must follow the insertion order: "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);"
     """
 
     url: HttpUrl
@@ -27,8 +27,16 @@ class DBSchema(BaseModel):
     chat_id: int | None = None
 
 
-def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
-    """Convert a row of tuple into a DBSchema object."""
+def row_to_schema(row: Tuple[str, str, str, str]) -> DBSchema:
+    """Convert a row of tuple into a DBSchema object.
+
+    Args:
+        row: Row of tuple to be converted.
+
+    Returns:
+        DBSchema:
+        Converted DBSchema object.
+    """
     fields = DBSchema.model_fields.keys()
     wrapped = dict(zip(fields, row))
     wrapped["schedule"] = getattr(config.AllowedCronSchedule, wrapped["schedule"])
@@ -36,7 +44,12 @@ def row_to_schema(row: Tuple[str, str, str]) -> DBSchema:
 
 
 def get() -> Generator[DBSchema]:
-    """Get trackers stored in the database."""
+    """Get trackers stored in the database.
+
+    Yields:
+        DBSchema:
+        Yields a DBSchema object for each entry in the database.
+    """
     with config.db.connection as connection:
         cursor = connection.cursor()
         data = cursor.execute("SELECT * FROM ytsync").fetchall()
@@ -98,7 +111,15 @@ def insert(
 
 
 def stringified_get(trackers: List[DBSchema] | None = None) -> str:
-    """Get trackers in a markdown-friendly format."""
+    """Get trackers in a markdown-friendly format.
+
+    Args:
+        trackers: List of trackers to be stringified.
+
+    Returns:
+        str:
+        Stringified trackers.
+    """
     txt = ""
     if trackers is None:
         trackers = list(get())
@@ -143,10 +164,10 @@ async def sync(
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
             youtube.queue_download(
+                playlist_url=url,
                 source_system=source_system,
                 chat_id=chat.id,
                 message_id=chat.message_id,
-                playlist_url=url,
                 callback=callback,
             ),
             timeout=config.env.response_timeout,
@@ -158,10 +179,10 @@ async def sync(
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
             youtube.queue_download(
+                playlist_url=url,
                 source_system=source_system,
                 chat_id=chat.id,
                 message_id=chat.message_id,
-                playlist_url=url,
                 callback=callback,
             ),
             timeout=config.env.response_timeout,
@@ -201,7 +222,7 @@ def delete(
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
-        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id matches
+        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
     elif trackers:
         if raise_for_exception:

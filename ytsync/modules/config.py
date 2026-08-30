@@ -26,7 +26,6 @@ from ytsync.modules import pydantic_config
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
-PLAYLIST_URL = "https://music.youtube.com/playlist?list={playlist_id}"
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 
 

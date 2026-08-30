@@ -227,8 +227,8 @@ async def download(
         )
         response = await asyncio.wait_for(
             youtube.queue_download(
-                source_system=checkpoint.SourceSystem(api=api_source),
                 playlist_url=str(body.url),
+                source_system=checkpoint.SourceSystem(api=api_source),
                 chat_id=body.chat_id,
                 callback=bot.reply_to,
             ),

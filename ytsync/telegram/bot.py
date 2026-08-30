@@ -38,16 +38,24 @@ class RequestMethods(StrEnum):
     POST = "POST"
 
 
+def get_help():
+    """Get the help text for telegram interactions."""
+    return (
+        "‣‣ /url <URL>\n"
+        "‣‣ /track <URL>\n"
+        f"‣‣ /track <URL> {list(config.AllowedCronSchedule.__members__)}\n"
+        "‣‣ /sync <NAME> || <URL>\n"
+        "‣‣ /delete <NAME> || <URL>\n"
+    )
+
+
 def intro() -> str:
     """Returns a welcome message as a string.
 
     Returns:
         str:
     """
-    return (
-        "\nTo start, send a link to YT music playlist in the following format:\n\n"
-        "- /id: <playlist id>\n- /url: <playlist url>\n"
-    )
+    return f"\nTo start, send a link to YT music playlist in the following format:\n\n{get_help()}"
 
 
 def _make_request(
@@ -56,7 +64,7 @@ def _make_request(
     files: dict | None = None,
     method: RequestMethods = RequestMethods.POST,
 ) -> requests.Response:
-    """Makes a post request with a ``connect timeout`` of 5 seconds and ``read timeout`` of 60.
+    """Makes a POST request with a ``connect timeout`` of 5 seconds and ``read timeout`` of 60.
 
     Args:
         url: URL to submit the request.
@@ -404,7 +412,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     if text_lower == "help":
         send_message(
             chat_id=chat.id,
-            response="Use '/id' or '/url' followed by the identifier.",
+            response="Use '/url' followed by the identifier.",
         )
         return
     if text_lower in ("status", "stats", "test"):
@@ -439,17 +447,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
     kwargs: Dict[str, str | int | checkpoint.SourceSystem | Callable] = dict(
         source_system=source_system, chat_id=chat.id, message_id=chat.message_id, callback=reply_to
     )
-    if command.startswith("/id"):
-        if playlist_id := command.replace("/id", "").strip():
-            kwargs["playlist_id"] = playlist_id
-        else:
-            reply_to(
-                chat.id,
-                chat.message_id,
-                "❌ *Invalid entry*\n\nA playlist ID is required.\n\nUsage: `/id <playlist_id>`",
-            )
-            return
-    elif command.startswith("/url"):
+    if command.startswith("/url"):
         if playlist_url := command.replace("/url", "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
@@ -473,7 +471,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
                     schedule = config.AllowedCronSchedule.DAILY
                 elif len(payload) == 2:
                     url = HttpUrl(payload[0])
-                    schedule = getattr(config.AllowedCronSchedule, payload[1])
+                    schedule = getattr(config.AllowedCronSchedule, payload[1].upper())
                 else:
                     reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
                     return
@@ -515,11 +513,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
     else:
         send_message(
             chat_id=chat.id,
-            response=(
-                f"❌ *Invalid command*\n\n"
-                f"Received: `{command}`\n\n"
-                f"Use `/id` or `/url` followed by the identifier."
-            ),
+            response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help()}",
         )
         return
     try:
@@ -529,8 +523,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
             LOGGER.warning("Request timed out")
             response = (
                 "❌ *Metadata lookup failed*\n\n"
-                "Failed to retrieve metadata within 10 seconds.\n\n"
-                "Please try a different `/id` or `/url` for this content."
+                f"Failed to retrieve metadata within {config.env.response_timeout} seconds.\n\n"
+                "Please try a different `/url` for this content."
             )
         else:
             LOGGER.error(error)

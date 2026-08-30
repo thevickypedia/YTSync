@@ -66,8 +66,8 @@ async def executor() -> None:
                 # Background task; so no timeout required
                 task = asyncio.create_task(
                     youtube.queue_download(
-                        source_system=checkpoint.SourceSystem(scheduled=track.schedule),
                         playlist_url=url,
+                        source_system=checkpoint.SourceSystem(scheduled=track.schedule),
                         callback=bot.reply_to,
                         chat_id=track.chat_id,
                         schedule=track.schedule,

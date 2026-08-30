@@ -86,16 +86,10 @@ def get_missing_playlist_entries(
     url_file_map_copy: Dict[str, pathlib.Path] = {}
     for url, local_path in url_file_map.items():
         if local_path in existing:
-            LOGGER.info(
-                "'%s' already exists on the remote server; skipping...",
-                local_path,
-            )
+            LOGGER.info("'%s' already exists; skipping...", local_path)
             preflight.available += 1
             continue
-        LOGGER.info(
-            "'%s' does not exist on the remote server",
-            local_path,
-        )
+        LOGGER.info("'%s' does not exist", local_path)
         url_file_map_copy[url] = local_path
         preflight.unavailable += 1
 
