@@ -38,14 +38,38 @@ class RequestMethods(StrEnum):
     POST = "POST"
 
 
+class Commands(StrEnum):
+    """Allowed Telegram bot commands.
+
+    >>> Commands
+
+    """
+
+    start = "/start"
+    help = "/help"
+    status = "/status"
+
+    download = "/download"
+    track = "/track"
+    sync = "/sync"
+    delete = "/delete"
+
+
 def get_help():
     """Get the help text for telegram interactions."""
     return (
-        "‣‣ /url <URL>\n"
-        "‣‣ /track <URL>\n"
-        f"‣‣ /track <URL> {list(config.AllowedCronSchedule.__members__)}\n"
-        "‣‣ /sync <NAME> || <URL>\n"
-        "‣‣ /delete <NAME> || <URL>\n"
+        "🎵 *YTSync Bot Commands*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"⬇️ *{Commands.download}* `<URL>`\n"
+        "    Download a playlist or album.\n\n"
+        f"⏱️ *{Commands.track}* `<URL>` `{' | '.join(config.AllowedCronSchedule.__members__)}`\n"
+        "    Track a URL on a recurring schedule.\n\n"
+        f"🔄 *{Commands.sync}* `<NAME>` [OR] `<URL>`\n"
+        "    Ad-hoc sync an existing tracker by name or URL.\n\n"
+        f"🗑️ *{Commands.delete}* `<NAME>` [OR] `<URL>`\n"
+        "    Delete an existing tracker by name or URL.\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "💡 *Tip:* Arguments in `<angle brackets>` are required."
     )
 
 
@@ -261,7 +285,7 @@ async def authenticate(chat: settings.Chat) -> bool:
     """Authenticates the user with ``userId`` and ``userName``.
 
     Args:
-        chat: Required section of the payload as Chat object.
+        chat: Required section of the payload as a Chat object.
 
     Returns:
         bool:
@@ -285,7 +309,7 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     """Verifies whether the message was received in the past 60 seconds.
 
     Args:
-        chat: Required section of the payload as Chat object.
+        chat: Required section of the payload as a Chat object.
 
     Returns:
         bool:
@@ -314,8 +338,8 @@ async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFrag
     """Processes a photo input.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Voice object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as a Photo object.
     """
     LOGGER.info(data_class)
     reply_to(
@@ -330,8 +354,8 @@ async def process_audio(chat: settings.Chat, data_class: settings.Audio) -> None
     """Processes an audio input.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Voice object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as an Audio object.
     """
     await process_document(chat, data_class)
 
@@ -340,18 +364,18 @@ async def process_video(chat: settings.Chat, data_class: settings.Video) -> None
     """Processes a video input.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Voice object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as a Video object.
     """
     await process_document(chat, data_class)
 
 
 async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None:
-    """Processes the audio file in payload received after checking for authentication.
+    """Processes the audio file in the payload received after checking for authentication.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Voice object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as a Voice object.
     """
     assert data_class, "Requested to process voice, but no voice note was received!"
     reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
@@ -360,18 +384,18 @@ async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None
 async def process_document(
     chat: settings.Chat, data_class: settings.Document | settings.Audio | settings.Video
 ) -> None:
-    """Processes the document in payload received after checking for authentication.
+    """Processes the document in the payload received after checking for authentication.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Document object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as a Document object.
     """
     assert data_class, "Requested to process document, but no document was received!"
     reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
 def get_process_pool() -> str:
-    """Get the status text for process pool."""
+    """Get the status text for the process pool."""
     pending = youtube.processor.status()
     txt = f"Total downloads submitted: {youtube.processor.total_submissions}"
     if pending is not None:
@@ -394,28 +418,22 @@ def get_channel() -> str:
 
 
 async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
-    """Processes the text in payload received after checking for authentication.
+    """Processes the text in the payload received after checking for authentication.
 
     Args:
-        chat: Required section of the payload as Chat object.
-        data_class: Required section of the payload as Text object.
+        chat: Required section of the payload as a Chat object.
+        data_class: Required section of the payload as a Text object.
     """
     if data_class.text:
         data_class.text = data_class.text.strip()
     else:
         send_message(chat_id=chat.id, response="Un-processable payload")
         return
-    text_lower = data_class.text.lower().lstrip("/")
-    if text_lower == "start":
+    if data_class.text in (Commands.start, Commands.help):
         send_message(chat.id, intro())
         return
-    if text_lower == "help":
-        send_message(
-            chat_id=chat.id,
-            response="Use '/url' followed by the identifier.",
-        )
-        return
-    if text_lower in ("status", "stats", "test"):
+    # "status", "stats", "test"
+    if data_class.text == Commands.status:
         txt = get_channel()
         try:
             txt += tracker.stringified_get()
@@ -437,7 +455,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
 
     Args:
         command: Command to be executed.
-        chat: Required section of the payload as Chat object.
+        chat: Required section of the payload as a Chat object.
     """
     LOGGER.info("Request: %s", command)
     # TODO:
@@ -447,22 +465,23 @@ async def executor(command: str, chat: settings.Chat) -> None:
     kwargs: Dict[str, str | int | checkpoint.SourceSystem | Callable] = dict(
         source_system=source_system, chat_id=chat.id, message_id=chat.message_id, callback=reply_to
     )
-    if command.startswith("/url"):
-        if playlist_url := command.replace("/url", "").strip():
+    if command.startswith(Commands.download):
+        if playlist_url := command.replace(Commands.download, "").strip():
             kwargs["playlist_url"] = playlist_url
         else:
             reply_to(
                 chat.id,
                 chat.message_id,
-                "❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `/url <playlist_url>`",
+                f"❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `{Commands.download} <playlist_url>`",
             )
             return
-    elif command.startswith("/track"):
+    elif command.startswith(Commands.track):
         invalid_msg = (
-            "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, followed by `/track`\n\n"
+            "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, "
+            f"followed by `{Commands.track}`\n\n"
             f"Optionally you can also add a schedule with one of {list(config.AllowedCronSchedule.__members__)}"
         )
-        if (statement := command.replace("/track", "").strip()).startswith("http"):
+        if (statement := command.replace(Commands.track, "").strip()).startswith("http"):
             payload = statement.split()
             LOGGER.info(payload)
             try:
@@ -483,8 +502,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
         else:
             reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
         return
-    elif command.startswith("/sync"):
-        if identifier := command.replace("/sync", "").strip():
+    elif command.startswith(Commands.sync):
+        if identifier := command.replace(Commands.sync, "").strip():
             if identifier.startswith("http"):
                 await tracker.sync(chat=chat, url=identifier, callback=reply_to)
             else:
@@ -493,11 +512,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
             reply_to(
                 chat.id,
                 chat.message_id,
-                "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/sync`.",
+                f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`.",
             )
         return
-    elif command.startswith("/delete"):
-        if identifier := command.replace("/delete", "").strip():
+    elif command.startswith(Commands.delete):
+        if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
                 resp = tracker.delete(url=identifier)
             else:
@@ -507,7 +526,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
             reply_to(
                 chat.id,
                 chat.message_id,
-                "❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `/delete`.",
+                f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`.",
             )
         return
     else:
@@ -524,7 +543,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
             response = (
                 "❌ *Metadata lookup failed*\n\n"
                 f"Failed to retrieve metadata within {config.env.response_timeout} seconds.\n\n"
-                "Please try a different `/url` for this content."
+                "Please try a different URL for this content."
             )
         else:
             LOGGER.error(error)
