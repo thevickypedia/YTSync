@@ -1,6 +1,19 @@
 Release Notes
 =============
 
+v0.2.0 (08/30/2026)
+-------------------
+- `cfede0d <https://github.com/thevickypedia/YTSync/commit/cfede0d25f97fbd924ea47e6bfdc67cd9c7f3ff3>`_ chore: Release ``v0.2.0``
+- `ed3f6f4 <https://github.com/thevickypedia/YTSync/commit/ed3f6f40b9dc6a9817464a93cbed6ad48f6f2916>`_ refactor: Add enumerations for telegram bot commands
+- `58a830c <https://github.com/thevickypedia/YTSync/commit/58a830c207e602be2e92d5e9e6efe6c783adf210>`_ refactor: Remove the option to identify playlist by ID
+- `9994147 <https://github.com/thevickypedia/YTSync/commit/9994147226c9b5e64cf9449db19287d2ac3ff39d>`_ feat: Include new API endpoints to list and get checkpoints
+- `8430dd9 <https://github.com/thevickypedia/YTSync/commit/8430dd93bc6b053ae676a3bc04f1408f47351bee>`_ feat: Include a functionality to generate checkpoints everytime a YT download completes
+- `c631a44 <https://github.com/thevickypedia/YTSync/commit/c631a44726fe7f846a206fe9c479a88083980f70>`_ feat: Add a CLI download functionality if ``yt_dlp.YoutubeDL`` faces a ``DownloadError``
+- `0693ec6 <https://github.com/thevickypedia/YTSync/commit/0693ec651c2c0f916de3295945e22cfd86105c56>`_ fix: Avoid masking transfer failures within success response
+- `72a0a9e <https://github.com/thevickypedia/YTSync/commit/72a0a9ed4a04dd6ec5867108d58ad4d0a5ca38b5>`_ refactor: Simplify YT downloader into individual components
+- `b431790 <https://github.com/thevickypedia/YTSync/commit/b431790c4b17fef506e6f2067515c5880095345c>`_ feat: Receive a report for download/transfer stats in the callback response instead of just the count
+- `0cbcde2 <https://github.com/thevickypedia/YTSync/commit/0cbcde2c44f3d101cc6b6b7f6284bb2036684afd>`_ chore: Update release notes for v0.1.0
+
 v0.1.0 (08/26/2026)
 -------------------
 - `cd513d5 <https://github.com/thevickypedia/YTSync/commit/cd513d5a5e5421dd031b8dcff4ea343ef0fe406b>`_ chore: Release ``v0.1.0``
