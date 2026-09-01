@@ -56,6 +56,7 @@ def get_missing_playlist_entries(
             LOGGER.warning("Invalid entry found: %s", entry or "None")
             preflight.error += 1
             continue
+        # TODO: Check if it is possible to get the file size
         try:
             with ydl:
                 # noinspection bad-argument-type

@@ -2,6 +2,7 @@ import math
 import os
 import pathlib
 import socket
+import warnings
 from datetime import datetime, tzinfo
 from enum import StrEnum
 from ipaddress import IPv4Address
@@ -67,6 +68,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     apikey: str | None = None
 
     # yt-dlp config
+    download_tester: bool = False
     # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp
     # https://github.com/yt-dlp/yt-dlp/wiki/FAQ#http-error-429-too-many-requests-or-402-payment-required
     cookie_file: FilePath | None = None
@@ -149,6 +151,9 @@ if not env.apikey:
     env.apikey = env.bot_token
 checkpoints_dir = env.data_dir / "checkpoints"
 checkpoint_dir_format = "%b_%d_%Y"
+# Raise a warning if download tester is enabled
+if env.download_tester:
+    warnings.warn("Download tester is enabled. This is not recommended for production use.", UserWarning, stacklevel=2)
 
 
 def is_valid_checkpoint_dir(value):

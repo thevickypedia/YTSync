@@ -146,6 +146,7 @@ def webhook_manager() -> None:
             webhook.delete_webhook()
         except requests.RequestException:
             pass
+        # TODO: This is currently broken because the async task doesn't have a loop and fails with a RuntimeWarning
         poll.start_polling()
 
 

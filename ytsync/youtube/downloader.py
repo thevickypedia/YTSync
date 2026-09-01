@@ -91,6 +91,18 @@ def download_playlist(
     # noinspection bad-argument-type
     with yt_dlp.YoutubeDL(options) as ydl:
         for url, filepath in url_file_map.items():
+            if config.env.download_tester:
+                LOGGER.info("Download test mode enabled, skipping download for: %s", url)
+                # TODO: Generate random bytes and write to file
+                filepath.touch(mode=0o644, exist_ok=True)
+                stats["downloaded"].append(filepath.name)
+                if transfer_pool:
+                    hooks.postprocess_hook(
+                        local_path=str(filepath),
+                        transfer_pool=transfer_pool,
+                        stats=stats,
+                    )
+                continue
             try:
                 # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
                 # This monotonic loop is to properly capture individual errors and attach custom handlers
