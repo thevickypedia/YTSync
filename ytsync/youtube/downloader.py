@@ -150,6 +150,9 @@ def download_playlist(
 
 def create_local_playlist(destination: pathlib.Path) -> str | None:
     """Create a .m3u file on the local machine."""
+    if not destination.exists():
+        LOGGER.warning("Destination directory does not exist; creating: %s", destination)
+        destination.mkdir(parents=True, exist_ok=True)
     filepath = destination.joinpath(f"{destination.name}.m3u")
     if files := [file for file in os.listdir(destination) if file.endswith(".mp3")]:
         with open(filepath, "w") as playlist_file:

@@ -12,7 +12,7 @@ LOGGER = logging.getLogger("ytsync")
 
 
 def runner(cmd: str, source: str) -> subprocess.CompletedProcess:
-    """Runs a given command with subprocess module."""
+    """Runs a given command with a subprocess module."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
         LOGGER.info(f"Successfully synced {source}")
@@ -23,7 +23,7 @@ def runner(cmd: str, source: str) -> subprocess.CompletedProcess:
 
 
 class Rsync:
-    """Rsync object to copy individual files to remote server.
+    """Rsync object to copy individual files to a remote server.
 
     >>> Rsync
 
@@ -48,7 +48,7 @@ class Rsync:
         return result.returncode == 0
 
     def get_remote_path(self, local_path: pathlib.Path | str) -> str:
-        """Use existing local filepath to derive the filepath in remote server.
+        """Use the existing local filepath to derive the filepath in the remote server.
 
         Args:
             local_path: Local filepath.
@@ -110,7 +110,7 @@ class Rsync:
         return existing.response or set()
 
     def run(self, source: str) -> None:
-        """Syncs a file to remote server with exponential backoff retry logic."""
+        """Syncs a file to a remote server with exponential backoff retry logic."""
         destination = self.get_remote_path(source)
         remote_location = f"{self.remote_user}@{self.remote_host}:" f"{destination}"
         LOGGER.info("Syncing: '%s' -> '%s'", source, remote_location)
@@ -138,7 +138,9 @@ class Rsync:
         cmd = [
             "ssh",
             f"{self.remote_user}@{self.remote_host}",
-            f"cd {shlex.quote(remote_loc)} && " f"ls *.mp3 > {shlex.quote(filepath)}",
+            f"mkdir -p {shlex.quote(remote_loc)} && "
+            f"cd {shlex.quote(remote_loc)} && "
+            f"ls *.mp3 > {shlex.quote(filepath)}",
         ]
         LOGGER.debug("Command: %s", cmd)
         try:
