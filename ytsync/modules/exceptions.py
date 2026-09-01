@@ -25,7 +25,7 @@ class BotWebhookConflict(BotError):
 
 
 class BotInUse(BotError):
-    """Error indicate bot token is being used else where.
+    """Error indicates bot token is being used else where.
 
     >>> BotInUse
 

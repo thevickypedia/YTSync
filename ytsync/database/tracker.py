@@ -142,7 +142,7 @@ async def sync(
     Args:
         name: Name of the playlist.
         url: URL for the playlist.
-        chat: Chat object to send a notification as callback.
+        chat: Chat object to send a notification as a callback.
         callback: Callback function call once the task has completed.
 
     Returns:
@@ -173,7 +173,7 @@ async def sync(
             timeout=config.env.response_timeout,
         )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
-        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id matches
+        # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
         assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)

@@ -6,6 +6,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from multiprocessing.pool import ThreadPool
+from typing import Dict
 
 import requests
 import uvicorn
@@ -119,7 +120,7 @@ def webhook_is_usable() -> bool:
         tz=timezone.utc,
     )
     age = (datetime.now(timezone.utc) - last_error_timestamp).total_seconds()
-    # 1. Check 'url' to ensure webhook is configured
+    # 1. Check 'url' to ensure a webhook is configured
     # 2. Check if 'pending_update_count' is less than the max expectation
     # 3. Check if the 'last_error_date' is within the accepted timestamp
     return bool(result.get("url") and pending_update_count < max_pending_updates and age > max_error_age_seconds)
@@ -180,17 +181,28 @@ async def docs_redirect() -> RedirectResponse:
     return RedirectResponse("/docs")
 
 
+async def health() -> Dict[str, str]:
+    """Health check endpoint."""
+    return {"status": "ok"}
+
+
 api_routes = [
     APIRoute(
-        endpoint=routes.telegram_webhook,
-        methods=["POST"],
-        path=config.env.bot_endpoint,
+        endpoint=health,
+        methods=["GET"],
+        path="/health",
         include_in_schema=False,
     ),
     APIRoute(
         endpoint=docs_redirect,
         methods=["GET"],
         path="/",
+        include_in_schema=False,
+    ),
+    APIRoute(
+        endpoint=routes.telegram_webhook,
+        methods=["POST"],
+        path=config.env.bot_endpoint,
         include_in_schema=False,
     ),
     APIRoute(
@@ -244,7 +256,7 @@ app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=api
 
 
 def start():
-    """Start the Jarvis API server using Uvicorn."""
+    """Start the Jarvis API server using uvicorn."""
     module_name = pathlib.Path(__file__)
     kwargs = dict(
         host=config.env.host,

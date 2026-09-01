@@ -26,7 +26,7 @@ def validate(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
 
 
 def two_factor(request: Request) -> bool:
-    """Two factor verification for messages coming via webhook.
+    """Two-factor verification for messages coming via webhook.
 
     Args:
         request: Request object from FastAPI.

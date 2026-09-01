@@ -23,7 +23,7 @@ def extract_secret(name: str, field: FieldInfo, secrets: Dict[str, Any]) -> Any 
     Args:
         name: Pydantic field name.
         field: Pydantic field object.
-        secrets: Secrets retrieved from vault.
+        secrets: Secrets retrieved from the vault.
 
     Returns:
         Any:
@@ -51,7 +51,7 @@ def normalize_vault_secrets(settings_cls: Type[BaseSettings], secrets: Dict[str,
 
     Args:
         settings_cls: Pydantic settings class.
-        secrets: Secrets retrieved from vault.
+        secrets: Secrets retrieved from the vault.
 
     Returns:
         Dict[str, Any]

@@ -62,7 +62,7 @@ class Database:
 
     Args:
         database: Name of the database file.
-        timeout: Timeout for the connection to database.
+        timeout: Timeout for the connection to a database.
     """
 
     def __init__(self, database: pathlib.Path | str, timeout: int = 3):
