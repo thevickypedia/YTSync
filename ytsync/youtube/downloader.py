@@ -1,6 +1,5 @@
 import functools
 import logging
-import os
 import pathlib
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -16,21 +15,19 @@ from ytsync.youtube import cli, hooks
 LOGGER = logging.getLogger("ytsync")
 
 
-def download(
-    checkpoint_stats: checkpoint.Checkpoint,
-    name: str,
-    url_file_map: Dict[str, pathlib.Path],
-    total_files: int | None,
-    destination: pathlib.Path,
-    audio_only: bool,
-) -> checkpoint.Checkpoint:
-    """Downloads the content from a given url and returns download/transfer statistics."""
-    start = time.time()
-    checkpoint_stats.download_start = config.now()
-    stats: Dict[str, List[str]] = {
-        "downloaded": [],
-        "download_failed": [],
-    }
+def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str, List[str]]):
+    """Generate the parameters for the yt_dlp module.
+
+    Args:
+        audio_only: Bool flag to indicate if only audio should be downloaded.
+        destination: Destination path.
+        stats: Statistics dictionary.
+
+    Returns:
+        Dict[str, Any]:
+        Returns the parameters for the yt_dlp module.
+    """
+    # TODO: 'progress_hooks' should only apply for video/mp4 files, mp3 files should be handled similar to cli attempt
     options: Dict[str, Any] = {
         "logger": LOGGER,
         "quiet": True,
@@ -84,6 +81,26 @@ def download(
     if config.env.proxy_url:
         options["proxy"] = str(config.env.proxy_url)
 
+    return options
+
+
+def download(
+    checkpoint_stats: checkpoint.Checkpoint,
+    name: str,
+    url_file_map: Dict[str, pathlib.Path],
+    total_files: int | None,
+    destination: pathlib.Path,
+    audio_only: bool,
+) -> checkpoint.Checkpoint:
+    """Downloads the content from a given url and returns download/transfer statistics."""
+    start = time.time()
+    checkpoint_stats.download_start = config.now()
+    stats: Dict[str, List[str]] = {
+        "downloaded": [],
+        "download_failed": [],
+    }
+
+    options = generate_params(audio_only=audio_only, destination=destination, stats=stats)
     transfer_pool = None
     if transfer.rsync.is_enabled:
         transfer_pool = ThreadPoolExecutor(
@@ -182,13 +199,11 @@ def download(
 
 def create_local_playlist(destination: pathlib.Path) -> str | None:
     """Create a .m3u file on the local machine."""
-    if not destination.exists():
-        LOGGER.warning("Destination directory does not exist; creating: %s", destination)
-        destination.mkdir(parents=True, exist_ok=True)
-    filepath = destination.joinpath(f"{destination.name}.m3u")
-    if files := [file for file in os.listdir(destination) if file.endswith(".mp3")]:
-        with open(filepath, "w") as playlist_file:
+    destination.mkdir(parents=True, exist_ok=True)
+    filepath = destination / f"{destination.name}.m3u"
+    if files := [file.name for file in destination.glob("*.mp3")]:
+        with filepath.open("w", encoding="utf-8") as playlist_file:
             playlist_file.write("\n".join(files) + "\n")
-        return None
-    LOGGER.warning(f"No eligible files found in {destination}")
-    return str(filepath)
+        return str(filepath)
+    LOGGER.warning("No eligible files found in %s", destination)
+    return None

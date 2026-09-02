@@ -5,7 +5,7 @@ import posixpath
 import time
 from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List
+from typing import Callable, Dict, List
 
 from pydantic import BaseModel, HttpUrl
 
@@ -57,9 +57,12 @@ async def queue_download(
     destination = config.env.download_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
 
-    url_file_loc, preflight_stats = squire.get_missing_entries(ydl, info, destination)
+    # TODO: Don't return tuples from 'get_missing_entries'
+    tuple_obj = squire.get_missing_entries(ydl, info, destination)
+    url_file_loc: Dict[str, pathlib.Path] | None = tuple_obj[0]
+    preflight_stats: checkpoint.PreFlight | None = tuple_obj[1]
     if url_file_loc is None:
-        url_file_loc = {url: destination}
+        url_file_loc = {str(url): destination}
         total_files = None
     else:
         total_files = len(url_file_loc)
