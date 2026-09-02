@@ -146,7 +146,7 @@ def download(
                 ydl.download([url])
             except DownloadError as error:
                 LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
-                cli_attempt = cli.download_track(url, destination)
+                cli_attempt = cli.download_track(url, destination, audio_only)
                 if cli_attempt and transfer_pool:
                     stats["downloaded"].append(filepath.name)
                     LOGGER.info("CLI attempt was successful, file saved at: %s; initiating rsync...", str(filepath))

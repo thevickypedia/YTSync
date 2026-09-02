@@ -8,35 +8,53 @@ from ytsync.modules import config
 LOGGER = logging.getLogger("ytsync")
 
 
-def get_cli_command(root_cmd: str, video_url: str, destination: pathlib.Path) -> str:
+def get_cli_command(
+    url: str,
+    root_cmd: str,
+    destination: pathlib.Path,
+    audio_only: bool,
+) -> str:
     """Get the CLI command to download a YT url.
 
     Args:
+        url: YT URL to download.
         root_cmd: Root command path for yt-dlp.
-        video_url: URL to download.
         destination: Path to save the downloaded file.
+        audio_only: Bool flag to indicate if only audio should be downloaded.
 
     Returns:
         str:
         Returns the full CLI command to download the video.
     """
-    args = "-f bestaudio -x --audio-format mp3 --audio-quality 0 --embed-thumbnail --embed-metadata -o"
-    return f'{root_cmd} {args} "{str(destination.joinpath(config.YT_FILENAME_TEMPLATE))}" "{video_url}"'
+    if audio_only:
+        args = (
+            "-f bestaudio "
+            "-x "
+            "--audio-format mp3 "
+            "--audio-quality 0 "
+            "--embed-thumbnail "
+            "--embed-metadata "
+            "-o"
+        )
+    else:
+        args = "-f bestvideo+bestaudio/best " "--embed-thumbnail " "--embed-metadata " "-o"
+    return f'{root_cmd} {args} "{str(destination.joinpath(config.YT_FILENAME_TEMPLATE))}" "{url}"'
 
 
-def download_track(url: str, destination: pathlib.Path) -> bool:
+def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> bool:
     """Download a track using the yt-dlp CLI command.
 
     Args:
         url: URL to download.
         destination: Path to save the downloaded file.
+        audio_only: Bool flag to indicate if only audio should be downloaded.
 
     Returns:
         bool:
         Returns a boolean flag to indicate if the download was successful.
     """
     if yt_dlp := shutil.which("yt-dlp"):
-        cmd = get_cli_command(yt_dlp, url, destination)
+        cmd = get_cli_command(url=url, root_cmd=yt_dlp, destination=destination, audio_only=audio_only)
         LOGGER.debug("Running the command: %s", cmd)
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, shell=True)
