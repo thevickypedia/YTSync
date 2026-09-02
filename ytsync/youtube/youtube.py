@@ -81,7 +81,7 @@ async def queue_download(
         source_system=source_system,
         input_url=url,
         resolved_urls=list(map(HttpUrl, url_file_loc.keys())),
-        is_playlist=squire.is_playlist(url),
+        is_playlist=len(url_file_loc) > 1,
         initial_destination=destination,
         final_destination=pathlib.Path(intended_path),
         name=name,

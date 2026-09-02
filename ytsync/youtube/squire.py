@@ -130,9 +130,3 @@ def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
             process=False,
         )
     return ydl, info
-
-
-# TODO: Add either a regex to path; or a better way to check if it's a playlist with yt_dlp
-def is_playlist(url: HttpUrl) -> bool:
-    """Check if the given URL is a playlist."""
-    return "playlist" in url

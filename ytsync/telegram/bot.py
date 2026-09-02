@@ -20,7 +20,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
 from ytsync.modules import checkpoint, config, exceptions, settings
-from ytsync.youtube import squire, youtube
+from ytsync.youtube import youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
@@ -501,11 +501,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
             except (AttributeError, ValidationError) as error:
                 reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
                 return
-            if squire.is_playlist(url):
-                response = str(tracker.insert(url, schedule, chat.id))
-                reply_to(chat.id, chat.message_id, response)
-            else:
-                reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
+            response = str(tracker.insert(url, schedule, chat.id))
+            reply_to(chat.id, chat.message_id, response)
         else:
             reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
         return
