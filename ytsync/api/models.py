@@ -49,4 +49,5 @@ class Download(BaseModel):
     """
 
     url: HttpUrl
+    audio_only: bool
     chat_id: int = 0

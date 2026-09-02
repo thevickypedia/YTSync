@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from enum import StrEnum
-from typing import Callable, Dict, List
+from typing import Dict, List
 
 import requests
 from pydantic import HttpUrl, ValidationError
@@ -49,7 +49,8 @@ class Commands(StrEnum):
     help = "/help"
     status = "/status"
 
-    download = "/download"
+    audio = "/audio"
+    video = "/video"
     track = "/track"
     sync = "/sync"
     delete = "/delete"
@@ -60,7 +61,8 @@ def get_help():
     return (
         "🎵 *YTSync Bot Commands*\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"⬇️ *{Commands.download}* `<URL>`\n"
+        f"⬇️ *{Commands.audio}* `<URL>`\n"
+        f"⬇️ *{Commands.video}* `<URL>`\n"
         "    Download content from any YT url.\n\n"
         f"⏱️ *{Commands.track}* `<URL>` `{' | '.join(config.AllowedCronSchedule.__members__)}`\n"
         "    Track a URL on a recurring schedule.\n\n"
@@ -450,10 +452,6 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
-def parse_url(url: str) -> str:
-    """Parses the URL and returns the video ID."""
-
-
 async def executor(command: str, chat: settings.Chat) -> None:
     """Executes the command via offline communicator.
 
@@ -462,23 +460,40 @@ async def executor(command: str, chat: settings.Chat) -> None:
         chat: Required section of the payload as a Chat object.
     """
     LOGGER.info("Request: %s", command)
-    # TODO:
-    #   Write unit tests and code coverage pipeline in GHA
-    #   Auto-detect video vs audio and change 'options' accordingly (currently all MP3)
-    source_system = checkpoint.SourceSystem(telegram=chat)
-    kwargs: Dict[str, str | int | checkpoint.SourceSystem | Callable] = dict(
-        source_system=source_system, chat_id=chat.id, message_id=chat.message_id, callback=reply_to
-    )
-    if command.startswith(Commands.download):
-        if url := command.replace(Commands.download, "").strip():
-            kwargs["url"] = url
+    # TODO: Write unit tests and code coverage pipeline in GHA
+    if command.startswith((Commands.audio, Commands.video)):
+        if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
+            try:
+                await asyncio.wait_for(
+                    youtube.queue_download(
+                        url=HttpUrl(url),
+                        source_system=checkpoint.SourceSystem(
+                            telegram=chat, audio_only=command.startswith(Commands.audio)
+                        ),
+                        chat_id=chat.id,
+                        message_id=chat.message_id,
+                        callback=reply_to,
+                    ),
+                    timeout=config.env.response_timeout,
+                )
+            except (asyncio.TimeoutError, DownloadError, ValidationError, AssertionError, ValueError) as error:
+                if isinstance(error, asyncio.TimeoutError):
+                    LOGGER.warning("Request timed out")
+                    response = (
+                        "❌ *Metadata lookup failed*\n\n"
+                        f"Failed to retrieve metadata within {config.env.response_timeout} seconds.\n\n"
+                        "Please try a different URL for this content."
+                    )
+                else:
+                    LOGGER.error(error)
+                    response = error.__str__()
+                reply_to(chat.id, chat.message_id, response)
         else:
             reply_to(
                 chat.id,
                 chat.message_id,
-                f"❌ *Invalid entry*\n\nURL is required.\n\nUsage: `{Commands.download} <url>`",
+                f"❌ *Invalid entry*\n\nURL is required.\n\nUsage: `{Commands.audio} <url>`",
             )
-            return
     elif command.startswith(Commands.track):
         invalid_msg = (
             "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, "
@@ -500,12 +515,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
                     return
             except (AttributeError, ValidationError) as error:
                 reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
-                return
-            response = str(tracker.insert(url, schedule, chat.id))
-            reply_to(chat.id, chat.message_id, response)
+            else:
+                response = str(tracker.insert(url, schedule, chat.id))
+                reply_to(chat.id, chat.message_id, response)
         else:
             reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
-        return
     elif command.startswith(Commands.sync):
         if identifier := command.replace(Commands.sync, "").strip():
             if identifier.startswith("http"):
@@ -518,7 +532,6 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 chat.message_id,
                 f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`.",
             )
-        return
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
@@ -532,24 +545,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 chat.message_id,
                 f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`.",
             )
-        return
     else:
         send_message(
             chat_id=chat.id,
             response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help()}",
         )
-        return
-    try:
-        await asyncio.wait_for(youtube.queue_download(**kwargs), timeout=config.env.response_timeout)
-    except (asyncio.TimeoutError, ValueError, AssertionError, DownloadError) as error:
-        if isinstance(error, asyncio.TimeoutError):
-            LOGGER.warning("Request timed out")
-            response = (
-                "❌ *Metadata lookup failed*\n\n"
-                f"Failed to retrieve metadata within {config.env.response_timeout} seconds.\n\n"
-                "Please try a different URL for this content."
-            )
-        else:
-            LOGGER.error(error)
-            response = error.__str__()
-        reply_to(chat.id, chat.message_id, response)

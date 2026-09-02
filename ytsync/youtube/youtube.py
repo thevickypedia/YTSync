@@ -97,6 +97,7 @@ async def queue_download(
             url_file_map=url_file_loc,
             total_files=total_files,
             destination=destination,
+            audio_only=source_system.audio_only,
         ),
     )
 

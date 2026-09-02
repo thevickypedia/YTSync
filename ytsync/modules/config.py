@@ -79,6 +79,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
     logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
     download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
+    # TODO: Include dedicated locations for audio and video files
 
     # Maximum number of parallel transfers to remote server
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)

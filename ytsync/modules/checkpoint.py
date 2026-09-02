@@ -20,6 +20,7 @@ class SourceSystem(BaseModel):
     api: APISource | None = None
     telegram: settings.Chat | None = None
     scheduled: config.AllowedCronSchedule | None = None
+    audio_only: bool = True
 
 
 class PreFlight(BaseModel):

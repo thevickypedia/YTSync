@@ -22,6 +22,7 @@ def download(
     url_file_map: Dict[str, pathlib.Path],
     total_files: int | None,
     destination: pathlib.Path,
+    audio_only: bool,
 ) -> checkpoint.Checkpoint:
     """Downloads the content from a given url and returns download/transfer statistics."""
     start = time.time()
@@ -33,22 +34,8 @@ def download(
     options: Dict[str, Any] = {
         "logger": LOGGER,
         "quiet": True,
-        "format": "bestaudio/best",
+        "format": "bestaudio/best" if audio_only else "bestvideo+bestaudio/best",
         "ignoreerrors": False,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "0",
-            },
-            {
-                "key": "FFmpegMetadata",
-            },
-            {
-                "key": "EmbedThumbnail",
-            },
-        ],
-        "writethumbnail": True,
         "outtmpl": str(destination.joinpath(config.YT_FILENAME_TEMPLATE)),
         "progress_hooks": [
             functools.partial(
@@ -57,6 +44,39 @@ def download(
             )
         ],
     }
+    if audio_only:
+        options.update(
+            {
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "0",
+                    },
+                    {
+                        "key": "FFmpegMetadata",
+                    },
+                    {
+                        "key": "EmbedThumbnail",
+                    },
+                ],
+                "writethumbnail": True,
+            }
+        )
+    else:
+        options.update(
+            {
+                "postprocessors": [
+                    {
+                        "key": "FFmpegMetadata",
+                    },
+                    {
+                        "key": "EmbedThumbnail",
+                    },
+                ],
+                "writethumbnail": True,
+            }
+        )
     if config.env.cookie_file:
         options["cookiefile"] = str(config.env.cookie_file)
     if config.env.source_address:
