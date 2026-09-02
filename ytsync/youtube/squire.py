@@ -4,6 +4,7 @@ from collections.abc import Generator
 from typing import Any, Dict, List, Tuple
 
 import yt_dlp
+from pydantic import HttpUrl
 from yt_dlp.utils import YoutubeDLError
 
 from ytsync.modules import checkpoint, config
@@ -27,12 +28,12 @@ def stats_to_markdown(stats: Dict[str, int | List[str]]) -> Generator[str]:
             yield f"*{snake_to_pascal(key)}*:\n{joined}\n"
 
 
-def get_missing_playlist_entries(
+def get_missing_entries(
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
     destination: pathlib.Path,
 ) -> Tuple[Dict[str, pathlib.Path] | None, checkpoint.PreFlight | None]:
-    """Get missing entries in a playlist URL when rsync is requested.
+    """Get missing entries from a parent URL either in local directory or remote server.
 
     Args:
         ydl: YouTube download object.
@@ -46,7 +47,7 @@ def get_missing_playlist_entries(
     preflight = checkpoint.PreFlight()
     entries = info.get("entries")
     if not entries:
-        # This is a valid scenario for individual song files, instead of a playlist
+        # This is a valid scenario for standalone links, instead of a playlist
         LOGGER.debug("'info' block does not contain valid 'entries': %s", info)
         return None, None
     url_file_map: Dict[str, pathlib.Path] = {}
@@ -112,11 +113,11 @@ def get_missing_playlist_entries(
     return url_file_map_copy, preflight
 
 
-def get_info(playlist_url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
-    """Get info based on the playlist URL.
+def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
+    """Get info based on the given YT URL.
 
     Args:
-        playlist_url: Playlist URL.
+        url: Download URL.
 
     Returns:
         Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
@@ -124,8 +125,14 @@ def get_info(playlist_url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     """
     with yt_dlp.YoutubeDL() as ydl:
         info = ydl.extract_info(
-            playlist_url,
+            str(url),
             download=False,
             process=False,
         )
     return ydl, info
+
+
+# TODO: Add either a regex to path; or a better way to check if it's a playlist with yt_dlp
+def is_playlist(url: HttpUrl) -> bool:
+    """Check if the given URL is a playlist."""
+    return "playlist" in url

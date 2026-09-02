@@ -41,60 +41,59 @@ controllers: List[Controller] = []
 
 
 async def queue_download(
-    playlist_url: str,
+    url: HttpUrl,
     source_system: checkpoint.SourceSystem,
     chat_id: int | None = None,
     message_id: int | None = None,
     callback: Callable | None = None,
     schedule: config.AllowedCronSchedule | None = None,
 ) -> str | None:
-    """Queue a playlist download in the process pool."""
-    LOGGER.debug("Playlist URL: %s", playlist_url)
-    ydl, info = squire.get_info(playlist_url)
-    playlist_name = info.get("title", None) or None
-    assert playlist_name and isinstance(playlist_name, str), "Failed to extract the playlist's title"
+    """Queue an input url to download in the process pool."""
+    LOGGER.debug("Input URL: %s", url)
+    ydl, info = squire.get_info(url)
+    name = info.get("title", None) or None
+    assert name and isinstance(name, str), "Failed to extract the title"
 
-    destination = config.env.download_dir.joinpath(playlist_name)
+    destination = config.env.download_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
 
-    url_file_loc, preflight_stats = squire.get_missing_playlist_entries(ydl, info, destination)
+    url_file_loc, preflight_stats = squire.get_missing_entries(ydl, info, destination)
     if url_file_loc is None:
-        url_file_loc = {playlist_url: destination}
+        url_file_loc = {url: destination}
         total_files = None
     else:
         total_files = len(url_file_loc)
-    intended_path = (
-        posixpath.join(transfer.rsync.remote_path, playlist_name) if transfer.rsync.is_enabled else destination
-    )
+    intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
     if not url_file_loc:
         assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
         if source_system.api:
-            return f"{playlist_name!r} with {preflight_stats.total} file(s) is already available at: {intended_path}"
+            return f"{name!r} with {preflight_stats.total} file(s) is already available at: {intended_path}"
         callback(
             chat_id=chat_id,
             message_id=message_id,
             response="ℹ️ *Already available*\n\n"
-            f"*{playlist_name}* with {preflight_stats.total} file(s) is already available at:\n"
+            f"*{name}* with {preflight_stats.total} file(s) is already available at:\n"
             f"`{intended_path}`",
         )
         return None
 
     checkpoint_stats = checkpoint.Checkpoint(
         source_system=source_system,
-        input_url=HttpUrl(playlist_url),
+        input_url=url,
         resolved_urls=list(map(HttpUrl, url_file_loc.keys())),
+        is_playlist=squire.is_playlist(url),
         initial_destination=destination,
         final_destination=pathlib.Path(intended_path),
-        name=playlist_name,
+        name=name,
         preflight=preflight_stats,
     )
 
     future, scheduled_time = processor.submit(
-        identifier=playlist_name,
-        function=downloader.download_playlist,
+        identifier=name,
+        function=downloader.download,
         **dict(
             checkpoint_stats=checkpoint_stats,
-            name=playlist_name,
+            name=name,
             url_file_map=url_file_loc,
             total_files=total_files,
             destination=destination,
@@ -103,7 +102,7 @@ async def queue_download(
 
     wrapped_callback = functools.partial(
         callbacks.process_callback,
-        name=playlist_name,
+        name=name,
         callback=callback,
         chat_id=chat_id,
         message_id=message_id,
@@ -114,7 +113,7 @@ async def queue_download(
 
     controllers.append(
         Controller(
-            name=playlist_name,
+            name=name,
             future=future,
         )
     )
@@ -126,17 +125,17 @@ async def queue_download(
         parsed_len = f" - {total_files} file(s) "
     if scheduled_time == 0:
         if source_system.api:
-            txt = f"{playlist_name!r}{parsed_len}has been queued for download."
+            txt = f"{name!r}{parsed_len}has been queued for download."
         else:
-            txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}queued for download."
+            txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}queued for download."
     else:
         future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
         zoned_time = future_utc.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         if source_system.api:
-            txt = f"{playlist_name!r}{parsed_len}will be queued for download at {t_string!r}"
+            txt = f"{name!r}{parsed_len}will be queued for download at {t_string!r}"
         else:
-            txt = f"✅ *Download queued*\n\n*{playlist_name}*{parsed_len}" f"will be queued for download at {t_string}"
+            txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}" f"will be queued for download at {t_string}"
 
     # Add a text block about callback notification when 'chat_id' is provided
     if chat_id:

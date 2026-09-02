@@ -71,7 +71,7 @@ async def telegram_webhook(request: Request):
 async def api_set_webhook(
     body: models.SetWebhook,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-) -> None:
+):
     """**API endpoint to POST a webhook.**
 
     **Args**
@@ -117,7 +117,7 @@ async def api_set_webhook(
 
 async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-) -> Dict[str, str] | None:
+):
     """**API endpoint to GET a webhook.**"""
     auth.validate(apikey, True)
     try:
@@ -131,7 +131,7 @@ async def api_get_webhook(
 
 async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-) -> Dict[str, str] | None:
+):
     """**API endpoint to DELETE a webhook.**"""
     auth.validate(apikey, True)
     try:
@@ -173,7 +173,7 @@ async def api_add_trackers(
         ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
     """
     auth.validate(apikey, False)
-    tracker.insert(str(body.url), body.schedule, body.chat_id, raise_for_exception=True)
+    tracker.insert(body.url, body.schedule, body.chat_id, raise_for_exception=True)
 
 
 async def api_delete_trackers(
@@ -206,8 +206,8 @@ async def download(
     request: Request,
     body: models.Download,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
-) -> str:
-    """**API endpoint to download playlists as an on-demand request.**
+):
+    """**API endpoint to download any YT content based on the URL as an on-demand request.**
 
     **Args**
 
@@ -227,7 +227,7 @@ async def download(
         )
         response = await asyncio.wait_for(
             youtube.queue_download(
-                playlist_url=str(body.url),
+                url=body.url,
                 source_system=checkpoint.SourceSystem(api=api_source),
                 chat_id=body.chat_id,
                 callback=bot.reply_to,

@@ -53,11 +53,11 @@ def process_callback(
     message_id: int | None = None,
     schedule: config.AllowedCronSchedule | None = None,
 ) -> None:
-    """Callback function triggered when the playlist process finishes.
+    """Callback function triggered when the process finishes.
 
     Args:
         future: Future object.
-        name: Playlist name.
+        name: Name assigned to the download content.
         callback: Callback function. This must always be `bot.reply_to` as a callable object.
         chat_id: Telegram Chat ID.
         message_id: Telegram message ID.

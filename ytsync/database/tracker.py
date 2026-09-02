@@ -58,7 +58,7 @@ def get() -> Generator[DBSchema]:
 
 
 def insert(
-    playlist_url: str, schedule: config.AllowedCronSchedule, chat_id: int, raise_for_exception: bool = False
+    playlist_url: HttpUrl, schedule: config.AllowedCronSchedule, chat_id: int, raise_for_exception: bool = False
 ) -> str | int:
     """Handles tracker for a playlist URL.
 
@@ -160,11 +160,10 @@ async def sync(
             )
             return
         tracker = tracker[0]
-        url = str(tracker.url)
-        LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
+        LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, tracker.url)
         await asyncio.wait_for(
             youtube.queue_download(
-                playlist_url=url,
+                url=tracker.url,
                 source_system=source_system,
                 chat_id=chat.id,
                 message_id=chat.message_id,
@@ -179,7 +178,7 @@ async def sync(
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
             youtube.queue_download(
-                playlist_url=url,
+                url=tracker.url,
                 source_system=source_system,
                 chat_id=chat.id,
                 message_id=chat.message_id,

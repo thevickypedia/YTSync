@@ -38,6 +38,7 @@ class Checkpoint(BaseModel):
     source_system: SourceSystem
     input_url: HttpUrl
     resolved_urls: List[HttpUrl]
+    is_playlist: bool
     name: str
     initial_destination: pathlib.Path
     final_destination: pathlib.Path

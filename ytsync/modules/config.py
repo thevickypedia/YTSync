@@ -85,7 +85,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # Applies to rsync and telegram polling
     max_retries: PositiveInt = Field(10, le=30, ge=1)
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
-    # Percentage of errors YTSync needs to tolerate before trying to download the entire playlist
+    # Percentage of errors YTSync needs to tolerate before trying to download the base url
     max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
     response_timeout: PositiveInt = Field(30, ge=10, le=60)
 

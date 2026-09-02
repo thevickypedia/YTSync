@@ -61,12 +61,11 @@ async def executor() -> None:
             # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
             # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly
             if expression.CronExpression(track.schedule.value).check_trigger():
-                url = str(track.url)
-                LOGGER.info("Executing sync for '%s' with '%s'", track.name, url)
+                LOGGER.info("Executing sync for '%s' with '%s'", track.name, track.url)
                 # Background task; so no timeout required
                 task = asyncio.create_task(
                     youtube.queue_download(
-                        playlist_url=url,
+                        url=track.url,
                         source_system=checkpoint.SourceSystem(scheduled=track.schedule),
                         callback=bot.reply_to,
                         chat_id=track.chat_id,

@@ -20,7 +20,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
 from ytsync.modules import checkpoint, config, exceptions, settings
-from ytsync.youtube import youtube
+from ytsync.youtube import squire, youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
@@ -61,7 +61,7 @@ def get_help():
         "🎵 *YTSync Bot Commands*\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"⬇️ *{Commands.download}* `<URL>`\n"
-        "    Download a playlist or album.\n\n"
+        "    Download content from any YT url.\n\n"
         f"⏱️ *{Commands.track}* `<URL>` `{' | '.join(config.AllowedCronSchedule.__members__)}`\n"
         "    Track a URL on a recurring schedule.\n\n"
         f"🔄 *{Commands.sync}* `<NAME>` [OR] `<URL>`\n"
@@ -79,7 +79,7 @@ def intro() -> str:
     Returns:
         str:
     """
-    return f"\nTo start, send a link to YT music playlist in the following format:\n\n{get_help()}"
+    return f"\nTo start, send any YT link in the following format:\n\n{get_help()}"
 
 
 def _make_request(
@@ -450,6 +450,10 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
+def parse_url(url: str) -> str:
+    """Parses the URL and returns the video ID."""
+
+
 async def executor(command: str, chat: settings.Chat) -> None:
     """Executes the command via offline communicator.
 
@@ -466,13 +470,13 @@ async def executor(command: str, chat: settings.Chat) -> None:
         source_system=source_system, chat_id=chat.id, message_id=chat.message_id, callback=reply_to
     )
     if command.startswith(Commands.download):
-        if playlist_url := command.replace(Commands.download, "").strip():
-            kwargs["playlist_url"] = playlist_url
+        if url := command.replace(Commands.download, "").strip():
+            kwargs["url"] = url
         else:
             reply_to(
                 chat.id,
                 chat.message_id,
-                f"❌ *Invalid entry*\n\nA playlist URL is required.\n\nUsage: `{Commands.download} <playlist_url>`",
+                f"❌ *Invalid entry*\n\nURL is required.\n\nUsage: `{Commands.download} <url>`",
             )
             return
     elif command.startswith(Commands.track):
@@ -497,8 +501,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
             except (AttributeError, ValidationError) as error:
                 reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
                 return
-            response = str(tracker.insert(str(url), schedule, chat.id))
-            reply_to(chat.id, chat.message_id, response)
+            if squire.is_playlist(url):
+                response = str(tracker.insert(url, schedule, chat.id))
+                reply_to(chat.id, chat.message_id, response)
+            else:
+                reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
         else:
             reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
         return

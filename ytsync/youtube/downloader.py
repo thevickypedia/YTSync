@@ -16,14 +16,14 @@ from ytsync.youtube import cli, hooks
 LOGGER = logging.getLogger("ytsync")
 
 
-def download_playlist(
+def download(
     checkpoint_stats: checkpoint.Checkpoint,
     name: str,
     url_file_map: Dict[str, pathlib.Path],
     total_files: int | None,
     destination: pathlib.Path,
 ) -> checkpoint.Checkpoint:
-    """Downloads a playlist and returns download/transfer statistics."""
+    """Downloads the content from a given url and returns download/transfer statistics."""
     start = time.time()
     checkpoint_stats.download_start = config.now()
     stats: Dict[str, List[str]] = {
@@ -152,9 +152,9 @@ def download_playlist(
             joined = "\n".join(f"• {item}" for item in stats["transfer_failed"])
             raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
         LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
-        playlist_id = transfer.rsync.create_playlist(name)
+        playlist_id = transfer.rsync.create_playlist(name) if checkpoint_stats.is_playlist else None
     else:
-        playlist_id = create_local_playlist(destination)
+        playlist_id = create_local_playlist(destination) if checkpoint_stats.is_playlist else None
     checkpoint_stats.playlist_id = playlist_id
     checkpoint_stats.runtime = time.time() - start
     return checkpoint_stats
