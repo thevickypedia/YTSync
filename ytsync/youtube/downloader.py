@@ -27,53 +27,43 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
         Dict[str, Any]:
         Returns the parameters for the yt_dlp module.
     """
-    # TODO: 'progress_hooks' should only apply for video/mp4 files, mp3 files should be handled similar to cli attempt
     options: Dict[str, Any] = {
         "logger": LOGGER,
         "quiet": True,
         "format": "bestaudio/best" if audio_only else "bestvideo+bestaudio/best",
         "ignoreerrors": False,
         "outtmpl": str(destination.joinpath(config.YT_FILENAME_TEMPLATE)),
-        "progress_hooks": [
+        "writethumbnail": True,
+    }
+    if audio_only:
+        options["postprocessors"] = [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "mp3",
+                "preferredquality": "0",
+            },
+            {
+                "key": "FFmpegMetadata",
+            },
+            {
+                "key": "EmbedThumbnail",
+            },
+        ]
+    else:
+        options["postprocessors"] = [
+            {
+                "key": "FFmpegMetadata",
+            },
+            {
+                "key": "EmbedThumbnail",
+            },
+        ]
+        options["progress_hooks"] = [
             functools.partial(
                 hooks.download_progress_hook,
                 stats=stats,
             )
-        ],
-    }
-    if audio_only:
-        options.update(
-            {
-                "postprocessors": [
-                    {
-                        "key": "FFmpegExtractAudio",
-                        "preferredcodec": "mp3",
-                        "preferredquality": "0",
-                    },
-                    {
-                        "key": "FFmpegMetadata",
-                    },
-                    {
-                        "key": "EmbedThumbnail",
-                    },
-                ],
-                "writethumbnail": True,
-            }
-        )
-    else:
-        options.update(
-            {
-                "postprocessors": [
-                    {
-                        "key": "FFmpegMetadata",
-                    },
-                    {
-                        "key": "EmbedThumbnail",
-                    },
-                ],
-                "writethumbnail": True,
-            }
-        )
+        ]
     if config.env.cookie_file:
         options["cookiefile"] = str(config.env.cookie_file)
     if config.env.source_address:
@@ -127,6 +117,8 @@ def download(
 
     # noinspection bad-argument-type
     with yt_dlp.YoutubeDL(options) as ydl:
+        # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
+        # This monotonic loop is to properly capture individual errors and attach custom handlers
         for url, filepath in url_file_map.items():
             if config.env.download_tester:
                 LOGGER.info("Download test mode enabled, skipping download for: %s", url)
@@ -141,9 +133,15 @@ def download(
                     )
                 continue
             try:
-                # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
-                # This monotonic loop is to properly capture individual errors and attach custom handlers
-                ydl.download([url])
+                status = ydl.download([url])
+                if audio_only:
+                    if status:
+                        LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
+                        stats["download_failed"].append(filepath.name)
+                    else:
+                        LOGGER.info("Download successful for url: %s -> %s", url, filepath.name)
+                        stats["downloaded"].append(filepath.name)
+                    continue
             except DownloadError as error:
                 LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
                 cli_attempt = cli.download_track(url, destination, audio_only)
