@@ -5,7 +5,7 @@ import posixpath
 import time
 from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Dict, List
+from typing import Callable, List
 
 from pydantic import BaseModel, HttpUrl
 
@@ -58,24 +58,17 @@ async def queue_download(
     destination.mkdir(exist_ok=True)
 
     # TODO: Don't return tuples from 'get_missing_entries'
-    tuple_obj = squire.get_missing_entries(ydl, info, destination)
-    url_file_loc: Dict[str, pathlib.Path] | None = tuple_obj[0]
-    preflight_stats: checkpoint.PreFlight | None = tuple_obj[1]
-    if url_file_loc is None:
-        url_file_loc = {str(url): destination}
-        total_files = None
-    else:
-        total_files = len(url_file_loc)
+    preprocessed = squire.get_missing_entries(url, ydl, info, destination)
     intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
-    if not url_file_loc:
-        assert preflight_stats, "Something went wrong! Neither URLs, nor preflight status were received!"
+    if not preprocessed.url_file_map:
+        assert preprocessed.preflight, "Something went wrong! Neither URLs, nor preflight status were received!"
         if source_system.api:
-            return f"{name!r} with {preflight_stats.total} file(s) is already available at: {intended_path}"
+            return f"{name!r} with {preprocessed.preflight.total} file(s) is already available at: {intended_path}"
         callback(
             chat_id=chat_id,
             message_id=message_id,
             response="ℹ️ *Already available*\n\n"
-            f"*{name}* with {preflight_stats.total} file(s) is already available at:\n"
+            f"*{name}* with {preprocessed.preflight.total} file(s) is already available at:\n"
             f"`{intended_path}`",
         )
         return None
@@ -83,12 +76,12 @@ async def queue_download(
     checkpoint_stats = checkpoint.Checkpoint(
         source_system=source_system,
         input_url=url,
-        resolved_urls=list(map(HttpUrl, url_file_loc.keys())),
-        is_playlist=len(url_file_loc) > 1,
+        resolved_urls=list(map(HttpUrl, preprocessed.url_file_map.keys())),
+        is_playlist=len(preprocessed.url_file_map) > 1,
         initial_destination=destination,
         final_destination=pathlib.Path(intended_path),
         name=name,
-        preflight=preflight_stats,
+        preflight=preprocessed.preflight,
     )
 
     future, scheduled_time = processor.submit(
@@ -97,8 +90,8 @@ async def queue_download(
         **dict(
             checkpoint_stats=checkpoint_stats,
             name=name,
-            url_file_map=url_file_loc,
-            total_files=total_files,
+            url_file_map=preprocessed.url_file_map,
+            total_files=preprocessed.total_files,
             destination=destination,
             audio_only=source_system.audio_only,
         ),
@@ -123,10 +116,10 @@ async def queue_download(
     )
 
     scheduled_time = max(0, scheduled_time - time.monotonic())
-    if total_files is None:
+    if preprocessed.total_files is None:
         parsed_len = " "
     else:
-        parsed_len = f" - {total_files} file(s) "
+        parsed_len = f" - {preprocessed.total_files} file(s) "
     if scheduled_time == 0:
         if source_system.api:
             txt = f"{name!r}{parsed_len}has been queued for download."

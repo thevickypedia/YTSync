@@ -1,6 +1,7 @@
 import logging
 import pathlib
 from collections.abc import Generator
+from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
 import yt_dlp
@@ -28,14 +29,25 @@ def stats_to_markdown(stats: Dict[str, int | List[str]]) -> Generator[str]:
             yield f"*{snake_to_pascal(key)}*:\n{joined}\n"
 
 
+@dataclass
+class PreProcessor:
+    """Pre-process the information block."""
+
+    url_file_map: Dict[str, pathlib.Path]
+    preflight: checkpoint.PreFlight
+    total_files: int | None = None
+
+
 def get_missing_entries(
+    url: HttpUrl,
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
     destination: pathlib.Path,
-) -> Tuple[Dict[str, pathlib.Path] | None, checkpoint.PreFlight | None]:
-    """Get missing entries from a parent URL either in local directory or remote server.
+) -> PreProcessor:
+    """Get missing entries from a parent URL either in the local directory or remote server.
 
     Args:
+        url: Parent URL.
         ydl: YouTube download object.
         info: Block of entries needed.
         destination: Local path to the destination.
@@ -47,9 +59,9 @@ def get_missing_entries(
     preflight = checkpoint.PreFlight()
     entries = info.get("entries")
     if not entries:
+        # TODO: This must not skip the exist checker?
         # This is a valid scenario for standalone links, instead of a playlist
-        LOGGER.debug("'info' block does not contain valid 'entries': %s", info)
-        return None, None
+        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
     url_file_map: Dict[str, pathlib.Path] = {}
     for entry in info["entries"]:
         preflight.total += 1
@@ -75,7 +87,7 @@ def get_missing_entries(
         url_file_map[entry["url"]] = destination.joinpath(filename)
 
     if not url_file_map:
-        return None, None
+        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
     if transfer.rsync.is_enabled:
         # Check files' presence in remote server
         existing = transfer.rsync.remote_files_exist(list(url_file_map.values()))
@@ -99,18 +111,18 @@ def get_missing_entries(
     # If there are items marked as unavailable,
     # don't care about error count since they'll likely fail to download for the same reason
     if preflight.unavailable:
-        return url_file_map_copy, preflight
+        return PreProcessor(url_file_map=url_file_map_copy, preflight=preflight, total_files=len(url_file_map_copy))
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
     if preflight.error > preflight.total * (config.env.max_error_threshold / 100):
         LOGGER.info(
             "Error count %d EXCEEDS the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
         )
-        return None, preflight
+        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
     )
-    return url_file_map_copy, preflight
+    return PreProcessor(url_file_map=url_file_map_copy, preflight=preflight, total_files=len(url_file_map_copy))
 
 
 def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
