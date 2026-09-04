@@ -31,11 +31,88 @@ def stats_to_markdown(stats: Dict[str, int | List[str]]) -> Generator[str]:
 
 @dataclass
 class PreProcessor:
-    """Pre-process the information block."""
+    """Pre-process the information block.
+
+    >>> PreProcessor
+
+    """
 
     url_file_map: Dict[str, pathlib.Path]
     preflight: checkpoint.PreFlight
     total_files: int | None = None
+
+
+def filter_existing(base_url_file_map: Dict[str, pathlib.Path]) -> Dict[str, pathlib.Path]:
+    """Filter out the existing files from the given URL-file map.
+
+    Args:
+        base_url_file_map: Base key-value map of URL to filepath.
+
+    Returns:
+        Dict[str, pathlib.Path]:
+        Returns a key-value map of URL to filepath that doesn't exist in the local/remote data directory.
+    """
+    if transfer.rsync.is_enabled:
+        # Check files' presence in remote server
+        existing = transfer.rsync.remote_files_exist(list(base_url_file_map.values()))
+    else:
+        # Check files' presence in local data directory
+        existing = {str(file) for file in base_url_file_map.values() if file.exists()}
+
+    # Redundant loop, but it's a necessary evil because of a cleaner remote check
+    # Avoid modifying the original dict since python doesn't support dropping values from dict while looping on it
+    url_file_map: Dict[str, pathlib.Path] = {}
+    for url, local_path in base_url_file_map.items():
+        # 'existing' is mapped to 'Set[str]'
+        if str(local_path) in existing:
+            LOGGER.info("'%s' already exists; skipping...", local_path)
+            # preflight.available += 1
+            continue
+        LOGGER.info("'%s' does not exist", local_path)
+        url_file_map[url] = local_path
+        # preflight.unavailable += 1
+    return url_file_map
+
+
+def generate_file_map(
+    ydl: yt_dlp.YoutubeDL,
+    entries: List[Dict[str, Any]],
+    destination: pathlib.Path,
+) -> Dict[str, pathlib.Path]:
+    """Generate a file map for the given entries.
+
+    Args:
+        ydl: YoutubeDL object.
+        entries: List of entries to generate the file map for.
+        destination: Destination path.
+
+    Returns:
+        Dict[str, pathlib.Path]:
+        Returns a key-value map of URL to filepath.
+    """
+    url_file_map: Dict[str, pathlib.Path] = {}
+    for entry in entries:
+        # preflight.total += 1
+        if not entry or not entry.get("url"):
+            LOGGER.warning("Invalid entry found: %s", entry or "None")
+            # preflight.error += 1
+            continue
+        try:
+            with ydl:
+                # noinspection bad-argument-type
+                filename = (
+                    pathlib.Path(
+                        ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(config.YT_FILENAME_TEMPLATE)))
+                    )
+                    .with_suffix(".mp3")
+                    .name
+                )
+        except YoutubeDLError as error:
+            LOGGER.exception(error)
+            # preflight.error += 1
+            continue
+        url_file_map[entry["url"]] = destination.joinpath(filename)
+    return url_file_map
 
 
 def get_missing_entries(
@@ -53,76 +130,55 @@ def get_missing_entries(
         destination: Local path to the destination.
 
     Returns:
-        List[str]:
-        Returns a list of all the missing entries.
+        PreProcessor:
+        Returns a PreProcessor object with the URL-file map and preflight information.
     """
     preflight = checkpoint.PreFlight()
-    entries = info.get("entries")
-    if not entries:
-        # TODO: This must not skip the exist checker?
-        # This is a valid scenario for standalone links, instead of a playlist
-        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
-    url_file_map: Dict[str, pathlib.Path] = {}
-    for entry in info["entries"]:
-        preflight.total += 1
-        if not entry or not entry.get("url"):
-            LOGGER.warning("Invalid entry found: %s", entry or "None")
-            preflight.error += 1
-            continue
-        # TODO: Check if it is possible to get the file size
-        try:
-            with ydl:
-                # noinspection bad-argument-type
-                filename = (
-                    pathlib.Path(
-                        ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(config.YT_FILENAME_TEMPLATE)))
-                    )
-                    .with_suffix(".mp3")
-                    .name
-                )
-        except YoutubeDLError as error:
-            LOGGER.exception(error)
-            preflight.error += 1
-            continue
-        url_file_map[entry["url"]] = destination.joinpath(filename)
-
-    if not url_file_map:
-        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
-    if transfer.rsync.is_enabled:
-        # Check files' presence in remote server
-        existing = transfer.rsync.remote_files_exist(list(url_file_map.values()))
+    if entries := info.get("entries", []):
+        entries = list(entries)
+        preflight.total = len(entries)
+        LOGGER.debug("Found %d entries", preflight.total)
     else:
-        # Check files' presence in local data directory
-        existing = {file for file in url_file_map.values() if file.exists()}
+        # No entries found, likely a single video/audio file, no preflight check needed
+        LOGGER.debug("No entries found; returning the parent URL as-is")
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
 
-    # Redundant loop, but it's a necessary evil because of a cleaner remote check
-    # Avoid modifying the original dict since python doesn't support dropping values from dict while looping on it
-    url_file_map_copy: Dict[str, pathlib.Path] = {}
-    for url, local_path in url_file_map.items():
-        if local_path in existing:
-            LOGGER.info("'%s' already exists; skipping...", local_path)
-            preflight.available += 1
-            continue
-        LOGGER.info("'%s' does not exist", local_path)
-        url_file_map_copy[url] = local_path
-        preflight.unavailable += 1
+    if base_url_file_map := generate_file_map(ydl, entries, destination):
+        # Calculate the number of files for which the filename resolution failed
+        preflight.error = len(entries) - len(base_url_file_map)
+        LOGGER.debug("Generated file map: %s", base_url_file_map)
+    else:
+        # Unable to check if there are any child URLs within the parent URL, include base preflight
+        preflight.error = len(entries)
+        LOGGER.debug("Unable to generate URL file map; returning the parent URL as-is")
+        LOGGER.debug(preflight.model_dump(mode="json"))
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
 
+    if url_file_map := filter_existing(base_url_file_map):
+        preflight.unavailable = len(url_file_map)
+        preflight.available = len(base_url_file_map) - preflight.unavailable
+    else:
+        LOGGER.debug(preflight.model_dump(mode="json"))
+        # No files need to be downloaded, include base preflight
+        return PreProcessor(url_file_map={}, preflight=preflight)
+
+    # Likely a playlist file
     LOGGER.info(preflight.model_dump(mode="json"))
     # If there are items marked as unavailable,
     # don't care about error count since they'll likely fail to download for the same reason
     if preflight.unavailable:
-        return PreProcessor(url_file_map=url_file_map_copy, preflight=preflight, total_files=len(url_file_map_copy))
+        return PreProcessor(url_file_map=url_file_map, preflight=preflight, total_files=len(url_file_map))
     # If there are more than N% of errors, then let's not take a chance - just try and download the entire playlist
     if preflight.error > preflight.total * (config.env.max_error_threshold / 100):
         LOGGER.info(
             "Error count %d EXCEEDS the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
         )
-        return PreProcessor(url_file_map={str(url): destination}, preflight=preflight)
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
     )
-    return PreProcessor(url_file_map=url_file_map_copy, preflight=preflight, total_files=len(url_file_map_copy))
+    return PreProcessor(url_file_map=url_file_map, preflight=preflight, total_files=len(url_file_map))
 
 
 def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:

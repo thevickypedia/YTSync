@@ -68,7 +68,7 @@ async def queue_download(
             chat_id=chat_id,
             message_id=message_id,
             response="ℹ️ *Already available*\n\n"
-            f"*{name}* with {preprocessed.preflight.total} file(s) is already available at:\n"
+            f"*{name}* with {preprocessed.preflight.total or 1} file(s) is already available at:\n"
             f"`{intended_path}`",
         )
         return None
