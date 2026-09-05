@@ -52,12 +52,13 @@ def filter_existing(base_url_file_map: Dict[str, pathlib.Path]) -> Dict[str, pat
         Dict[str, pathlib.Path]:
         Returns a key-value map of URL to filepath that doesn't exist in the local/remote data directory.
     """
+    # Exist check only apply for 'files', not directories, since the directory will be created if it doesn't exist
     if transfer.rsync.is_enabled:
         # Check files' presence in remote server
         existing = transfer.rsync.remote_files_exist(list(base_url_file_map.values()))
     else:
         # Check files' presence in local data directory
-        existing = {str(file) for file in base_url_file_map.values() if file.exists()}
+        existing = {str(file) for file in base_url_file_map.values() if file.is_file()}
 
     # Redundant loop, but it's a necessary evil because of a cleaner remote check
     # Avoid modifying the original dict since python doesn't support dropping values from dict while looping on it
