@@ -86,6 +86,8 @@ ssh user@receiver_ip
 
 > Mount the local `~/.ssh` volume to allow reading known hosts
 ```shell
+export UID=$(id -u)
+export GID=$(id -g)
 docker run \
   -v ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro \
   -v ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro \

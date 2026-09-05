@@ -3,6 +3,7 @@
 ########################################################################################################################
 services:
   app:
+    user: "${UID}:${GID}"
     image: thevickypedia/ytsync
     container_name: ytsync
     network_mode: bridge
