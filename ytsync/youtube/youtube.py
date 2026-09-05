@@ -57,7 +57,6 @@ async def queue_download(
     destination = config.env.download_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
 
-    # TODO: Don't return tuples from 'get_missing_entries'
     preprocessed = squire.get_missing_entries(url, ydl, info, destination)
     intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:

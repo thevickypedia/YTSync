@@ -3,6 +3,7 @@ import os
 import pathlib
 import socket
 import warnings
+from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from enum import StrEnum
 from ipaddress import IPv4Address
@@ -28,6 +29,24 @@ SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") 
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
+
+
+@dataclass
+class TelegramBeat:
+    """Telegram beat class.
+
+    >>> TelegramBeat
+
+    """
+
+    offset: int = 0
+    failed_connections: int = 0
+
+    poll_for_messages: bool = False
+    restart_loop: bool = False
+
+
+telegram_beat = TelegramBeat()
 
 
 class AllowedCronSchedule(StrEnum):

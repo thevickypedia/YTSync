@@ -15,14 +15,13 @@ from yt_dlp.utils import DownloadError
 from ytsync.api import auth, models
 from ytsync.database import tracker
 from ytsync.modules import checkpoint, config
-from ytsync.telegram import bot, poll, webhook
+from ytsync.telegram import bot, webhook
 from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(
     description="Enter the telegram bot token (for webhook operations) or apikey (for YTSync interactions)"
 )
-POLL_LOCK = asyncio.Lock()
 
 
 async def telegram_webhook(request: Request):
@@ -105,8 +104,7 @@ async def api_set_webhook(
         config.env.bot_webhook = body.webhook
         config.env.bot_secret = body.secret_token
         config.env.bot_webhook_ip = body.webhook_ip
-        async with POLL_LOCK:
-            await poll.stop_polling()
+        config.telegram_beat.poll_for_messages = False
         raise HTTPException(
             status_code=HTTPStatus.OK.real,
         )
@@ -136,9 +134,7 @@ async def api_delete_webhook(
     auth.validate(apikey, True)
     try:
         response = webhook.delete_webhook()
-        async with POLL_LOCK:
-            await poll.stop_polling()
-            poll.start_polling()
+        config.telegram_beat.poll_for_messages = True
         return response
     except requests.RequestException as error:
         LOGGER.error(error)

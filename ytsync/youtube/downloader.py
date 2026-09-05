@@ -122,7 +122,6 @@ def download(
         for url, filepath in url_file_map.items():
             if config.env.download_tester:
                 LOGGER.info("Download test mode enabled, skipping download for: %s", url)
-                # TODO: Generate random bytes and write to file
                 filepath.touch(mode=0o644, exist_ok=True)
                 stats["downloaded"].append(filepath.name)
                 if transfer_pool:

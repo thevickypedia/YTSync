@@ -66,11 +66,9 @@ def filter_existing(base_url_file_map: Dict[str, pathlib.Path]) -> Dict[str, pat
         # 'existing' is mapped to 'Set[str]'
         if str(local_path) in existing:
             LOGGER.info("'%s' already exists; skipping...", local_path)
-            # preflight.available += 1
             continue
         LOGGER.info("'%s' does not exist", local_path)
         url_file_map[url] = local_path
-        # preflight.unavailable += 1
     return url_file_map
 
 
@@ -92,10 +90,8 @@ def generate_file_map(
     """
     url_file_map: Dict[str, pathlib.Path] = {}
     for entry in entries:
-        # preflight.total += 1
         if not entry or not entry.get("url"):
             LOGGER.warning("Invalid entry found: %s", entry or "None")
-            # preflight.error += 1
             continue
         try:
             with ydl:
@@ -109,7 +105,6 @@ def generate_file_map(
                 )
         except YoutubeDLError as error:
             LOGGER.exception(error)
-            # preflight.error += 1
             continue
         url_file_map[entry["url"]] = destination.joinpath(filename)
     return url_file_map

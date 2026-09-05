@@ -24,7 +24,6 @@ from ytsync.youtube import youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
-ACTIVE_TASKS: Dict[str, asyncio.Task] = {}
 
 
 class RequestMethods(StrEnum):
@@ -407,8 +406,7 @@ def get_process_pool() -> str:
 
 def get_channel() -> str:
     """Get the channel text for telegram interactions."""
-    task = ACTIVE_TASKS.get("poll")
-    if task and not task.done():
+    if config.telegram_beat.poll_for_messages:
         txt = "Channel: Polling"
     elif config.env.bot_webhook:
         txt = f"Channel: Webhook via {config.env.bot_webhook}"

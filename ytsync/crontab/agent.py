@@ -1,12 +1,13 @@
 import asyncio
 import logging
 import time
+from collections.abc import Coroutine
 from datetime import datetime
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
-from ytsync.modules import checkpoint
-from ytsync.telegram import bot
+from ytsync.modules import checkpoint, config
+from ytsync.telegram import bot, handler, poll
 from ytsync.youtube import youtube
 
 LOGGER = logging.getLogger("ytsync")
@@ -38,21 +39,49 @@ def callback(task: asyncio.Task) -> None:
     end_time = int(time.time() - start_time)
     approx_start = datetime.fromtimestamp(start_time).strftime("%a %b %d %H:%M %Y %Z")
     approx_end = datetime.fromtimestamp(end_time).strftime("%a %b %d %H:%M %Y %Z")
-    LOGGER.info("Task [%s] running since: %s, completed at: [%s]", name, approx_start, approx_end)
+    log = not name.startswith("poll_")
+    if log:
+        LOGGER.info("Task [%s] running since: %s, completed at: [%s]", name, approx_start, approx_end)
     try:
         result = task.result()
-        LOGGER.info("Background task [%s] completed successfully", name)
-        LOGGER.info(result)
+        if log:
+            LOGGER.info("Background task [%s] completed successfully", name)
+            LOGGER.info(result)
     except Exception as error:
         LOGGER.exception(error)
         LOGGER.error("Background task [%s] failed to finish", name)
 
 
+def create_task(coro: Coroutine, name: str) -> asyncio.Task:
+    """Creates a background task with a name.
+
+    Args:
+        coro: The coroutine to be executed in the background.
+        name: The name of the task.
+
+    Returns:
+        asyncio.Task:
+        The created asyncio task.
+    """
+    task = asyncio.create_task(coro, name=f"{name}||{int(time.time())}")
+    task.add_done_callback(callback)
+    return task
+
+
 async def executor() -> None:
     """Executes in a loop to read the database and execute the YouTube sync for the requested URL."""
     global LAST_CHECK
+    create_task(handler.init(), name="poll_init")
     while True:
-        await asyncio.sleep(30)
+        await asyncio.sleep(5)
+        # MARK: Poll for telegram messages
+        if config.telegram_beat.poll_for_messages:
+            create_task(poll.executor(), name="poll_executor")
+        if config.telegram_beat.restart_loop:
+            LOGGER.debug("Restarting loop...")
+            # Avoid being called again when init is in progress
+            config.telegram_beat.restart_loop = False
+            create_task(handler.init(), name="poll_init")
         now = datetime.now().replace(second=0, microsecond=0)
         if now == LAST_CHECK:
             continue
@@ -63,14 +92,13 @@ async def executor() -> None:
             if expression.CronExpression(track.schedule.value).check_trigger():
                 LOGGER.info("Executing sync for '%s' with '%s'", track.name, track.url)
                 # Background task; so no timeout required
-                task = asyncio.create_task(
+                create_task(
                     youtube.queue_download(
                         url=track.url,
                         source_system=checkpoint.SourceSystem(scheduled=track.schedule),
                         callback=bot.reply_to,
                         chat_id=track.chat_id,
                         schedule=track.schedule,
-                    )
+                    ),
+                    name=track.name,
                 )
-                task.set_name(f"{track.name}||{int(time.time())}")
-                task.add_done_callback(callback)

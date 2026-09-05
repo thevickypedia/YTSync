@@ -45,7 +45,7 @@ def set_webhook(
     webhook: HttpUrl,
     secret_token: str,
     webhook_ip: IPv4Address | None = None,
-) -> bool | None:
+) -> bool:
     """Set webhook.
 
     References:
@@ -78,4 +78,4 @@ def set_webhook(
             return response.ok
     except exceptions.EgressErrors as error:
         LOGGER.error(error)
-    return None
+    return False
