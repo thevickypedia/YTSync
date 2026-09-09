@@ -43,8 +43,8 @@ class Checkpoint(BaseModel):
     name: str
     initial_destination: pathlib.Path
     final_destination: pathlib.Path
-    # Only applies for playlists
-    preflight: PreFlight | None = None
+    # Only applies for playlists; defaults to 0 if not a playlist
+    preflight: PreFlight
     # Awaits download/transfer
     downloaded: List[str] = []
     download_failed: List[str] = []

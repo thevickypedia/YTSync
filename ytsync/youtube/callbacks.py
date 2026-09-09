@@ -5,7 +5,7 @@ import pathlib
 import time
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Any, Callable, Dict, List
+from typing import Callable, Dict, List
 
 from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
@@ -78,19 +78,34 @@ def process_callback(
     result: checkpoint.Checkpoint = future.result()
     if schedule:
         response = (
-            f"✅ *{schedule} download completed for {name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`.\n\n"
+            f"✅ *{schedule} download completed for {result.name!r}*\n\n"
+            f"Process completed in `{result.runtime:.2f}s`."
         )
     else:
-        response = f"✅ *Download completed for {name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`.\n\n"
-    # preflight_status is set to None if checks fail
-    if result.preflight:
-        p_stats = "\n".join(squire.stats_to_markdown(result.preflight.model_dump(mode="json")))
-        response += f"*Pre-flight result:*\n{p_stats}\n\n"
-    stats: Dict[str, Any] = {"downloaded": result.downloaded, "download_failed": result.download_failed}
-    t_stats = "\n".join(squire.stats_to_markdown(stats))
-    response += f"*Download/Transfer result:*\n{t_stats}"
-    stats["download_end"] = config.now()
-    final_checkpoint = checkpoint.Checkpoint(**{**result.model_dump(mode="json"), **stats}).model_dump(mode="json")
+        response = f"✅ *Download completed for {result.name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`."
+    if result.is_playlist:
+        # preflight only applies for playlists; and set it 0s as default if there is an error
+        if any(
+            (result.preflight.total, result.preflight.error, result.preflight.available, result.preflight.unavailable)
+        ):
+            p_stats = "\n".join(squire.stats_to_markdown(result.preflight.model_dump(mode="json")))
+            response += f"\n\n*Pre-flight result:*\n{p_stats}"
+        stats_msg = f"Downloaded: {len(result.downloaded)} / {result.preflight.total}"
+        if result.download_failed:
+            joined = "\n".join(f"• {item}" for item in result.download_failed)
+            stats_msg += "Download Failed: " + f"\n{joined}"
+        response += f"\n\n*Download/Transfer result:*\n{stats_msg}"
+    if transfer.rsync.is_enabled:
+        total = result.transferred + result.transfer_failed
+        response += (
+            f"\n\n{len(result.transferred)} / {len(total)} transferred to "
+            f"{transfer.rsync.remote_host}:{transfer.rsync.remote_path}"
+        )
+        if result.transfer_failed:
+            joined = "\n".join(f"• {item}" for item in result.transfer_failed)
+            response += "\n\nTransfer Failed: " + f"\n{joined}"
+    result.download_end = config.now()
+    final_checkpoint = result.model_dump(mode="json")
     save_checkpoint(final_checkpoint)
     LOGGER.info(response)
     if callback and chat_id:

@@ -25,8 +25,10 @@ def stats_to_markdown(stats: Dict[str, int | List[str]]) -> Generator[str]:
         if isinstance(value, int):
             yield f"*{snake_to_pascal(key)}*: {value}"
         elif isinstance(value, list):
-            joined = "\n".join(f"• {item}" for item in value)
-            yield f"*{snake_to_pascal(key)}*:\n{joined}\n"
+            # Skip empty lists
+            if value:
+                joined = "\n".join(f"• {item}" for item in value)
+                yield f"*{snake_to_pascal(key)}*:\n{joined}\n"
 
 
 @dataclass
