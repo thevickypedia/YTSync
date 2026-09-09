@@ -53,7 +53,9 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 ###### FileIO Settings
 * **data_dir**: Directory to store the database. _Defaults to `data`_
 * **logs_dir**: Directory to store logs. _Defaults to `logs`_
-* **download_dir**: Directory to store downloaded files. _Defaults to `downloads`_
+* **audio_dir**: Directory to store audio files. _Defaults to `audio`_
+* **video_dir**: Directory to store video files. _Defaults to `video`_
+> Remote machines can't choose, audio and video directory. It is auto-created with default values.
 
 ###### Concurrency & Tolerance Settings
 * **max_transfers**: Maximum number of concurrent transfers to perform. _Defaults to the number of CPU cores_
@@ -86,8 +88,6 @@ ssh user@receiver_ip
 
 > Mount the local `~/.ssh` volume to allow reading known hosts
 ```shell
-export UID=$(id -u)
-export GID=$(id -g)
 docker run \
   -v ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro \
   -v ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro \

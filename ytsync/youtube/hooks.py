@@ -1,5 +1,6 @@
 import functools
 import logging
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
@@ -15,8 +16,8 @@ def postprocess_hook(
     stats: Dict[str, List[str]],
 ) -> None:
     """Submit a completed file to the thread pool."""
-    local_path = local_path.strip()
-    if local_path.endswith(TRANSIENT_FILES):
+    local_path = pathlib.Path(local_path.strip())
+    if local_path.suffix in TRANSIENT_FILES:
         LOGGER.debug("Transient download complete; awaiting final - %s", local_path)
         return
     LOGGER.info("Ready to transfer: %s", local_path)

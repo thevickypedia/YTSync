@@ -121,7 +121,7 @@ def download(
         # This monotonic loop is to properly capture individual errors and attach custom handlers
         for url, filepath in url_file_map.items():
             if config.env.download_tester:
-                LOGGER.info("Download test mode enabled, skipping download for: %s", url)
+                LOGGER.info("Download tester enabled, skipping [%s] - %s", url, filepath)
                 filepath.touch(mode=0o644, exist_ok=True)
                 stats["downloaded"].append(filepath.name)
                 if transfer_pool:
@@ -192,7 +192,7 @@ def download(
             playlist_id = create_local_playlist(destination) if checkpoint_stats.is_playlist else None
         except Exception as error:
             LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
-            playlist_id = None
+            playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
     checkpoint_stats.playlist_id = playlist_id
     checkpoint_stats.runtime = time.time() - start
     return checkpoint_stats

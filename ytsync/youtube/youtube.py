@@ -54,10 +54,13 @@ async def queue_download(
     name = info.get("title", None) or None
     assert name and isinstance(name, str), "Failed to extract the title"
 
-    destination = config.env.download_dir.joinpath(name)
+    if source_system.audio_only:
+        destination = config.env.audio_dir.joinpath(name)
+    else:
+        destination = config.env.video_dir.joinpath(name)
     destination.mkdir(exist_ok=True)
 
-    preprocessed = squire.get_missing_entries(url, ydl, info, destination)
+    preprocessed = squire.get_missing_entries(url, ydl, info, destination, source_system)
     intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
         assert preprocessed.preflight, "Something went wrong! Neither URLs, nor preflight status were received!"
@@ -83,6 +86,7 @@ async def queue_download(
         preflight=preprocessed.preflight,
     )
 
+    # TODO: Download immediately when tester is enabled
     future, scheduled_time = processor.submit(
         identifier=name,
         function=downloader.download,

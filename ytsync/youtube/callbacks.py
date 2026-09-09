@@ -14,7 +14,7 @@ from ytsync.youtube import squire
 LOGGER = logging.getLogger("ytsync")
 
 
-def transfer_file(local_path: str) -> None:
+def transfer_file(local_path: pathlib.Path) -> None:
     """Transfer a completed file."""
     LOGGER.info("Transferring: %s", local_path)
     transfer.rsync.run(source=local_path)
@@ -29,11 +29,10 @@ def transfer_file(local_path: str) -> None:
 
 def transfer_callback(
     future: Future,
-    filepath: str,
+    filepath: pathlib.Path,
     stats: Dict[str, List[str]],
 ) -> None:
     """Called when an individual transfer thread completes."""
-    filepath = pathlib.Path(filepath)
     try:
         future.result()
     except Exception as exc:

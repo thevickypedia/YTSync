@@ -3,7 +3,6 @@
 ########################################################################################################################
 services:
   app:
-    user: "${UID}:${GID}"
     image: thevickypedia/ytsync
     container_name: ytsync
     network_mode: bridge
@@ -19,7 +18,8 @@ services:
       # The application only reads logs_dir and data_dir - this is a design choice for separation
       - ${LOGS_PATH:-./logs}:${logs_dir:-/app/logs}
       - ${DATA_PATH:-./data}:${data_dir:-/app/data}
-      - ${DOWNLOAD_LOCATION:-./downloads}:${download_dir:-/app/downloads}
+      - ${AUDIO_LOCATION:-./audio}:${audio_dir:-/app/audio}
+      - ${VIDEO_LOCATION:-./video}:${video_dir:-/app/video}
       - ~/.ssh/id_ed25519:/root/.ssh/id_ed25519:ro
       - ~/.ssh/known_hosts:/root/.ssh/known_hosts:ro
     ports:

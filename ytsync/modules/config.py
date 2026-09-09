@@ -97,8 +97,8 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # FileIO config
     data_dir: NewPath | DirectoryPath = pathlib.Path("data")
     logs_dir: NewPath | DirectoryPath = pathlib.Path("logs")
-    download_dir: NewPath | DirectoryPath = pathlib.Path("downloads")
-    # TODO: Include dedicated locations for audio and video files
+    audio_dir: NewPath | DirectoryPath = pathlib.Path("audio")
+    video_dir: NewPath | DirectoryPath = pathlib.Path("video")
 
     # Maximum number of parallel transfers to remote server
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
@@ -110,6 +110,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     response_timeout: PositiveInt = Field(30, ge=10, le=60)
 
     # Sequential download factors
+    # TODO: Remove 'delayed_start' functionality
     delayed_start: bool = False
     # Next available time cannot be accurately determined before it begins
     # 'next_buffer' with # of seconds is used to simulate an actual download duration
@@ -164,7 +165,8 @@ if env.bot_webhook and env.bot_webhook.path != env.bot_endpoint:
     )
 
 env.data_dir.mkdir(exist_ok=True)
-env.download_dir.mkdir(exist_ok=True)
+env.audio_dir.mkdir(exist_ok=True)
+env.video_dir.mkdir(exist_ok=True)
 db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
 if not env.apikey:

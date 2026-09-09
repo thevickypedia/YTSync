@@ -11,7 +11,7 @@ from ytsync.modules import config, retry
 LOGGER = logging.getLogger("ytsync")
 
 
-def runner(cmd: str, source: str) -> subprocess.CompletedProcess:
+def runner(cmd: str, source: pathlib.Path) -> subprocess.CompletedProcess:
     """Runs a given command with a subprocess module."""
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
@@ -47,7 +47,7 @@ class Rsync:
         )
         return result.returncode == 0
 
-    def get_remote_path(self, local_path: pathlib.Path | str) -> str:
+    def get_remote_path(self, local_path: pathlib.Path) -> str:
         """Use the existing local filepath to derive the filepath in the remote server.
 
         Args:
@@ -57,7 +57,9 @@ class Rsync:
             str:
             Filepath in the remote server.
         """
-        relative_path = os.path.relpath(local_path, config.env.download_dir)
+        # 'local_path' is the filepath, which is within 'audio' or 'video' directory; hence the '.parent.parent'
+        root_path = local_path.parent.parent.resolve()
+        relative_path = os.path.relpath(local_path, str(root_path))
         return posixpath.join(
             self.remote_path,
             pathlib.Path(relative_path).as_posix(),
@@ -109,7 +111,7 @@ class Rsync:
         )
         return existing.response or set()
 
-    def run(self, source: str) -> None:
+    def run(self, source: pathlib.Path) -> None:
         """Syncs a file to a remote server with exponential backoff retry logic."""
         destination = self.get_remote_path(source)
         remote_location = f"{self.remote_user}@{self.remote_host}:" f"{destination}"
@@ -123,7 +125,7 @@ class Rsync:
             "--partial",
             "-e",
             "ssh -o StrictHostKeyChecking=no",
-            source,
+            str(source),
             remote_location,
         ]
 

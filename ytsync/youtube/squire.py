@@ -42,16 +42,27 @@ class PreProcessor:
     total_files: int | None = None
 
 
-def filter_existing(base_url_file_map: Dict[str, pathlib.Path]) -> Dict[str, pathlib.Path]:
+def filter_existing(
+    base_url_file_map: Dict[str, pathlib.Path], source_system: checkpoint.SourceSystem | None = None
+) -> Dict[str, pathlib.Path]:
     """Filter out the existing files from the given URL-file map.
 
     Args:
         base_url_file_map: Base key-value map of URL to filepath.
+        source_system: The source system to determine the filtering logic.
 
     Returns:
         Dict[str, pathlib.Path]:
         Returns a key-value map of URL to filepath that doesn't exist in the local/remote data directory.
     """
+    if source_system:
+        mapper = {}
+        for url, destination in base_url_file_map.items():
+            if source_system.audio_only:
+                mapper[url] = destination.joinpath(destination.name).with_suffix(".mp3")
+            else:
+                mapper[url] = destination.joinpath(destination.name).with_suffix(".mp4")
+        base_url_file_map = mapper
     # Exist check only apply for 'files', not directories, since the directory will be created if it doesn't exist
     if transfer.rsync.is_enabled:
         # Check files' presence in remote server
@@ -116,6 +127,7 @@ def get_missing_entries(
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
     destination: pathlib.Path,
+    source_system: checkpoint.SourceSystem,
 ) -> PreProcessor:
     """Get missing entries from a parent URL either in the local directory or remote server.
 
@@ -124,6 +136,7 @@ def get_missing_entries(
         ydl: YouTube download object.
         info: Block of entries needed.
         destination: Local path to the destination.
+        source_system: The source system to determine the filtering logic.
 
     Returns:
         PreProcessor:
@@ -137,7 +150,7 @@ def get_missing_entries(
     else:
         # No entries found, likely a single video/audio file, no preflight check needed
         LOGGER.debug("No entries found; returning the parent URL as-is")
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}, source_system), preflight=preflight)
 
     if base_url_file_map := generate_file_map(ydl, entries, destination):
         # Calculate the number of files for which the filename resolution failed
@@ -148,7 +161,7 @@ def get_missing_entries(
         preflight.error = len(entries)
         LOGGER.debug("Unable to generate URL file map; returning the parent URL as-is")
         LOGGER.debug(preflight.model_dump(mode="json"))
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}, source_system), preflight=preflight)
 
     if url_file_map := filter_existing(base_url_file_map):
         preflight.unavailable = len(url_file_map)
