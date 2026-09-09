@@ -18,6 +18,7 @@ processor = process.Processor(
     cooldown_interval=config.env.cooldown_interval,
     buffer=config.env.next_buffer,
     delayed_start=config.env.delayed_start,
+    tester_mode=config.env.download_tester,
 )
 
 
@@ -86,7 +87,6 @@ async def queue_download(
         preflight=preprocessed.preflight,
     )
 
-    # TODO: Download immediately when tester is enabled
     future, scheduled_time = processor.submit(
         identifier=name,
         function=downloader.download,

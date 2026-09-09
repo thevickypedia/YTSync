@@ -31,12 +31,15 @@ class Processor:
 
     """
 
-    def __init__(self, cooldown_interval: int = 300, buffer: int = 60, delayed_start: bool = False):
+    def __init__(
+        self, cooldown_interval: int = 300, buffer: int = 60, delayed_start: bool = False, tester_mode: bool = False
+    ):
         """Instantiates the processor object."""
         self.process_pool = ProcessPoolExecutor(max_workers=1)
         self.cooldown_interval = cooldown_interval
         self.delayed_start = delayed_start
         self.buffer = buffer
+        self.tester_mode = tester_mode
         self.total_submissions = 0
 
         # Monotonic timestamp of the last task that actually completed
@@ -90,8 +93,11 @@ class Processor:
         with self._lock:
             now = time.monotonic()
 
+            if self.tester_mode:
+                scheduled_time = now
+                LOGGER.info("Submitting %s now; running in tester mode", identifier)
             # No submissions were made - this is the true first task
-            if self.total_submissions == 0:
+            elif self.total_submissions == 0:
                 if self.delayed_start:
                     # If 'delayed_start' is set, wait until cooldown for first run
                     scheduled_time = now + self.cooldown_interval
