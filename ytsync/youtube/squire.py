@@ -90,6 +90,7 @@ def generate_file_map(
     ydl: yt_dlp.YoutubeDL,
     entries: List[Dict[str, Any]],
     destination: pathlib.Path,
+    extension: str,
 ) -> Dict[str, pathlib.Path]:
     """Generate a file map for the given entries.
 
@@ -97,6 +98,7 @@ def generate_file_map(
         ydl: YoutubeDL object.
         entries: List of entries to generate the file map for.
         destination: Destination path.
+        extension: File extension to use for the generated files.
 
     Returns:
         Dict[str, pathlib.Path]:
@@ -114,7 +116,7 @@ def generate_file_map(
                     pathlib.Path(
                         ydl.prepare_filename(entry, outtmpl=str(destination.joinpath(config.YT_FILENAME_TEMPLATE)))
                     )
-                    .with_suffix(".mp3")
+                    .with_suffix(extension)
                     .name
                 )
         except YoutubeDLError as error:
@@ -154,7 +156,8 @@ def get_missing_entries(
         LOGGER.debug("No entries found; returning the parent URL as-is")
         return PreProcessor(url_file_map=filter_existing({str(url): destination}, source_system), preflight=preflight)
 
-    if base_url_file_map := generate_file_map(ydl, entries, destination):
+    sfx = ".mp3" if source_system.audio_only else ".mp4"
+    if base_url_file_map := generate_file_map(ydl, entries, destination, sfx):
         # Calculate the number of files for which the filename resolution failed
         preflight.error = len(entries) - len(base_url_file_map)
         LOGGER.debug("Generated file map: %s", base_url_file_map)
@@ -202,7 +205,14 @@ def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Returns a tuple of YoutubeDL object, and a dictionary of information block.
     """
-    with yt_dlp.YoutubeDL() as ydl:
+    options = {}
+    if config.env.cookie_file:
+        options["cookiefile"] = str(config.env.cookie_file)
+    if config.env.source_address:
+        options["source_address"] = str(config.env.source_address)
+    if config.env.proxy_url:
+        options["proxy"] = str(config.env.proxy_url)
+    with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(
             str(url),
             download=False,
