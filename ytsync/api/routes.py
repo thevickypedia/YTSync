@@ -252,6 +252,7 @@ async def list_checkpoints(
         }
     """
     auth.validate(apikey, False)
+    # TODO: One bad entry can break the entire response - #14
     return {
         parent.name: [
             int(re.search(r"\d+", child.name).group()) for child in parent.iterdir() if child.suffix == ".json"
@@ -273,6 +274,7 @@ async def get_checkpoint(
         ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
+    # TODO: Fix unsanitized path segments - #16
     auth.validate(apikey, False)
     target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
     if not target.exists():

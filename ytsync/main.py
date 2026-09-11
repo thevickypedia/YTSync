@@ -36,6 +36,7 @@ async def lifespan(_: FastAPI):
     if LOGGER.isEnabledFor(logging.DEBUG):
         log_config()
     LOGGER.info("Initiating background tasks...")
+    # TODO: Add call back for 'bg_task' and exception handlers within 'agent.executor' for every hop - #17
     bg_task = asyncio.create_task(agent.executor())
     yield
     # Stop the background task

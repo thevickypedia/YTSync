@@ -67,6 +67,7 @@ async def executor():
             delay = config.telegram_beat.failed_connections * config.env.backoff_factor
             LOGGER.info("Restarting in %d seconds.", delay)
             await restart_loop(after=delay)
+    # TODO: Catch all might break the loop if an unhandled exception occurs; merge with egress errors - #18
     except (
         asyncio.CancelledError,
         KeyboardInterrupt,
