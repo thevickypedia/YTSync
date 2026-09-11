@@ -173,7 +173,7 @@ async def sync(
         )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
         # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
-        assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+        assert len(tracker) <= 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
@@ -222,7 +222,7 @@ def delete(
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
         # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
-        assert len(tracker) > 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+        assert len(tracker) <= 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
     elif trackers:
         if raise_for_exception:
             raise HTTPException(
