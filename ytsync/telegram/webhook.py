@@ -9,6 +9,7 @@ from ytsync.modules import config, exceptions
 from ytsync.telegram import bot
 
 LOGGER = logging.getLogger("ytsync")
+webhook_timeout = (3, 10)
 
 
 def get_webhook() -> Dict[str, str] | None:
@@ -18,7 +19,7 @@ def get_webhook() -> Dict[str, str] | None:
         https://core.telegram.org/bots/api#getwebhookinfo
     """
     get_info = f"{bot.BASE_URL}/getWebhookInfo"
-    response = requests.get(url=get_info, timeout=(3, 10))
+    response = requests.get(url=get_info, timeout=webhook_timeout)
     if response.ok:
         LOGGER.info(response.json())
         return response.json()
@@ -33,7 +34,7 @@ def delete_webhook() -> Dict[str, str] | None:
         https://core.telegram.org/bots/api#deletewebhook
     """
     del_info = f"{bot.BASE_URL}/setWebhook"
-    response = requests.post(url=del_info, params=dict(url=None))
+    response = requests.post(url=del_info, params=dict(url=None), timeout=webhook_timeout)
     if response.ok:
         LOGGER.info("Webhook has been removed.")
         return response.json()
@@ -70,7 +71,7 @@ def set_webhook(
             )
         else:
             # noinspection bad-argument-type
-            response = requests.post(url=put_info, params=payload)
+            response = requests.post(url=put_info, params=payload, timeout=webhook_timeout)
         response.raise_for_status()
         if response.ok:
             LOGGER.info("Webhook has been set to: %s", webhook)

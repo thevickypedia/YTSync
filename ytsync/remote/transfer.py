@@ -1,3 +1,4 @@
+import shutil
 import logging
 import os
 import pathlib
@@ -13,7 +14,7 @@ LOGGER = logging.getLogger("ytsync")
 
 def runner(cmd: str, source: pathlib.Path) -> subprocess.CompletedProcess:
     """Runs a given command with a subprocess module."""
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=config.env.max_timeout, check=False)
     if result.returncode == 0:
         LOGGER.info(f"Successfully synced {source}")
         return result  # Success, exit function
@@ -34,18 +35,7 @@ class Rsync:
         self.remote_host = config.env.remote_host
         self.remote_user = config.env.remote_user
         self.remote_path = config.env.remote_path
-        self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, self._is_installed()))
-
-    @staticmethod
-    def _is_installed() -> bool:
-        """Returns a boolean flag to indicate the rsync installation status."""
-        result = subprocess.run(
-            ["command", "-V", "rsync"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            shell=True,
-        )
-        return result.returncode == 0
+        self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, shutil.which("rsync") is not None))
 
     def get_remote_path(self, local_path: pathlib.Path) -> str:
         """Use the existing local filepath to derive the filepath in the remote server.
@@ -78,6 +68,7 @@ class Rsync:
             text=True,
             capture_output=True,
             check=True,
+            timeout=config.env.max_timeout,
         )
         existing = set()
         for line in result.stdout.splitlines():

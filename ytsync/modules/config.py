@@ -104,13 +104,13 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
     # Applies to rsync and telegram polling
     max_retries: PositiveInt = Field(10, le=30, ge=1)
+    max_timeout: PositiveInt = Field(30, le=60, ge=1)
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
     # Percentage of errors YTSync needs to tolerate before trying to download the base url
     max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
     response_timeout: PositiveInt = Field(30, ge=10, le=60)
 
     # Sequential download factors
-    # TODO: Remove 'delayed_start' functionality
     delayed_start: bool = False
     # Next available time cannot be accurately determined before it begins
     # 'next_buffer' with # of seconds is used to simulate an actual download duration

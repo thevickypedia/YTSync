@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 from enum import StrEnum
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import requests
 from pydantic import HttpUrl, ValidationError
@@ -88,8 +88,9 @@ def _make_request(
     payload: dict,
     files: dict | None = None,
     method: RequestMethods = RequestMethods.POST,
+    timeout: Tuple[int, int] = (2, 3),
 ) -> requests.Response:
-    """Makes a POST request with a ``connect timeout`` of 5 seconds and ``read timeout`` of 60.
+    """Makes a POST request with a ``connect timeout`` of 2 seconds and ``read timeout`` of 3 seconds.
 
     Args:
         url: URL to submit the request.
@@ -101,9 +102,10 @@ def _make_request(
         Response class.
     """
     if method == RequestMethods.GET:
-        response = requests.get(url=url, data=payload, files=files, timeout=(2, 3))
+        # TODO: Change GET requests with payload to query params (unconventional HTTP spec) - #20
+        response = requests.get(url=url, data=payload, files=files, timeout=timeout)
     elif method == RequestMethods.POST:
-        response = requests.post(url=url, data=payload, files=files, timeout=(2, 3))
+        response = requests.post(url=url, data=payload, files=files, timeout=timeout)
     else:
         raise ValueError("Invalid request method received: '%s'", method)
     if not response.ok:
@@ -200,6 +202,7 @@ async def poll_for_messages(offset: int) -> None | int:
         url=BASE_URL + "/getUpdates",
         payload={"offset": offset, "timeout": 60},
         method=RequestMethods.GET,
+        timeout=(5, 65),
     )
     if response.ok:
         results = response.json().get("result", [])
@@ -458,7 +461,8 @@ async def executor(command: str, chat: settings.Chat) -> None:
         chat: Required section of the payload as a Chat object.
     """
     LOGGER.info("Request: %s", command)
-    # TODO: Write unit tests and code coverage pipeline in GHA
+    # TODO: Replace all assert statements with proper error handling with if/else - #19
+    #   Write unit tests and code coverage pipeline in GHA
     if command.startswith((Commands.audio, Commands.video)):
         if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
             try:
