@@ -1,3 +1,5 @@
+# TODO: Remove the ProcessPoolExecutor, and simply create a new table in the DB and add an enty with the new time - #9
+
 import functools
 import logging
 import threading
@@ -141,7 +143,7 @@ class Processor:
             )
             return future, scheduled_time
 
-    def shutdown(self, wait: bool = True, cancel_futures: bool = False):
+    def shutdown(self, wait: bool = False, cancel_futures: bool = True):
         """Shutdown the entire process pool."""
         LOGGER.info("Shutting down processor with %d in queue", self.process_pool._queue_count)
         self.process_pool.shutdown(wait=wait, cancel_futures=cancel_futures)

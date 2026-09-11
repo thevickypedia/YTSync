@@ -38,6 +38,7 @@ class Controller(BaseModel):
         arbitrary_types_allowed = True
 
 
+# TODO: Remove the concept of controllers - #10 (achieved by #9)
 controllers: List[Controller] = []
 
 
@@ -54,12 +55,12 @@ async def queue_download(
     ydl, info = squire.get_info(url)
     name = info.get("title", None) or None
     assert name and isinstance(name, str), "Failed to extract the title"
-
+    # TODO: 'name' must be sanitized to avoid issues with special characters in file paths - #11
     if source_system.audio_only:
         destination = config.env.audio_dir.joinpath(name)
     else:
         destination = config.env.video_dir.joinpath(name)
-    destination.mkdir(exist_ok=True)
+    destination.mkdir(exist_ok=True, parents=True)
 
     preprocessed = squire.get_missing_entries(url, ydl, info, destination, source_system)
     intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
