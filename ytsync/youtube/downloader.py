@@ -171,10 +171,7 @@ def download(
     checkpoint_stats.downloaded = stats["downloaded"]
     checkpoint_stats.download_failed = stats["download_failed"]
     if transfer_pool:
-        LOGGER.info(
-            "Waiting for transfers for %s",
-            name,
-        )
+        LOGGER.info("Waiting for transfers for %s", name)
         transfer_pool.shutdown(wait=True)
         checkpoint_stats.transferred = stats["transferred"]
         checkpoint_stats.transfer_failed = stats["transfer_failed"]

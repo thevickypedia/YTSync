@@ -164,9 +164,9 @@ if env.bot_webhook and env.bot_webhook.path != env.bot_endpoint:
         ],
     )
 
-env.data_dir.mkdir(exist_ok=True)
-env.audio_dir.mkdir(exist_ok=True)
-env.video_dir.mkdir(exist_ok=True)
+env.data_dir.mkdir(exist_ok=True, parents=True)
+env.audio_dir.mkdir(exist_ok=True, parents=True)
+env.video_dir.mkdir(exist_ok=True, parents=True)
 db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
 if not env.apikey:

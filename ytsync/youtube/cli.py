@@ -26,7 +26,6 @@ def get_cli_command(
         str:
         Returns the full CLI command to download the video.
     """
-    # TODO: shlex.quote() - #15
     if audio_only:
         args = (
             "-f bestaudio "
@@ -58,9 +57,7 @@ def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> boo
         cmd = get_cli_command(url=url, root_cmd=yt_dlp, destination=destination, audio_only=audio_only)
         LOGGER.debug("Running the command: %s", cmd)
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, shell=True, check=True, timeout=config.env.max_timeout
-            )
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=config.env.max_timeout)
         except (subprocess.SubprocessError, subprocess.CalledProcessError) as error:
             LOGGER.warning(error)
             return False

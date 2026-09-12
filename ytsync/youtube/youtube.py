@@ -2,6 +2,7 @@ import functools
 import logging
 import pathlib
 import posixpath
+import re
 import time
 from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
@@ -55,15 +56,15 @@ async def queue_download(
     ydl, info = squire.get_info(url)
     name = info.get("title", None) or None
     assert name and isinstance(name, str), "Failed to extract the title"
-    # TODO: 'name' must be sanitized to avoid issues with special characters in file paths - #11
+    subdir = re.sub(r'[<>:"/\\|?*]', "_", name)
     if source_system.audio_only:
-        destination = config.env.audio_dir.joinpath(name)
+        destination = config.env.audio_dir.joinpath(subdir)
     else:
-        destination = config.env.video_dir.joinpath(name)
+        destination = config.env.video_dir.joinpath(subdir)
     destination.mkdir(exist_ok=True, parents=True)
 
     preprocessed = squire.get_missing_entries(url, ydl, info, destination, source_system)
-    intended_path = posixpath.join(transfer.rsync.remote_path, name) if transfer.rsync.is_enabled else destination
+    intended_path = posixpath.join(transfer.rsync.remote_path, subdir) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
         assert preprocessed.preflight, "Something went wrong! Neither URLs, nor preflight status were received!"
         if source_system.api:
