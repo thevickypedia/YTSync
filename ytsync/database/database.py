@@ -94,8 +94,8 @@ class Database:
             primary_key: Primary key.
         """
         if primary_key:
-            # Ensure the column exists by name
-            assert primary_key in columns, f"{primary_key!r} should be one of the columns"
+            if primary_key not in columns:
+                raise ValueError(f"{primary_key!r} should be one of the columns")
             # Rebuild the column definition with PRIMARY KEY
             columns = [f"{col} PRIMARY KEY" if col == primary_key else col for col in columns]
         with self.connection as connection:

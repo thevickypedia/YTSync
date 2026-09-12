@@ -98,7 +98,10 @@ def insert(
             )
         else:
             _, yt_info = squire.get_info(playlist_url)
-            assert all((yt_info, yt_info.get("title"))), "Failed to get the playlist title"
+            if all((yt_info, yt_info.get("title"))):
+                title = yt_info["title"]
+            else:
+                raise ValueError(f"Failed to get the playlist title for {playlist_url!r}")
             title = yt_info["title"]
         cursor.execute(
             "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);",
@@ -173,7 +176,15 @@ async def sync(
         )
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
         # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
-        assert len(tracker) <= 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+        if len(tracker) > 1:
+            LOGGER.warning("Multiple trackers found with the same URL")
+            LOGGER.warning(tracker)
+            callback(
+                chat_id=chat.id,
+                message_id=chat.message_id,
+                response=f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same URL, please check the logs.",
+            )
+            return
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
         await asyncio.wait_for(
@@ -222,7 +233,8 @@ def delete(
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
     elif url and (tracker := [tracker for tracker in trackers if str(tracker.url).rstrip("/") == url.rstrip("/")]):
         # NOTE: This should never happen since insertion deletes and adds a new entry if URL and chat_id match
-        assert len(tracker) <= 1, "Multiple trackers found with the same URL, please reach out to the Administrator."
+        if len(tracker) > 1:
+            return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same URL, please check the logs."
     elif trackers:
         if raise_for_exception:
             raise HTTPException(

@@ -381,7 +381,9 @@ async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None
         chat: Required section of the payload as a Chat object.
         data_class: Required section of the payload as a Voice object.
     """
-    assert data_class, "Requested to process voice, but no voice note was received!"
+    if not data_class:
+        LOGGER.warning("Requested to process voice, but no voice note was received!")
+        raise ValueError("No document received")
     reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
 
 
@@ -394,7 +396,9 @@ async def process_document(
         chat: Required section of the payload as a Chat object.
         data_class: Required section of the payload as a Document object.
     """
-    assert data_class, "Requested to process document, but no document was received!"
+    if not data_class:
+        LOGGER.warning("Requested to process document, but no document was received!")
+        raise ValueError("No document received")
     reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
@@ -461,8 +465,7 @@ async def executor(command: str, chat: settings.Chat) -> None:
         chat: Required section of the payload as a Chat object.
     """
     LOGGER.info("Request: %s", command)
-    # TODO: Replace all assert statements with proper error handling with if/else - #19
-    #   Write unit tests and code coverage pipeline in GHA
+    # TODO: Write unit tests and code coverage pipeline in GHA
     if command.startswith((Commands.audio, Commands.video)):
         if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
             try:

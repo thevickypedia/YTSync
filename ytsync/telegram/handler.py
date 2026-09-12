@@ -73,11 +73,14 @@ def webhook_is_usable() -> bool:
     try:
         existing_webhook = webhook.get_webhook() or {}
         result = existing_webhook.get("result", {}) or {}
-        assert isinstance(result, dict), f"Invalid result object received: {result}"
-    except (AssertionError, requests.RequestException) as error:
+    except requests.RequestException as error:
         LOGGER.warning(error)
         return False
-    LOGGER.debug(result)
+    if result and isinstance(result, dict):
+        LOGGER.debug(result)
+    else:
+        LOGGER.error("Invalid result object received: %s", result)
+        return False
     # This can occur from a previously set webhook that has been deleted from env vars
     if url := result.get("url"):
         config.env.bot_webhook = HttpUrl(str(url))

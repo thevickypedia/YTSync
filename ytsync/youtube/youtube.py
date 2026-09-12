@@ -55,7 +55,9 @@ async def queue_download(
     LOGGER.debug("Input URL: %s", url)
     ydl, info = squire.get_info(url)
     name = info.get("title", None) or None
-    assert name and isinstance(name, str), "Failed to extract the title"
+    if not name:
+        LOGGER.error("'title' not found in info dict: %s", info)
+        raise ValueError("Failed to extract the title from the URL")
     subdir = re.sub(r'[<>:"/\\|?*]', "_", name)
     if source_system.audio_only:
         destination = config.env.audio_dir.joinpath(subdir)
@@ -66,7 +68,8 @@ async def queue_download(
     preprocessed = squire.get_missing_entries(url, ydl, info, destination, source_system)
     intended_path = posixpath.join(transfer.rsync.remote_path, subdir) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
-        assert preprocessed.preflight, "Something went wrong! Neither URLs, nor preflight status were received!"
+        if not preprocessed.preflight:
+            raise ValueError("Something went wrong! Neither URLs, nor preflight status were received!")
         if source_system.api:
             return f"{name!r} with {preprocessed.preflight.total} file(s) is already available at: {intended_path}"
         callback(
