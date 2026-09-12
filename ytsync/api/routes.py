@@ -252,10 +252,12 @@ async def list_checkpoints(
         }
     """
     auth.validate(apikey, False)
-    # TODO: One bad entry can break the entire response - #14
     return {
         parent.name: [
-            int(re.search(r"\d+", child.name).group()) for child in parent.iterdir() if child.suffix == ".json"
+            int(match.group())
+            for child in parent.iterdir()
+            if child.suffix == ".json"
+            if (match := re.search(r"\d+", child.name))
         ]
         for parent in config.checkpoints_dir.iterdir()
         if parent.is_dir() and config.is_valid_checkpoint_dir(parent.name)
@@ -274,8 +276,17 @@ async def get_checkpoint(
         ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
-    # TODO: Fix unsanitized path segments - #16
     auth.validate(apikey, False)
+    if not timestamp.isdigit():
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST.real,
+            detail=f"Invalid checkpoint timestamp: {timestamp!r}",
+        )
+    if not config.is_valid_checkpoint_dir(datestamp):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND.real,
+            detail=f"Checkpoint directory {datestamp} not found",
+        )
     target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
     if not target.exists():
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=f"Checkpoint {target.name} not found")
