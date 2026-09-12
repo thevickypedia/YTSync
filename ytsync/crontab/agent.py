@@ -6,7 +6,7 @@ from datetime import datetime
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config
+from ytsync.modules import checkpoint, config, exceptions
 from ytsync.telegram import bot, handler, poll
 from ytsync.youtube import youtube
 
@@ -68,37 +68,54 @@ def create_task(coro: Coroutine, name: str) -> asyncio.Task:
     return task
 
 
+async def single_task() -> None:
+    """Executes a single iteration of the main loop.
+
+    Polls for incoming messages, read the database and execute the YouTube sync for the requested URL.
+    """
+    global LAST_CHECK
+    # MARK: Poll for telegram messages
+    if config.telegram_beat.poll_for_messages:
+        create_task(poll.executor(), name="poll_executor")
+    if config.telegram_beat.restart_loop:
+        LOGGER.debug("Restarting loop...")
+        # Avoid being called again when init is in progress
+        config.telegram_beat.restart_loop = False
+        create_task(handler.init(), name="poll_init")
+    now = datetime.now().replace(second=0, microsecond=0)
+    if now == LAST_CHECK:
+        return
+    LAST_CHECK = now
+    for track in tracker.get():
+        try:
+            cron_expr = expression.CronExpression(track.schedule.value)
+        except exceptions.InvalidArgument as error:
+            LOGGER.error("Invalid cron expression for '%s': %s", track.name, error)
+            tracker.delete(name=track.name, url=track.url, chat_id=track.chat_id, raise_for_exception=False)
+            continue
+        # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
+        # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly
+        if cron_expr.check_trigger():
+            LOGGER.info("Executing sync for '%s' with '%s'", track.name, track.url)
+            # Background task; so no timeout required
+            create_task(
+                youtube.queue_download(
+                    url=track.url,
+                    source_system=checkpoint.SourceSystem(scheduled=track.schedule),
+                    callback=bot.reply_to,
+                    chat_id=track.chat_id,
+                    schedule=track.schedule,
+                ),
+                name=track.name,
+            )
+
+
 async def executor() -> None:
     """Executes in a loop to read the database and execute the YouTube sync for the requested URL."""
-    global LAST_CHECK
     create_task(handler.init(), name="poll_init")
     while True:
         await asyncio.sleep(5)
-        # MARK: Poll for telegram messages
-        if config.telegram_beat.poll_for_messages:
-            create_task(poll.executor(), name="poll_executor")
-        if config.telegram_beat.restart_loop:
-            LOGGER.debug("Restarting loop...")
-            # Avoid being called again when init is in progress
-            config.telegram_beat.restart_loop = False
-            create_task(handler.init(), name="poll_init")
-        now = datetime.now().replace(second=0, microsecond=0)
-        if now == LAST_CHECK:
-            continue
-        LAST_CHECK = now
-        for track in tracker.get():
-            # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
-            # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly
-            if expression.CronExpression(track.schedule.value).check_trigger():
-                LOGGER.info("Executing sync for '%s' with '%s'", track.name, track.url)
-                # Background task; so no timeout required
-                create_task(
-                    youtube.queue_download(
-                        url=track.url,
-                        source_system=checkpoint.SourceSystem(scheduled=track.schedule),
-                        callback=bot.reply_to,
-                        chat_id=track.chat_id,
-                        schedule=track.schedule,
-                    ),
-                    name=track.name,
-                )
+        try:
+            await single_task()
+        except Exception as error:
+            LOGGER.exception(error)

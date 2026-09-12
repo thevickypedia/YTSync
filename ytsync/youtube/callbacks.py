@@ -93,7 +93,7 @@ def process_callback(
         stats_msg = f"Downloaded: {len(result.downloaded)} / {result.preflight.total}"
         if result.download_failed:
             joined = "\n".join(f"• {item}" for item in result.download_failed)
-            stats_msg += "Download Failed: " + f"\n{joined}"
+            stats_msg += "\n\nDownload Failed: " + f"\n{joined}"
         response += f"\n\n*Download/Transfer result:*\n{stats_msg}"
     if transfer.rsync.is_enabled:
         total = result.transferred + result.transfer_failed

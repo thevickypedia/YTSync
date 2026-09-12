@@ -58,13 +58,11 @@ def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> boo
         cmd = get_cli_command(url=url, root_cmd=yt_dlp, destination=destination, audio_only=audio_only)
         LOGGER.debug("Running the command: %s", cmd)
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, shell=True, check=True, timeout=config.env.max_timeout)
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, shell=True, check=True, timeout=config.env.max_timeout
+            )
         except (subprocess.SubprocessError, subprocess.CalledProcessError) as error:
-            if isinstance(error, subprocess.CalledProcessError):
-                result = error.output.decode(encoding="UTF-8").strip()
-                LOGGER.warning("[%d]: %s", error.returncode, result)
-            else:
-                LOGGER.warning(error)
+            LOGGER.warning(error)
             return False
         for output in result.stdout.splitlines():
             LOGGER.debug(output)

@@ -29,6 +29,22 @@ def log_config() -> None:
     LOGGER.debug("***************************** CONFIGURATION END *****************************")
 
 
+def bg_task_callback(task: asyncio.Task) -> None:
+    """Callback for background tasks.
+
+    Args:
+        task: Takes the async task object as a parameter.
+    """
+    name = task.get_name()
+    try:
+        result = task.result()
+        LOGGER.info("Background task [%s] completed successfully", name)
+        LOGGER.info(result)
+    except Exception as error:
+        LOGGER.exception(error)
+        LOGGER.error("Background task [%s] failed to finish", name)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
@@ -36,8 +52,8 @@ async def lifespan(_: FastAPI):
     if LOGGER.isEnabledFor(logging.DEBUG):
         log_config()
     LOGGER.info("Initiating background tasks...")
-    # TODO: Add call back for 'bg_task' and exception handlers within 'agent.executor' for every hop - #17
     bg_task = asyncio.create_task(agent.executor())
+    bg_task.add_done_callback(bg_task_callback)
     yield
     # Stop the background task
     bg_task.cancel()
