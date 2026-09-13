@@ -10,7 +10,7 @@ import logging
 import secrets
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Dict, List, Tuple
 
@@ -20,7 +20,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
 from ytsync.modules import checkpoint, config, exceptions, settings
-from ytsync.youtube import youtube
+from ytsync.youtube import queue, youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
@@ -403,10 +403,11 @@ async def process_document(
 
 
 def get_process_pool() -> str:
-    """Get the status text for the process pool."""
-    pending = youtube.processor.status()
-    txt = f"Total downloads submitted: {youtube.processor.total_submissions}"
-    if pending is not None:
+    """Get the status text for the queued system."""
+    total = list(queue.get())
+    # TODO: Include an option in 'get()' to only parse pending items but still get the total count
+    txt = f"Total downloads submitted: {len(total)}"
+    if pending := [t for t in total if datetime.fromisoformat(t.scheduled_time) > datetime.now(timezone.utc)]:
         txt += f"\nPending downloads: {pending}"
     return txt
 

@@ -10,7 +10,7 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
-from ytsync.youtube import cli, hooks
+from ytsync.youtube import cli, hooks, squire
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -74,13 +74,8 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
     return options
 
 
-def download(
-    checkpoint_stats: checkpoint.Checkpoint,
-    name: str,
-    url_file_map: Dict[str, pathlib.Path],
-    total_files: int | None,
-    destination: pathlib.Path,
-    audio_only: bool,
+async def download(
+    checkpoint_stats: checkpoint.Checkpoint, preprocess_stats: squire.PreProcessor
 ) -> checkpoint.Checkpoint:
     """Downloads the content from a given url and returns download/transfer statistics."""
     start = time.time()
@@ -90,6 +85,11 @@ def download(
         "download_failed": [],
     }
 
+    name = checkpoint_stats.name
+    url_file_map = preprocess_stats.url_file_map
+    total_files = preprocess_stats.total_files or len(preprocess_stats.url_file_map)
+    destination = checkpoint_stats.initial_destination
+    audio_only = checkpoint_stats.source_system.audio_only
     options = generate_params(audio_only=audio_only, destination=destination, stats=stats)
     transfer_pool = None
     if transfer.rsync.is_enabled:

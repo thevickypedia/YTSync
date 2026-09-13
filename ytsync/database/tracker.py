@@ -212,7 +212,7 @@ async def sync(
 def delete(
     name: str | None = None,
     url: str | None = None,
-    chat_id: int = 0,
+    chat_id: int | None = None,
     raise_for_exception: bool = False,
 ) -> str | int:
     """Delete a tracker by its 1-based status index.
@@ -257,7 +257,7 @@ def delete(
             "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
             (
                 url,
-                chat_id,
+                chat_id or 0,
             ),
         )
         connection.commit()

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -5,10 +6,11 @@ import pathlib
 import time
 from concurrent.futures import Future
 from datetime import datetime
-from typing import Callable, Dict, List
+from typing import Dict, List
 
 from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
+from ytsync.telegram import bot
 from ytsync.youtube import squire
 
 LOGGER = logging.getLogger("ytsync")
@@ -45,9 +47,8 @@ def transfer_callback(
 
 
 def process_callback(
-    future: Future,
+    task: asyncio.Task,
     name: str,
-    callback: Callable | None = None,
     chat_id: int | None = None,
     message_id: int | None = None,
     schedule: config.AllowedCronSchedule | None = None,
@@ -55,27 +56,26 @@ def process_callback(
     """Callback function triggered when the process finishes.
 
     Args:
-        future: Future object.
+        task: Asynchronous task.
         name: Name assigned to the download content.
-        callback: Callback function. This must always be `bot.reply_to` as a callable object.
         chat_id: Telegram Chat ID.
         message_id: Telegram message ID.
         schedule: Cron schedule enum to indicate a scheduled run.
     """
     if schedule:
         schedule = schedule.value.lstrip("@").capitalize()
-    if error := future.exception():
-        if callback and chat_id:
+    if error := task.exception():
+        if chat_id:
             # NOTE: callback function must always be 'bot.reply_to' with an explicit 'message_id' - 'None' or otherwise
             if schedule:
                 txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
             else:
                 txt = f"❌ *Download failed for {name!r}*\n\n{error}"
-            callback(chat_id=chat_id, message_id=message_id, response=txt)
+            bot.reply_to(chat_id=chat_id, message_id=message_id, response=txt)
         LOGGER.error("Process failed for %s", name)
         return
 
-    result: checkpoint.Checkpoint = future.result()
+    result: checkpoint.Checkpoint = task.result()
     if schedule:
         response = (
             f"✅ *{schedule} download completed for {result.name!r}*\n\n"
@@ -108,8 +108,8 @@ def process_callback(
     final_checkpoint = result.model_dump(mode="json")
     save_checkpoint(final_checkpoint)
     LOGGER.info(response)
-    if callback and chat_id:
-        callback(
+    if chat_id:
+        bot.reply_to(
             chat_id=chat_id,
             message_id=message_id,
             response=response,

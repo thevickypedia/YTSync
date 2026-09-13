@@ -1,46 +1,17 @@
-import functools
 import logging
 import pathlib
 import posixpath
 import re
-import time
-from concurrent.futures import Future
 from datetime import datetime, timedelta, timezone
-from typing import Callable, List
+from typing import Callable
 
-from pydantic import BaseModel, HttpUrl
+from pydantic import HttpUrl
 
 from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
-from ytsync.youtube import callbacks, downloader, process, squire
+from ytsync.youtube import queue, squire
 
 LOGGER = logging.getLogger("ytsync")
-processor = process.Processor(
-    cooldown_interval=config.env.cooldown_interval,
-    buffer=config.env.next_buffer,
-    delayed_start=config.env.delayed_start,
-    tester_mode=config.env.download_tester,
-)
-
-
-class Controller(BaseModel):
-    """State controller for processes and transfer pools.
-
-    >>> Controller
-
-    """
-
-    name: str
-    future: Future
-
-    class Config:
-        """Allow arbitrary types."""
-
-        arbitrary_types_allowed = True
-
-
-# TODO: Remove the concept of controllers - #10 (achieved by #9)
-controllers: List[Controller] = []
 
 
 async def queue_download(
@@ -51,11 +22,11 @@ async def queue_download(
     callback: Callable | None = None,
     schedule: config.AllowedCronSchedule | None = None,
 ) -> str | None:
-    """Queue an input url to download in the process pool."""
+    """Queue an input url to download per the next available time."""
     LOGGER.debug("Input URL: %s", url)
     ydl, info = squire.get_info(url)
     name = info.get("title", None) or None
-    if not name:
+    if not name or not isinstance(name, str):
         LOGGER.error("'title' not found in info dict: %s", info)
         raise ValueError("Failed to extract the title from the URL")
     subdir = re.sub(r'[<>:"/\\|?*]', "_", name)
@@ -92,50 +63,24 @@ async def queue_download(
         preflight=preprocessed.preflight,
     )
 
-    future, scheduled_time = processor.submit(
-        identifier=name,
-        function=downloader.download,
-        **dict(
-            checkpoint_stats=checkpoint_stats,
-            name=name,
-            url_file_map=preprocessed.url_file_map,
-            total_files=preprocessed.total_files,
-            destination=destination,
-            audio_only=source_system.audio_only,
-        ),
-    )
-
-    wrapped_callback = functools.partial(
-        callbacks.process_callback,
+    cooldown = queue.submit(
         name=name,
-        callback=callback,
-        chat_id=chat_id,
-        message_id=message_id,
-        schedule=schedule,
+        checkpoint_stats=checkpoint_stats,
+        preprocessor_stats=preprocessed,
     )
 
-    future.add_done_callback(wrapped_callback)
-
-    controllers.append(
-        Controller(
-            name=name,
-            future=future,
-        )
-    )
-
-    scheduled_time = max(0, scheduled_time - time.monotonic())
+    scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
     if preprocessed.total_files is None:
         parsed_len = " "
     else:
         parsed_len = f" - {preprocessed.total_files} file(s) "
-    if scheduled_time == 0:
+    if cooldown == 0:
         if source_system.api:
             txt = f"{name!r}{parsed_len}has been queued for download."
         else:
             txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}queued for download."
     else:
-        future_utc = datetime.now(timezone.utc) + timedelta(seconds=scheduled_time)
-        zoned_time = future_utc.astimezone(config.env.tz)
+        zoned_time = scheduled_time.astimezone(config.env.tz)
         t_string = zoned_time.strftime("%a %b %d %H:%M %Y %Z")
         if source_system.api:
             txt = f"{name!r}{parsed_len}will be queued for download at {t_string!r}"

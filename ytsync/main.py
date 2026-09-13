@@ -57,8 +57,6 @@ async def lifespan(_: FastAPI):
     yield
     # Stop the background task
     bg_task.cancel()
-    # Clear the process pool
-    agent.shutdown_event()
     LOGGER.info("Shutting down API server.")
 
 
