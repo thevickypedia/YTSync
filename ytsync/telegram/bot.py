@@ -10,7 +10,7 @@ import logging
 import secrets
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import StrEnum
 from typing import Dict, List, Tuple
 
@@ -402,13 +402,12 @@ async def process_document(
     reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
-def get_process_pool() -> str:
+def get_queue_status() -> str:
     """Get the status text for the queued system."""
-    total = list(queue.get())
-    # TODO: Include an option in 'get()' to only parse pending items but still get the total count
-    txt = f"Total downloads submitted: {len(total)}"
-    if pending := [t for t in total if datetime.fromisoformat(t.scheduled_time) > datetime.now(timezone.utc)]:
-        txt += f"\nPending downloads: {pending}"
+    status = queue.count()
+    txt = f"Total downloads submitted: {status.total}"
+    if status.pending:
+        txt += f"\nPending downloads: {status.pending}"
     return txt
 
 
@@ -448,7 +447,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
-        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n{txt}\n\n{get_process_pool()}"
+        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n{txt}\n\n{get_queue_status()}"
         reply_to(chat.id, chat.message_id, final)
         return
     try:

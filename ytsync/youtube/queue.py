@@ -132,18 +132,18 @@ def submit(
     now = datetime.now(timezone.utc)
 
     if config.env.download_tester:
-        scheduled_time = now
+        scheduled_time = now + timedelta(seconds=config.env.next_buffer)
         LOGGER.info("Submitting %s now; running in tester mode", name)
     elif not q_count.total:
         if config.env.delayed_start:
-            scheduled_time = now + timedelta(seconds=config.env.cooldown_interval)
+            scheduled_time = now + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
             LOGGER.info(
                 "Submitting %s after %.2fs of delayed start",
                 name,
                 config.env.cooldown_interval,
             )
         else:
-            scheduled_time = now
+            scheduled_time = now + timedelta(seconds=config.env.next_buffer)
             LOGGER.info("Submitting %s now", name)
     else:
         last_queue = latest_timestamp()
