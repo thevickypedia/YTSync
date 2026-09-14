@@ -1,9 +1,7 @@
 import json
 import logging
-import os
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
-from typing import List
 
 from pydantic import BaseModel
 
@@ -29,38 +27,89 @@ class Queue(BaseModel):
     preprocessor: squire.PreProcessor
 
 
-def get() -> Generator[Queue, None, None]:
-    """Get all the existing queues.
+class QueueCount(BaseModel):
+    """Queue model with checkpoint and preprocessor objects.
+
+    >>> QueueCount
+
+    """
+
+    total: int
+    pending: int
+
+
+def count() -> QueueCount:
+    """Count the number of entries in the queue.
+
+    Returns:
+        QueueCount:
+        Get the Queue count of total and pending items.
+    """
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
+        now = datetime.now(tz=timezone.utc).timestamp()
+        pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
+        return QueueCount(total=total, pending=pending)
+
+
+def get(include_past: bool = False) -> Generator[Queue]:
+    """Get queues stored in the database.
 
     Yields:
         Queue:
-        Yields the Queue object for each entry in the queue file.
+        Yields a Queue object for each entry in the database.
     """
-    # TODO: Switch to a DB - each row as 'json_string = json.dumps(row)'
-    if not os.path.isfile(QUEUE_SOURCE):
-        return
-    with open(QUEUE_SOURCE) as file:
-        data_list = json.load(file)
-    for q in data_list:
-        yield Queue(**q)
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        if include_past:
+            data = cursor.execute("SELECT data FROM queue").fetchall()
+        else:
+            now = datetime.now(tz=timezone.utc).timestamp()
+            data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
+    for row in data:
+        if row:
+            yield Queue(**json.loads(row[0]))
 
 
-def put(queues: List[Queue]) -> None:
-    """Put queues into the queue file.
+def insert(queue: Queue) -> None:
+    """Handles tracker for a playlist URL.
 
     Args:
-        queues: List of queues to persist.
+        queue: Takes a Queue object as an argument.
     """
-    queues_json = [queue.model_dump(mode="json") for queue in queues]
-    with open(QUEUE_SOURCE, "w") as file:
-        json.dump(queues_json, file, indent=2)
+    timestamp = datetime.fromisoformat(queue.scheduled_time).timestamp()
+    data = queue.model_dump_json()
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO queue (timestamp, data) VALUES (?,?);",
+            (
+                timestamp,
+                data,
+            ),
+        )
+        connection.commit()
+
+
+def latest_timestamp() -> Queue:
+    """Get the latest Queue based on the timestamp in the table.
+
+    Returns:
+        Queue:
+        Retrieves a Queue object for the latest timestamp.
+    """
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        latest_data = cursor.execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()[0]
+        return Queue(**json.loads(latest_data))
 
 
 def submit(
     name: str,
     checkpoint_stats: checkpoint.Checkpoint,
     preprocessor_stats: squire.PreProcessor,
-) -> int:
+) -> int | float:
     """Submit a new queue entry.
 
     See Also:
@@ -79,13 +128,13 @@ def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
-    queues = list(get())
+    q_count = count()
     now = datetime.now(timezone.utc)
 
     if config.env.download_tester:
         scheduled_time = now
         LOGGER.info("Submitting %s now; running in tester mode", name)
-    elif not queues:
+    elif not q_count.total:
         if config.env.delayed_start:
             scheduled_time = now + timedelta(seconds=config.env.cooldown_interval)
             LOGGER.info(
@@ -97,10 +146,7 @@ def submit(
             scheduled_time = now
             LOGGER.info("Submitting %s now", name)
     else:
-        last_queue = max(
-            queues,
-            key=lambda queue: datetime.fromisoformat(queue.scheduled_time),
-        )
+        last_queue = latest_timestamp()
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
         scheduled_time = last_scheduled_time + timedelta(
             seconds=(config.env.cooldown_interval + config.env.next_buffer)
@@ -112,12 +158,12 @@ def submit(
             max(0, (scheduled_time - now).total_seconds()),
         )
     cooldown = max(0, (scheduled_time - now).total_seconds())
-    queues.append(
+    LOGGER.info("Final cooldown for %s: %d", name, cooldown)
+    insert(
         Queue(
             scheduled_time=scheduled_time.isoformat(),
             checkpoint=checkpoint_stats,
             preprocessor=preprocessor_stats,
         )
     )
-    put(queues)
     return cooldown

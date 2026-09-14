@@ -169,6 +169,7 @@ env.audio_dir.mkdir(exist_ok=True, parents=True)
 env.video_dir.mkdir(exist_ok=True, parents=True)
 db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
+db.create_table(table_name="queue", columns=["timestamp", "data"], primary_key="timestamp")
 if not env.apikey:
     env.apikey = env.bot_token
 checkpoints_dir = env.data_dir / "checkpoints"
