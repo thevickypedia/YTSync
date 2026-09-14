@@ -133,32 +133,35 @@ def submit(
 
     if config.env.download_tester:
         scheduled_time = now + timedelta(seconds=config.env.next_buffer)
-        LOGGER.info("Submitting %s now; running in tester mode", name)
+        LOGGER.info(
+            "Submitting %s at %s; running in tester mode",
+            name,
+            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+        )
     elif not q_count.total:
         if config.env.delayed_start:
             scheduled_time = now + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
             LOGGER.info(
-                "Submitting %s after %.2fs of delayed start",
+                "Submitting %s at: %s",
                 name,
-                config.env.cooldown_interval,
+                scheduled_time.astimezone(tz=config.env.tz).isoformat(),
             )
         else:
             scheduled_time = now + timedelta(seconds=config.env.next_buffer)
-            LOGGER.info("Submitting %s now", name)
+            LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     else:
         last_queue = latest_timestamp()
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
-        scheduled_time = last_scheduled_time + timedelta(
-            seconds=(config.env.cooldown_interval + config.env.next_buffer)
-        )
+        # Out of last_scheduled_time and now; pick the most recent one
+        base_time = max(now, last_scheduled_time)
+        scheduled_time = base_time + timedelta(seconds=(config.env.cooldown_interval + config.env.next_buffer))
         LOGGER.info(
-            "Submitting %s for %s; %.2fs remaining cooldown",
+            "Submitting %s at: %s",
             name,
-            scheduled_time.isoformat(),
-            max(0, (scheduled_time - now).total_seconds()),
+            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
         )
     cooldown = max(0, (scheduled_time - now).total_seconds())
-    LOGGER.info("Final cooldown for %s: %d", name, cooldown)
+    LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
     insert(
         Queue(
             scheduled_time=scheduled_time.isoformat(),
