@@ -40,6 +40,8 @@ def bg_task_callback(task: asyncio.Task) -> None:
         result = task.result()
         LOGGER.info("Background task [%s] completed successfully", name)
         LOGGER.info(result)
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        LOGGER.debug("Terminated due to event cancellation.")
     except Exception as error:
         LOGGER.exception(error)
         LOGGER.error("Background task [%s] failed to finish", name)

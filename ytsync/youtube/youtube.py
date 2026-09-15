@@ -3,7 +3,6 @@ import pathlib
 import posixpath
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Callable
 
 from pydantic import HttpUrl
 
@@ -17,11 +16,8 @@ LOGGER = logging.getLogger("ytsync")
 async def queue_download(
     url: HttpUrl,
     source_system: checkpoint.SourceSystem,
-    chat_id: int | None = None,
-    message_id: int | None = None,
-    callback: Callable | None = None,
-    schedule: config.AllowedCronSchedule | None = None,
-) -> str | None:
+    cron_schedule: config.AllowedCronSchedule | None = None,
+) -> str:
     """Queue an input url to download per the next available time."""
     LOGGER.debug("Input URL: %s", url)
     ydl, info = squire.get_info(url)
@@ -43,14 +39,11 @@ async def queue_download(
             raise ValueError("Something went wrong! Neither URLs, nor preflight status were received!")
         if source_system.api:
             return f"{name!r} with {preprocessed.preflight.total} file(s) is already available at: {intended_path}"
-        callback(
-            chat_id=chat_id,
-            message_id=message_id,
-            response="ℹ️ *Already available*\n\n"
+        return (
+            "ℹ️ *Already available*\n\n"
             f"*{name}* with {preprocessed.preflight.total or 1} file(s) is already available at:\n"
-            f"`{intended_path}`",
+            f"`{intended_path}`"
         )
-        return None
 
     checkpoint_stats = checkpoint.Checkpoint(
         source_system=source_system,
@@ -64,9 +57,7 @@ async def queue_download(
     )
 
     cooldown = queue.submit(
-        name=name,
-        checkpoint_stats=checkpoint_stats,
-        preprocessor_stats=preprocessed,
+        name=name, checkpoint_stats=checkpoint_stats, preprocessor_stats=preprocessed, cron_schedule=cron_schedule
     )
 
     scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
@@ -87,17 +78,9 @@ async def queue_download(
         else:
             txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}" f"will be queued for download at {t_string}"
 
-    # Add a text block about callback notification when 'chat_id' is provided
-    if chat_id:
+    # Add a text block about callback notification when 'source_system' is 'telegram'
+    if source_system.telegram:
         spacer = " " if source_system.api else "\n\n"
-        txt += f"{spacer}You will receive a notification to {chat_id!r} when the process completes."
+        txt += f"{spacer}You will receive a notification to {source_system.telegram.id!r} when the process completes."
 
-    if source_system.api:
-        return txt
-
-    # Skip start notification for scheduled runs to avoid too much noise
-    if schedule:
-        LOGGER.info(txt)
-    else:
-        callback(chat_id=chat_id, message_id=message_id, response=txt)
-    return None
+    return txt

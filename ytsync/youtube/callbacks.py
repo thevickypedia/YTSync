@@ -11,7 +11,7 @@ from typing import Dict, List
 from ytsync.modules import checkpoint, config
 from ytsync.remote import transfer
 from ytsync.telegram import bot
-from ytsync.youtube import squire
+from ytsync.youtube import queue, squire
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -48,30 +48,31 @@ def transfer_callback(
 
 def process_callback(
     task: asyncio.Task,
-    name: str,
-    chat_id: int | None = None,
-    message_id: int | None = None,
-    schedule: config.AllowedCronSchedule | None = None,
+    payload: queue.Queue,
 ) -> None:
     """Callback function triggered when the process finishes.
 
     Args:
         task: Asynchronous task.
-        name: Name assigned to the download content.
-        chat_id: Telegram Chat ID.
-        message_id: Telegram message ID.
-        schedule: Cron schedule enum to indicate a scheduled run.
+        payload: Queue object.
     """
+    name = payload.checkpoint.name
+    if tele := payload.checkpoint.source_system.telegram:
+        chat_id = tele.id
+        message_id = tele.message_id
+    else:
+        chat_id = message_id = None
+    schedule = payload.cron_schedule
+
     if schedule:
         schedule = schedule.value.lstrip("@").capitalize()
     if error := task.exception():
         if chat_id:
-            # NOTE: callback function must always be 'bot.reply_to' with an explicit 'message_id' - 'None' or otherwise
             if schedule:
                 txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
             else:
                 txt = f"❌ *Download failed for {name!r}*\n\n{error}"
-            bot.reply_to(chat_id=chat_id, message_id=message_id, response=txt)
+            bot.synchronous_message(chat_id=chat_id, message_id=message_id, response=txt)
         LOGGER.error("Process failed for %s", name)
         return
 
@@ -109,7 +110,7 @@ def process_callback(
     save_checkpoint(final_checkpoint)
     LOGGER.info(response)
     if chat_id:
-        bot.reply_to(
+        bot.synchronous_message(
             chat_id=chat_id,
             message_id=message_id,
             response=response,

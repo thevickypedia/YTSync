@@ -42,6 +42,7 @@ class TelegramBeat:
     offset: int = 0
     failed_connections: int = 0
 
+    polling_in_progress: bool = False
     poll_for_messages: bool = False
     restart_loop: bool = False
 
@@ -116,7 +117,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # 'next_buffer' with # of seconds is used to simulate an actual download duration
     next_buffer: PositiveInt = Field(60, ge=30, le=300)  # 30s to 5m; default: 60s
     # 'cooldown_interval' with # of seconds is used to propagate delay between each download
-    cooldown_interval: PositiveInt = Field(300, ge=30, le=10_800)  # 30s to 3h; default: 5m
+    cooldown_interval: PositiveInt = Field(300, ge=60, le=10_800)  # 60s to 3h; default: 5m
 
     # Remote config
     remote_host: str | None = None

@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections.abc import Generator
 from http import HTTPStatus
-from typing import Callable, List, Tuple
+from typing import List, Tuple
 
 from fastapi import HTTPException
 from pydantic import BaseModel, HttpUrl
@@ -72,6 +72,7 @@ def insert(
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
+    playlist_url = str(playlist_url)
     with config.db.connection as connection:
         cursor = connection.cursor()
         # Selecting with 'chat_id' prevents cross-user access OR data corruption
@@ -137,16 +138,13 @@ def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     return txt
 
 
-async def sync(
-    chat: settings.Chat, name: str | None = None, url: str | None = None, callback: Callable | None = None
-) -> None:
+async def sync(chat: settings.Chat, name: str | None = None, url: str | None = None) -> str:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
     Args:
         name: Name of the playlist.
         url: URL for the playlist.
         chat: Chat object to send a notification as a callback.
-        callback: Callback function call once the task has completed.
 
     Returns:
         str:
@@ -156,21 +154,13 @@ async def sync(
     source_system = checkpoint.SourceSystem(telegram=chat)
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
-            callback(
-                chat_id=chat.id,
-                message_id=chat.message_id,
-                response=f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL",
-            )
-            return
+            return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, tracker.url)
-        await asyncio.wait_for(
+        return await asyncio.wait_for(
             youtube.queue_download(
                 url=tracker.url,
                 source_system=source_system,
-                chat_id=chat.id,
-                message_id=chat.message_id,
-                callback=callback,
             ),
             timeout=config.env.response_timeout,
         )
@@ -179,34 +169,20 @@ async def sync(
         if len(tracker) > 1:
             LOGGER.warning("Multiple trackers found with the same URL")
             LOGGER.warning(tracker)
-            callback(
-                chat_id=chat.id,
-                message_id=chat.message_id,
-                response=f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same URL, please check the logs.",
-            )
-            return
+            return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same URL, please check the logs."
         tracker = tracker[0]
         LOGGER.info("Executing sync for '%s' with '%s'", tracker.name, url)
-        await asyncio.wait_for(
+        return await asyncio.wait_for(
             youtube.queue_download(
                 url=tracker.url,
                 source_system=source_system,
-                chat_id=chat.id,
-                message_id=chat.message_id,
-                callback=callback,
             ),
             timeout=config.env.response_timeout,
         )
     elif trackers:
-        callback(
-            chat_id=chat.id,
-            message_id=chat.message_id,
-            response=f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}",
-        )
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}"
     else:
-        callback(
-            chat_id=chat.id, message_id=chat.message_id, response="⚠️ *Warning*\n\nNo trackers found on the server."
-        )
+        return "⚠️ *Warning*\n\nNo trackers found on the server."
 
 
 def delete(

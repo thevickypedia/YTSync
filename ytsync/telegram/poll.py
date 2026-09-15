@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-import requests.exceptions
+import httpx
 
 from ytsync.modules import config, exceptions
 from ytsync.telegram import bot, webhook
@@ -46,7 +46,7 @@ async def executor():
         if offset is not None:
             config.telegram_beat.offset = offset
     except exceptions.BotWebhookConflict as error:
-        # At this point, it is be safe to remove the dead webhook
+        # At this point, it is safe to remove the dead webhook
         LOGGER.error(error)
         webhook.delete_webhook()
         await restart_loop(after=1)
@@ -58,18 +58,17 @@ async def executor():
         LOGGER.error("ATTENTION: %s", error)
         await terminate(reason=type(error).__name__)
     except (asyncio.CancelledError, KeyboardInterrupt) as error:
-        if isinstance(error, asyncio.CancelledError):
-            LOGGER.info("Terminated due to event cancellation.")
-        else:
-            LOGGER.exception(error)
+        LOGGER.info("Terminated due to event cancellation.")
         await terminate(reason=type(error).__name__)
     except (exceptions.EgressErrors, Exception) as error:
-        if isinstance(error, requests.exceptions.ReadTimeout):
+        if isinstance(error, httpx.ReadTimeout):
             return
-        LOGGER.error(error)
         config.telegram_beat.failed_connections += 1
         if config.telegram_beat.failed_connections > config.env.max_retries:
+            LOGGER.exception(error)
             LOGGER.critical("ATTENTION::Couldn't recover from connection error. Restarting current process.")
             delay = config.telegram_beat.failed_connections * config.env.backoff_factor
             LOGGER.info("Restarting in %d seconds.", delay)
             await restart_loop(after=delay)
+        else:
+            LOGGER.error(error)

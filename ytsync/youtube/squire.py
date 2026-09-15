@@ -45,12 +45,13 @@ class PreProcessor:
 
 
 def filter_existing(
-    base_url_file_map: Dict[str, pathlib.Path], source_system: checkpoint.SourceSystem | None = None
+    base_url_file_map: Dict[str, pathlib.Path], sfx: str, source_system: checkpoint.SourceSystem | None = None
 ) -> Dict[str, pathlib.Path]:
     """Filter out the existing files from the given URL-file map.
 
     Args:
         base_url_file_map: Base key-value map of URL to filepath.
+        sfx: Suffix to add to the filename mapping.
         source_system: The source system to determine the filtering logic.
 
     Returns:
@@ -60,10 +61,7 @@ def filter_existing(
     if source_system:
         mapper = {}
         for url, destination in base_url_file_map.items():
-            if source_system.audio_only:
-                mapper[url] = destination.joinpath(destination.name).with_suffix(".mp3")
-            else:
-                mapper[url] = destination.joinpath(destination.name).with_suffix(".mp4")
+            mapper[url] = destination.joinpath(destination.name).with_suffix(sfx)
         base_url_file_map = mapper
     # Exist check only apply for 'files', not directories, since the directory will be created if it doesn't exist
     if transfer.rsync.is_enabled:
@@ -146,6 +144,10 @@ def get_missing_entries(
         PreProcessor:
         Returns a PreProcessor object with the URL-file map and preflight information.
     """
+    # FIXME: Downloaded videos are not always mp4
+    #   Hard coding to .mp4 is non-breaking; but it renders exist check useless if the file is a .mkv
+    #   May potentially impact reporting depending on the usage of 'base_url_file_map' [OR] 'url_file_map'
+    sfx = ".mp3" if source_system.audio_only else ".mp4"
     preflight = checkpoint.PreFlight()
     if entries := info.get("entries", []):
         entries = list(entries)
@@ -154,9 +156,10 @@ def get_missing_entries(
     else:
         # No entries found, likely a single video/audio file, no preflight check needed
         LOGGER.debug("No entries found; returning the parent URL as-is")
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}, source_system), preflight=preflight)
+        return PreProcessor(
+            url_file_map=filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
+        )
 
-    sfx = ".mp3" if source_system.audio_only else ".mp4"
     if base_url_file_map := generate_file_map(ydl, entries, destination, sfx):
         # Calculate the number of files for which the filename resolution failed
         preflight.error = len(entries) - len(base_url_file_map)
@@ -166,9 +169,11 @@ def get_missing_entries(
         preflight.error = len(entries)
         LOGGER.debug("Unable to generate URL file map; returning the parent URL as-is")
         LOGGER.debug(preflight.model_dump(mode="json"))
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}, source_system), preflight=preflight)
+        return PreProcessor(
+            url_file_map=filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
+        )
 
-    if url_file_map := filter_existing(base_url_file_map):
+    if url_file_map := filter_existing(base_url_file_map, sfx):
         preflight.unavailable = len(url_file_map)
         preflight.available = len(base_url_file_map) - preflight.unavailable
     else:
@@ -187,12 +192,31 @@ def get_missing_entries(
         LOGGER.info(
             "Error count %d EXCEEDS the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
         )
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}), preflight=preflight)
+        return PreProcessor(url_file_map=filter_existing({str(url): destination}, sfx), preflight=preflight)
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
     )
     return PreProcessor(url_file_map=url_file_map, preflight=preflight, total_files=len(url_file_map))
+
+
+def add_optional_params(options: Dict[str, Any]) -> Dict[str, Any]:
+    """Adds optional parameters based on environment variables.
+
+    Args:
+        options: Existing subset of options.
+
+    Returns:
+        Dict[str, Any]:
+        Returns the final options mapping.
+    """
+    if config.env.cookie_file:
+        options["cookiefile"] = str(config.env.cookie_file)
+    if config.env.source_address:
+        options["source_address"] = str(config.env.source_address)
+    if config.env.proxy_url:
+        options["proxy"] = str(config.env.proxy_url)
+    return options
 
 
 def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
@@ -205,13 +229,8 @@ def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Returns a tuple of YoutubeDL object, and a dictionary of information block.
     """
-    options = {}
-    if config.env.cookie_file:
-        options["cookiefile"] = str(config.env.cookie_file)
-    if config.env.source_address:
-        options["source_address"] = str(config.env.source_address)
-    if config.env.proxy_url:
-        options["proxy"] = str(config.env.proxy_url)
+    options = add_optional_params({})
+    # noinspection bad-argument-type
     with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(
             str(url),

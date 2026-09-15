@@ -3,17 +3,20 @@
 
 >>> Bot
 
+See Also:
+    - All telegram bot operations are asynchronous and use raw httpx request.
+    - The only synchronous function is to send a message meant to be used by callbacks.
 """
 
 import asyncio
 import logging
 import secrets
-import sys
 import time
 from datetime import datetime
 from enum import StrEnum
 from typing import Dict, List, Tuple
 
+import httpx
 import requests
 from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
@@ -83,13 +86,54 @@ def intro() -> str:
     return f"\nTo start, send any YT link in the following format:\n\n{get_help()}"
 
 
-def _make_request(
+def synchronous_message(
+    chat_id: int,
+    message_id: int | None,
+    response: str,
+    parse_mode: str | None = "markdown",
+    retry: bool = False,
+) -> requests.Response:
+    """Synchronous function to send a message through telegram bot.
+
+    Args:
+        chat_id: ChatId to respond to.
+        message_id: MessageId to mark as reply.
+        response: Message to be sent to the user.
+        parse_mode: Parse mode. Defaults to ``markdown``
+        retry: Retry reply in case reply failed because of parsing.
+
+    See Also:
+        - | This is a dual-intent function that can either send a new message or
+          | reply to an existing one based on 'message_id'
+        - Includes a built-in retry logic if the default Markdown parser fails on the first attempt.
+
+    Warnings:
+        - Python has a design limitation where callbacks for async tasks need to be synchronous.
+        - This function is **ONLY** meant to be used by synchronous functions that handle callbacks.
+
+    Returns:
+        Response:
+        Response class.
+    """
+    url = BASE_URL + "/sendMessage"
+    payload = {"chat_id": chat_id, "text": response, "parse_mode": parse_mode}
+    if message_id:
+        payload["message_id"] = message_id
+    result = requests.post(url=url, data=payload, timeout=(2, 3))
+    # Retry with response as plain text
+    if result.status_code == 400 and parse_mode and not retry:
+        LOGGER.warning("Retrying response as plain text with no parsing")
+        synchronous_message(chat_id=chat_id, message_id=message_id, response=response, parse_mode=None, retry=True)
+    return result
+
+
+async def _make_request(
     url: str,
     payload: dict,
     files: dict | None = None,
     method: RequestMethods = RequestMethods.POST,
     timeout: Tuple[int, int] = (2, 3),
-) -> requests.Response:
+) -> httpx.Response:
     """Makes a POST request with a ``connect timeout`` of 2 seconds and ``read timeout`` of 3 seconds.
 
     Args:
@@ -101,28 +145,38 @@ def _make_request(
         Response:
         Response class.
     """
-    if method == RequestMethods.GET:
-        # TODO: Change GET requests with payload to query params (unconventional HTTP spec) - #20
-        response = requests.get(url=url, data=payload, files=files, timeout=timeout)
-    elif method == RequestMethods.POST:
-        response = requests.post(url=url, data=payload, files=files, timeout=timeout)
-    else:
-        raise ValueError("Invalid request method received: '%s'", method)
-    if not response.ok:
-        LOGGER.debug(payload)
-        LOGGER.debug(files)
-        LOGGER.warning("Called by: '%s'", sys._getframe(1).f_code.co_name)  # noqa
-        LOGGER.error(response.json())
-    return response
+    # TODO: Include httpx.Timeout object to distinguish connect vs read timeouts
+    async with httpx.AsyncClient() as client:
+        # MARK: Trade-off switching to httpx is that; GET requests cannot have a body - limited to query params
+        if method == RequestMethods.GET:
+            response = await client.get(
+                url=url,
+                params=payload,
+                timeout=timeout,
+            )
+        elif method == RequestMethods.POST:
+            response = await client.post(
+                url=url,
+                data=payload,
+                files=files,
+                timeout=timeout,
+            )
+        else:
+            raise ValueError(f"Invalid request method received: '{method}'")
+        if not response.is_success:
+            LOGGER.debug(payload)
+            LOGGER.debug(files)
+            LOGGER.error(response.json())
+        return response
 
 
-def reply_to(
+async def reply_to(
     chat_id: int,
     message_id: int | None,
     response: str,
     parse_mode: str | None = "markdown",
     retry: bool = False,
-) -> requests.Response:
+) -> httpx.Response:
     """Generates a payload to reply to a message received.
 
     Args:
@@ -133,12 +187,12 @@ def reply_to(
         retry: Retry reply in case reply failed because of parsing.
 
     Returns:
-        Response:
-        Response class.
+        httpx.Response:
+        Httpx response object.
     """
     if not message_id:
-        return send_message(chat_id, response, parse_mode)
-    result = _make_request(
+        return await send_message(chat_id, response, parse_mode)
+    result = await _make_request(
         url=BASE_URL + "/sendMessage",
         payload={
             "chat_id": chat_id,
@@ -150,16 +204,16 @@ def reply_to(
     # Retry with response as plain text
     if result.status_code == 400 and parse_mode and not retry:
         LOGGER.warning("Retrying response as plain text with no parsing")
-        reply_to(chat_id, message_id, response, None, True)
+        await reply_to(chat_id, message_id, response, None, True)
     return result
 
 
-def send_message(
+async def send_message(
     chat_id: int,
     response: str,
     parse_mode: str | None = "markdown",
     retry: bool = False,
-) -> requests.Response:
+) -> httpx.Response:
     """Generates a payload to reply to a message received.
 
     Args:
@@ -169,17 +223,17 @@ def send_message(
         retry: Retry reply in case reply failed because of parsing.
 
     Returns:
-        Response:
-        Response class.
+        httpx.Response:
+        Httpx response object.
     """
-    result = _make_request(
+    result = await _make_request(
         url=BASE_URL + "/sendMessage",
         payload={"chat_id": chat_id, "text": response, "parse_mode": parse_mode},
     )
     # Retry with response as plain text
     if result.status_code == 400 and parse_mode and not retry:
         LOGGER.warning("Retrying response as plain text with no parsing")
-        send_message(chat_id=chat_id, response=response, parse_mode=None, retry=True)
+        await send_message(chat_id=chat_id, response=response, parse_mode=None, retry=True)
     return result
 
 
@@ -198,13 +252,13 @@ async def poll_for_messages(offset: int) -> None | int:
     See Also:
         Swaps ``offset`` value during every iteration to avoid reprocessing messages.
     """
-    response = _make_request(
+    response = await _make_request(
         url=BASE_URL + "/getUpdates",
         payload={"offset": offset, "timeout": 60},
         method=RequestMethods.GET,
         timeout=(5, 65),
     )
-    if response.ok:
+    if response.is_success:
         results = response.json().get("result", [])
         if not results:
             return None
@@ -272,7 +326,7 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         # noinspection not-mapping,not-iterable
         await process_photo(chat, [settings.PhotoFragment(**d) for d in payload["photo"]])
     else:
-        reply_to(chat.id, chat.message_id, "Payload type is not allowed.")
+        await reply_to(chat.id, chat.message_id, "Payload type is not allowed.")
 
 
 def username_is_valid(username: str | None) -> bool:
@@ -297,14 +351,14 @@ async def authenticate(chat: settings.Chat) -> bool:
     """
     if chat.is_bot:
         LOGGER.error("Bot request from %s", chat.username)
-        send_message(
+        await send_message(
             chat_id=chat.id,
             response=f"Sorry {chat.first_name}! I can't process requests from bots.",
         )
         return False
     if chat.id not in config.env.bot_chat_ids or not username_is_valid(username=chat.username):
         LOGGER.error("Unauthorized chatID [%d] or userName [%s]", chat.id, chat.username)
-        send_message(chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})")
+        await send_message(chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})")
         return False
     return True
 
@@ -330,7 +384,7 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     request_time = local_dt.strftime("%m-%d-%Y %H:%M:%S")
     processed_time = current_dt.strftime("%m-%d-%Y %H:%M:%S")
     LOGGER.warning("Request timed out [%s] for %s", request_time, chat.username)
-    reply_to(
+    await reply_to(
         chat.id,
         chat.message_id,
         f"Request timed out\nRequested: {request_time}\n" f"Processed: {processed_time}",
@@ -346,7 +400,7 @@ async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFrag
         data_class: Required section of the payload as a Photo object.
     """
     LOGGER.info(data_class)
-    reply_to(
+    await reply_to(
         chat.id,
         chat.message_id,
         "Image fragments are not supported. If you're sending a compressed image, "
@@ -384,7 +438,7 @@ async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None
     if not data_class:
         LOGGER.warning("Requested to process voice, but no voice note was received!")
         raise ValueError("No document received")
-    reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
+    await reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
 
 
 async def process_document(
@@ -399,7 +453,7 @@ async def process_document(
     if not data_class:
         LOGGER.warning("Requested to process document, but no document was received!")
         raise ValueError("No document received")
-    reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
+    await reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
 def get_queue_status() -> str:
@@ -434,10 +488,10 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     if data_class.text:
         data_class.text = data_class.text.strip()
     else:
-        send_message(chat_id=chat.id, response="Un-processable payload")
+        await send_message(chat_id=chat.id, response="Un-processable payload")
         return
     if data_class.text in (Commands.start, Commands.help):
-        send_message(chat.id, intro())
+        await send_message(chat.id, intro())
         return
     # "status", "stats", "test"
     if data_class.text == Commands.status:
@@ -448,13 +502,13 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
         final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n{txt}\n\n{get_queue_status()}"
-        reply_to(chat.id, chat.message_id, final)
+        await reply_to(chat.id, chat.message_id, final)
         return
     try:
         await executor(data_class.text, chat)
     except Exception as error:
         LOGGER.exception(error)
-        reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
+        await reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
 async def executor(command: str, chat: settings.Chat) -> None:
@@ -469,15 +523,12 @@ async def executor(command: str, chat: settings.Chat) -> None:
     if command.startswith((Commands.audio, Commands.video)):
         if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
             try:
-                await asyncio.wait_for(
+                response = await asyncio.wait_for(
                     youtube.queue_download(
                         url=HttpUrl(url),
                         source_system=checkpoint.SourceSystem(
                             telegram=chat, audio_only=command.startswith(Commands.audio)
                         ),
-                        chat_id=chat.id,
-                        message_id=chat.message_id,
-                        callback=reply_to,
                     ),
                     timeout=config.env.response_timeout,
                 )
@@ -490,15 +541,10 @@ async def executor(command: str, chat: settings.Chat) -> None:
                         "Please try a different URL for this content."
                     )
                 else:
-                    LOGGER.error(error)
+                    LOGGER.exception(error)
                     response = error.__str__()
-                reply_to(chat.id, chat.message_id, response)
         else:
-            reply_to(
-                chat.id,
-                chat.message_id,
-                f"❌ *Invalid entry*\n\nURL is required.\n\nUsage: `{Commands.audio} <url>`",
-            )
+            response = f"❌ *Invalid entry*\n\nURL is required.\n\nUsage: `{Commands.audio} <url>`"
     elif command.startswith(Commands.track):
         invalid_msg = (
             "❌ *Invalid entry*\n\n{pretext}A playlist URL is required, "
@@ -512,46 +558,38 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 if len(payload) == 1:
                     url = HttpUrl(payload[0])
                     schedule = config.AllowedCronSchedule.DAILY
+                    response = str(tracker.insert(url, schedule, chat.id))
                 elif len(payload) == 2:
                     url = HttpUrl(payload[0])
                     schedule = getattr(config.AllowedCronSchedule, payload[1].upper())
+                    response = str(tracker.insert(url, schedule, chat.id))
                 else:
-                    reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
-                    return
+                    response = invalid_msg.format(pretext="")
             except (AttributeError, ValidationError) as error:
-                reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=f"{error}\n\n"))
-            else:
-                response = str(tracker.insert(url, schedule, chat.id))
-                reply_to(chat.id, chat.message_id, response)
+                LOGGER.exception(error)
+                response = invalid_msg.format(pretext=f"{error}\n\n")
         else:
-            reply_to(chat.id, chat.message_id, invalid_msg.format(pretext=""))
+            response = invalid_msg.format(pretext="")
     elif command.startswith(Commands.sync):
         if identifier := command.replace(Commands.sync, "").strip():
             if identifier.startswith("http"):
-                await tracker.sync(chat=chat, url=identifier, callback=reply_to)
+                response = await tracker.sync(chat=chat, url=identifier)
             else:
-                await tracker.sync(chat=chat, name=identifier, callback=reply_to)
+                response = await tracker.sync(chat=chat, name=identifier)
         else:
-            reply_to(
-                chat.id,
-                chat.message_id,
-                f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`.",
-            )
+            response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`."
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
-                resp = tracker.delete(url=identifier)
+                response = str(tracker.delete(url=identifier))
             else:
-                resp = tracker.delete(name=identifier)
-            reply_to(chat.id, chat.message_id, str(resp))
+                response = str(tracker.delete(name=identifier))
         else:
-            reply_to(
-                chat.id,
-                chat.message_id,
-                f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`.",
-            )
+            response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`."
     else:
-        send_message(
+        await send_message(
             chat_id=chat.id,
             response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help()}",
         )
+        return
+    await reply_to(chat.id, chat.message_id, response)

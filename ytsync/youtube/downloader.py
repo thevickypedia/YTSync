@@ -15,7 +15,7 @@ from ytsync.youtube import cli, hooks, squire
 LOGGER = logging.getLogger("ytsync")
 
 
-def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str, List[str]]):
+def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str, List[str]]) -> Dict[str, Any]:
     """Generate the parameters for the yt_dlp module.
 
     Args:
@@ -64,14 +64,8 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
                 stats=stats,
             )
         ]
-    if config.env.cookie_file:
-        options["cookiefile"] = str(config.env.cookie_file)
-    if config.env.source_address:
-        options["source_address"] = str(config.env.source_address)
-    if config.env.proxy_url:
-        options["proxy"] = str(config.env.proxy_url)
 
-    return options
+    return squire.add_optional_params(options)
 
 
 async def download(

@@ -1,8 +1,10 @@
+import httpx
 import requests
 
 EgressErrors = (
     ConnectionError,
     TimeoutError,
+    httpx.HTTPError,
     requests.RequestException,
     requests.Timeout,
 )

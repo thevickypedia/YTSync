@@ -225,8 +225,6 @@ async def download(
             youtube.queue_download(
                 url=body.url,
                 source_system=checkpoint.SourceSystem(api=api_source, audio_only=body.audio_only),
-                chat_id=body.chat_id,
-                callback=bot.reply_to,
             ),
             timeout=config.env.response_timeout,
         )
