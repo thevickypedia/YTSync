@@ -14,7 +14,7 @@ import secrets
 import time
 from datetime import datetime
 from enum import StrEnum
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import httpx
 import requests
@@ -132,7 +132,8 @@ async def _make_request(
     payload: dict,
     files: dict | None = None,
     method: RequestMethods = RequestMethods.POST,
-    timeout: Tuple[int, int] = (2, 3),
+    connect_timeout: int | float = 2,
+    read_timeout: int | float = 3,
 ) -> httpx.Response:
     """Makes a POST request with a ``connect timeout`` of 2 seconds and ``read timeout`` of 3 seconds.
 
@@ -145,21 +146,20 @@ async def _make_request(
         Response:
         Response class.
     """
-    # TODO: Include httpx.Timeout object to distinguish connect vs read timeouts
     async with httpx.AsyncClient() as client:
         # MARK: Trade-off switching to httpx is that; GET requests cannot have a body - limited to query params
         if method == RequestMethods.GET:
             response = await client.get(
                 url=url,
                 params=payload,
-                timeout=timeout,
+                timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
             )
         elif method == RequestMethods.POST:
             response = await client.post(
                 url=url,
                 data=payload,
                 files=files,
-                timeout=timeout,
+                timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
             )
         else:
             raise ValueError(f"Invalid request method received: '{method}'")
@@ -256,7 +256,8 @@ async def poll_for_messages(offset: int) -> None | int:
         url=BASE_URL + "/getUpdates",
         payload={"offset": offset, "timeout": 60},
         method=RequestMethods.GET,
-        timeout=(5, 65),
+        connect_timeout=5,
+        read_timeout=65,
     )
     if response.is_success:
         results = response.json().get("result", [])
