@@ -48,7 +48,7 @@ async def executor():
     except exceptions.BotWebhookConflict as error:
         # At this point, it is safe to remove the dead webhook
         LOGGER.error(error)
-        webhook.delete_webhook()
+        await webhook.delete_webhook()
         await restart_loop(after=1)
     except exceptions.BotInUse as error:
         LOGGER.error(error)
@@ -60,7 +60,7 @@ async def executor():
     except (asyncio.CancelledError, KeyboardInterrupt) as error:
         LOGGER.info("Terminated due to event cancellation.")
         await terminate(reason=type(error).__name__)
-    except (exceptions.EgressErrors, Exception) as error:
+    except (httpx.HTTPError, Exception) as error:
         if isinstance(error, httpx.ReadTimeout):
             return
         config.telegram_beat.failed_connections += 1

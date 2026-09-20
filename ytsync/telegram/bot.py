@@ -17,7 +17,6 @@ from enum import StrEnum
 from typing import Dict, List
 
 import httpx
-import requests
 from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
@@ -92,7 +91,7 @@ def synchronous_message(
     response: str,
     parse_mode: str | None = "markdown",
     retry: bool = False,
-) -> requests.Response:
+) -> httpx.Response:
     """Synchronous function to send a message through telegram bot.
 
     Args:
@@ -112,14 +111,16 @@ def synchronous_message(
         - This function is **ONLY** meant to be used by synchronous functions that handle callbacks.
 
     Returns:
-        Response:
-        Response class.
+        httpx.Response:
+        Httpx response object.
     """
     url = BASE_URL + "/sendMessage"
     payload = {"chat_id": chat_id, "text": response, "parse_mode": parse_mode}
     if message_id:
         payload["message_id"] = message_id
-    result = requests.post(url=url, data=payload, timeout=(2, 3))
+    result = httpx.post(url=url, data=payload, timeout=httpx.Timeout(None, connect=2, read=3))
+    if result.is_success:
+        return result
     # Retry with response as plain text
     if result.status_code == 400 and parse_mode and not retry:
         LOGGER.warning("Retrying response as plain text with no parsing")
@@ -143,31 +144,30 @@ async def _make_request(
         files: Take filename as an optional argument.
 
     Returns:
-        Response:
-        Response class.
+        httpx.Response:
+        Httpx response object.
     """
-    async with httpx.AsyncClient() as client:
-        # MARK: Trade-off switching to httpx is that; GET requests cannot have a body - limited to query params
-        if method == RequestMethods.GET:
-            response = await client.get(
-                url=url,
-                params=payload,
-                timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
-            )
-        elif method == RequestMethods.POST:
-            response = await client.post(
-                url=url,
-                data=payload,
-                files=files,
-                timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
-            )
-        else:
-            raise ValueError(f"Invalid request method received: '{method}'")
-        if not response.is_success:
-            LOGGER.debug(payload)
-            LOGGER.debug(files)
-            LOGGER.error(response.json())
-        return response
+    # MARK: Trade-off switching to httpx is that; GET requests cannot have a body - limited to query params
+    if method == RequestMethods.GET:
+        response = await config.ASYNC_CLIENT.get(
+            url=url,
+            params=payload,
+            timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
+        )
+    elif method == RequestMethods.POST:
+        response = await config.ASYNC_CLIENT.post(
+            url=url,
+            data=payload,
+            files=files,
+            timeout=httpx.Timeout(None, connect=connect_timeout, read=read_timeout),
+        )
+    else:
+        raise ValueError(f"Invalid request method received: '{method}'")
+    if not response.is_success:
+        LOGGER.debug(payload)
+        LOGGER.debug(files)
+        LOGGER.error(response.json())
+    return response
 
 
 async def reply_to(

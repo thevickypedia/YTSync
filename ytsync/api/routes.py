@@ -6,7 +6,7 @@ from http import HTTPStatus
 from json.decoder import JSONDecodeError
 from typing import Dict, List
 
-import requests
+import httpx
 from fastapi import Depends, Request
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -96,7 +96,7 @@ async def api_set_webhook(
         )
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL path")
 
-    if webhook.set_webhook(
+    if await webhook.set_webhook(
         webhook=body.webhook,
         secret_token=body.secret_token,
         webhook_ip=body.webhook_ip,
@@ -119,8 +119,8 @@ async def api_get_webhook(
     """**API endpoint to GET a webhook.**"""
     auth.validate(apikey, True)
     try:
-        return webhook.get_webhook()
-    except requests.RequestException as error:
+        return await webhook.get_webhook()
+    except httpx.HTTPError as error:
         LOGGER.error(error)
         raise HTTPException(
             status_code=HTTPStatus.EXPECTATION_FAILED.real,
@@ -133,10 +133,10 @@ async def api_delete_webhook(
     """**API endpoint to DELETE a webhook.**"""
     auth.validate(apikey, True)
     try:
-        response = webhook.delete_webhook()
+        response = await webhook.delete_webhook()
         config.telegram_beat.poll_for_messages = True
         return response
-    except requests.RequestException as error:
+    except httpx.HTTPError as error:
         LOGGER.error(error)
         raise HTTPException(
             status_code=HTTPStatus.EXPECTATION_FAILED.real,

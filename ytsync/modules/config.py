@@ -10,6 +10,7 @@ from ipaddress import IPv4Address
 from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
+import httpx
 from pydantic import (
     DirectoryPath,
     Field,
@@ -29,6 +30,7 @@ SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") 
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
+ASYNC_CLIENT: httpx.AsyncClient
 
 
 @dataclass

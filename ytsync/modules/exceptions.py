@@ -1,15 +1,3 @@
-import httpx
-import requests
-
-EgressErrors = (
-    ConnectionError,
-    TimeoutError,
-    httpx.HTTPError,
-    requests.RequestException,
-    requests.Timeout,
-)
-
-
 class BotError(Exception):
     """Custom base exception for Telegram Bot.
 

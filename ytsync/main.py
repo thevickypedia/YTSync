@@ -4,6 +4,7 @@ import pathlib
 from contextlib import asynccontextmanager
 from typing import Dict
 
+import httpx
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
@@ -56,7 +57,11 @@ async def lifespan(_: FastAPI):
     LOGGER.info("Initiating background tasks...")
     bg_task = asyncio.create_task(agent.executor())
     bg_task.add_done_callback(bg_task_callback)
-    yield
+    async with httpx.AsyncClient() as client:
+        # SET: app.state.http_client = client
+        # USE: client: httpx.AsyncClient = request.app.state.http_client
+        config.ASYNC_CLIENT = client
+        yield
     # Stop the background task
     bg_task.cancel()
     LOGGER.info("Shutting down API server.")

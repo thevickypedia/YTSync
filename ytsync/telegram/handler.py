@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from ipaddress import IPv4Address
 
-import requests
+import httpx
 from pydantic import HttpUrl
 
 from ytsync.modules import config
@@ -13,14 +13,14 @@ LOGGER = logging.getLogger("ytsync")
 
 async def init() -> None:
     """Initialize telegram API and decide to choose webhook vs long polling."""
-    if webhook_is_usable():
+    if await webhook_is_usable():
         config.telegram_beat.poll_for_messages = False
     else:
         config.telegram_beat.poll_for_messages = True
         LOGGER.info("Polling for incoming messages...")
 
 
-def webhook_is_usable() -> bool:
+async def webhook_is_usable() -> bool:
     """Check if there is an existing webhook.
 
     Examples:
@@ -62,7 +62,7 @@ def webhook_is_usable() -> bool:
     """
     # 1. Set the webhook
     if all((config.env.bot_webhook, config.env.bot_secret, config.env.bot_webhook_ip)):
-        return webhook.set_webhook(
+        return await webhook.set_webhook(
             webhook=config.env.bot_webhook,
             secret_token=config.env.bot_secret,
             webhook_ip=config.env.bot_webhook_ip,
@@ -71,9 +71,9 @@ def webhook_is_usable() -> bool:
     max_pending_updates = 100
     max_error_age_seconds = 60
     try:
-        existing_webhook = webhook.get_webhook() or {}
+        existing_webhook = await webhook.get_webhook() or {}
         result = existing_webhook.get("result", {}) or {}
-    except requests.RequestException as error:
+    except httpx.HTTPError as error:
         LOGGER.warning(error)
         return False
     if result and isinstance(result, dict):
