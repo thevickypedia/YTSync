@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pathlib
 import shutil
@@ -41,7 +42,7 @@ def get_cli_command(
     return f'{root_cmd} {args} "{str(destination.joinpath(config.YT_FILENAME_TEMPLATE))}" "{url}"'
 
 
-def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> bool:
+async def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> bool:
     """Download a track using the yt-dlp CLI command.
 
     Args:
@@ -57,14 +58,19 @@ def download_track(url: str, destination: pathlib.Path, audio_only: bool) -> boo
         cmd = get_cli_command(url=url, root_cmd=yt_dlp, destination=destination, audio_only=audio_only)
         LOGGER.debug("Running the command: %s", cmd)
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, shell=True, timeout=config.env.max_timeout)
-        except (subprocess.SubprocessError, subprocess.CalledProcessError) as error:
+            process = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout_bytes, stderr_bytes = await asyncio.wait_for(process.communicate(), timeout=config.env.max_timeout)
+        except (asyncio.TimeoutError, subprocess.SubprocessError) as error:
             LOGGER.warning(error)
             return False
-        for output in result.stdout.splitlines():
+        for output in stdout_bytes.decode().splitlines():
             LOGGER.debug(output)
-        for output in result.stderr.splitlines():
+        for output in stderr_bytes.decode().splitlines():
             LOGGER.warning(output)
-        return result.returncode == 0
+        return process.returncode == 0
     LOGGER.warning("yt-dlp not found in PATH for a CLI download attempt.")
     return False

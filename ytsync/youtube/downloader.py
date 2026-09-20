@@ -68,10 +68,97 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
     return squire.add_optional_params(options)
 
 
+async def download_ydl(
+    ydl: yt_dlp.YoutubeDL, url: str, filepath: pathlib.Path, stats: Dict[str, List[str]], audio_only: bool
+) -> None:
+    """Downloads using the yt-dlp library."""
+    with ydl:
+        if ydl.download([url]):
+            raise DownloadError(msg=f"Download failed for url: {url} -> {filepath.name}")
+        if audio_only:
+            LOGGER.info("Download successful for url: %s -> %s", url, filepath.name)
+            stats["downloaded"].append(filepath.name)
+
+
+async def download_cli(
+    url: str,
+    filepath: pathlib.Path,
+    stats: Dict[str, List[str]],
+    audio_only: bool,
+    destination: pathlib.Path,
+    transfer_pool: ThreadPoolExecutor | None,
+) -> bool:
+    """Downloads using the yt-dlp CLI."""
+    LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
+    cli_attempt = await cli.download_track(url, destination, audio_only)
+    if cli_attempt and transfer_pool:
+        stats["downloaded"].append(filepath.name)
+        LOGGER.info("CLI attempt was successful, file saved at: %s; initiating rsync...", str(filepath))
+        hooks.postprocess_hook(
+            local_path=str(filepath),
+            transfer_pool=transfer_pool,
+            stats=stats,
+        )
+    elif cli_attempt:
+        stats["downloaded"].append(filepath.name)
+        LOGGER.info("CLI attempt was successful, file saved at: %s", str(filepath))
+    return cli_attempt
+
+
+async def download_alt(
+    ydl: yt_dlp.YoutubeDL,
+    url: str,
+    filepath: pathlib.Path,
+    stats: Dict[str, List[str]],
+    audio_only: bool,
+    destination: pathlib.Path,
+    transfer_pool: ThreadPoolExecutor | None,
+) -> None:
+    """Downloader function for alternative download methods.
+
+    Args:
+        ydl: YoutubeDL object.
+        url: URL to submit the request.
+        filepath: Path to the file to download.
+        stats: Dictionary to store/append statistics.
+        audio_only: Whether to download only the audio.
+        destination: Path to save the downloaded file.
+        transfer_pool: ThreadPoolExecutor to use for rsync.
+    """
+    if config.env.download_tester:
+        LOGGER.info("Download tester enabled, skipping [%s] - %s", url, filepath)
+        filepath.touch(mode=0o644, exist_ok=True)
+        stats["downloaded"].append(filepath.name)
+        if transfer_pool:
+            hooks.postprocess_hook(
+                local_path=str(filepath),
+                transfer_pool=transfer_pool,
+                stats=stats,
+            )
+        return
+    try:
+        await download_ydl(ydl, url, filepath, stats, audio_only)
+    except DownloadError as error:
+        if not await download_cli(url, filepath, stats, audio_only, destination, transfer_pool):
+            LOGGER.warning("CLI attempt failed, assuming download failed")
+            LOGGER.error(error)
+            stats["download_failed"].append(filepath.name)
+
+
 async def download(
-    checkpoint_stats: checkpoint.Checkpoint, preprocess_stats: squire.PreProcessor
+    checkpoint_stats: checkpoint.Checkpoint,
+    preprocess_stats: squire.PreProcessor,
 ) -> checkpoint.Checkpoint:
-    """Downloads the content from a given url and returns download/transfer statistics."""
+    """Downloads the content from a given url and returns download/transfer statistics.
+
+    Args:
+        checkpoint_stats: Checkpoint object.
+        preprocess_stats: PreProcessor object.
+
+    Returns:
+        checkpoint.Checkpoint:
+        Returns the updated Checkpoint object.
+    """
     start = time.time()
     checkpoint_stats.download_start = config.now()
     stats: Dict[str, List[str]] = {
@@ -114,47 +201,7 @@ async def download(
         # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
         # This monotonic loop is to properly capture individual errors and attach custom handlers
         for url, filepath in url_file_map.items():
-            if config.env.download_tester:
-                LOGGER.info("Download tester enabled, skipping [%s] - %s", url, filepath)
-                filepath.touch(mode=0o644, exist_ok=True)
-                stats["downloaded"].append(filepath.name)
-                if transfer_pool:
-                    hooks.postprocess_hook(
-                        local_path=str(filepath),
-                        transfer_pool=transfer_pool,
-                        stats=stats,
-                    )
-                continue
-            try:
-                status = ydl.download([url])
-                if audio_only:
-                    if status:
-                        LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
-                        stats["download_failed"].append(filepath.name)
-                    else:
-                        LOGGER.info("Download successful for url: %s -> %s", url, filepath.name)
-                        stats["downloaded"].append(filepath.name)
-                    continue
-            except DownloadError as error:
-                LOGGER.warning("Download failed for url: %s -> %s", url, filepath.name)
-                cli_attempt = cli.download_track(url, destination, audio_only)
-                if cli_attempt and transfer_pool:
-                    stats["downloaded"].append(filepath.name)
-                    LOGGER.info("CLI attempt was successful, file saved at: %s; initiating rsync...", str(filepath))
-                    hooks.postprocess_hook(
-                        local_path=str(filepath),
-                        transfer_pool=transfer_pool,
-                        stats=stats,
-                    )
-                    continue
-                elif cli_attempt:
-                    stats["downloaded"].append(filepath.name)
-                    LOGGER.info("CLI attempt was successful, file saved at: %s", str(filepath))
-                    continue
-                else:
-                    LOGGER.warning("CLI attempt failed, assuming download failed")
-                LOGGER.error(error)
-                stats["download_failed"].append(filepath.name)
+            await download_alt(ydl, url, filepath, stats, audio_only, destination, transfer_pool)
 
     if len(stats["download_failed"]) == len(url_file_map):
         if total_files is None:
