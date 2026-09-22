@@ -30,7 +30,7 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
     options: Dict[str, Any] = {
         "logger": LOGGER,
         "quiet": True,
-        "format": "bestaudio/best" if audio_only else "bestvideo+bestaudio/best",
+        "format": "bestaudio/best" if audio_only else "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]",
         "ignoreerrors": False,
         "outtmpl": str(destination.joinpath(config.YT_FILENAME_TEMPLATE)),
         "writethumbnail": True,
@@ -51,6 +51,10 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
         ]
     else:
         options["postprocessors"] = [
+            {
+                "key": "FFmpegVideoRemuxer",
+                "preferedformat": "mp4",
+            },
             {
                 "key": "FFmpegMetadata",
             },

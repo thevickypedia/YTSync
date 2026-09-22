@@ -145,9 +145,6 @@ async def get_missing_entries(
         PreProcessor:
         Returns a PreProcessor object with the URL-file map and preflight information.
     """
-    # FIXME: Downloaded videos are not always mp4
-    #   Hard coding to .mp4 is non-breaking; but it renders exist check useless if the file is a .mkv
-    #   May potentially impact reporting depending on the usage of 'base_url_file_map' [OR] 'url_file_map'
     sfx = ".mp3" if source_system.audio_only else ".mp4"
     preflight = checkpoint.PreFlight()
     if entries := info.get("entries", []):
