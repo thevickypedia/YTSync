@@ -131,15 +131,27 @@ async def download_alt(
         Returns an awaitable task if there is an async task to gather.
     """
     task = None
-    if config.env.download_tester:
-        LOGGER.info("Download tester enabled, skipping [%s] - %s", url, filepath)
-        filepath.touch(mode=0o644, exist_ok=True)
+    # MARK: If the file already exists [OR] download tester is enabled, skip the download and initiate rsync if enabled
+    # A filepath can exist and be present in the url_file_map, if the file is available locally, but missing in remote
+    # Partially downloaded files WILL NEVER have the same file extension as the final file, so '> 0' check is sufficient
+    if config.env.download_tester or (filepath.exists() and filepath.stat().st_size > 0):
+        if config.env.download_tester:
+            LOGGER.info("Download tester enabled, skipping [%s] - %s", url, filepath)
+            filepath.touch(mode=0o644, exist_ok=True)
+        else:
+            LOGGER.info(
+                "File already exists, skipping [%s] - %s [%s]",
+                url,
+                filepath,
+                squire.size_converter(filepath.stat().st_size),
+            )
         stats["downloaded"].append(filepath.name)
         if transfer.rsync.is_enabled:
             return hooks.postprocess_hook(
                 local_path=str(filepath),
                 stats=stats,
             )
+        return None
     try:
         await download_ydl(ydl, url, filepath, stats, audio_only)
     except DownloadError as error:

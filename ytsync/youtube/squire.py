@@ -1,6 +1,7 @@
 import logging
+import math
 import pathlib
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from dataclasses import dataclass
 from typing import Any, Dict, List, Tuple
 
@@ -84,12 +85,12 @@ async def filter_existing(
     return url_file_map
 
 
-def generate_file_map(
+async def generate_file_map(
     ydl: yt_dlp.YoutubeDL,
     entries: List[Dict[str, Any]],
     destination: pathlib.Path,
     extension: str,
-) -> Dict[str, pathlib.Path]:
+) -> AsyncGenerator[Tuple[str, pathlib.Path]]:
     """Generate a file map for the given entries.
 
     Args:
@@ -99,16 +100,14 @@ def generate_file_map(
         extension: File extension to use for the generated files.
 
     Returns:
-        Dict[str, pathlib.Path]:
-        Returns a key-value map of URL to filepath.
+        AsyncGenerator[Tuple[str, pathlib.Path]]:
+        Yields tuples of URL and filepath.
     """
-    url_file_map: Dict[str, pathlib.Path] = {}
     for entry in entries:
         if not entry or not entry.get("url"):
             LOGGER.warning("Invalid entry found: %s", entry or "None")
             continue
         try:
-            # TODO: Must use filename from prepared instead of 'with_suffix' - might break mp3
             with ydl:
                 # noinspection bad-argument-type
                 filename = (
@@ -121,8 +120,7 @@ def generate_file_map(
         except YoutubeDLError as error:
             LOGGER.exception(error)
             continue
-        url_file_map[entry["url"]] = destination.joinpath(filename)
-    return url_file_map
+        yield entry["url"], destination.joinpath(filename)
 
 
 async def get_missing_entries(
@@ -158,7 +156,10 @@ async def get_missing_entries(
             url_file_map=await filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
         )
 
-    if base_url_file_map := generate_file_map(ydl, entries, destination, sfx):
+    base_url_file_map: Dict[str, pathlib.Path] = {}
+    async for url, filepath in generate_file_map(ydl, entries, destination, sfx):
+        base_url_file_map[url] = filepath
+    if base_url_file_map:
         # Calculate the number of files for which the filename resolution failed
         preflight.error = len(entries) - len(base_url_file_map)
         LOGGER.debug("Generated file map: %s", base_url_file_map)
@@ -236,3 +237,21 @@ def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
             process=False,
         )
     return ydl, info
+
+
+# TODO: Add size converter for every files' statistics in the response object
+def size_converter(byte_size: int | float) -> str:
+    """Gets the current memory consumed and converts it to human friendly format.
+
+    Args:
+        byte_size: Receives byte size as argument.
+
+    Returns:
+        str:
+        Converted human understandable size.
+    """
+    if byte_size == 0:
+        return "0 B"
+    size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    index = int(math.floor(math.log(byte_size, 1024)))
+    return f"{round(byte_size / pow(1024, index), 2)} {size_name[index]}"

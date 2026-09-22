@@ -56,6 +56,7 @@ def process_callback(
     if schedule:
         schedule = schedule.value.lstrip("@").capitalize()
     if error := task.exception():
+        # TODO: Transfer fails might also be caught in this block; handle it separately or just make message agnostic
         if chat_id:
             if schedule:
                 txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
