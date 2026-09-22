@@ -3,9 +3,6 @@
 
 >>> Bot
 
-See Also:
-    - All telegram bot operations are asynchronous and use raw httpx request.
-    - The only synchronous function is to send a message meant to be used by callbacks.
 """
 
 import asyncio
@@ -83,49 +80,6 @@ def intro() -> str:
         str:
     """
     return f"\nTo start, send any YT link in the following format:\n\n{get_help()}"
-
-
-def synchronous_message(
-    chat_id: int,
-    message_id: int | None,
-    response: str,
-    parse_mode: str | None = "markdown",
-    retry: bool = False,
-) -> httpx.Response:
-    """Synchronous function to send a message through telegram bot.
-
-    Args:
-        chat_id: ChatId to respond to.
-        message_id: MessageId to mark as reply.
-        response: Message to be sent to the user.
-        parse_mode: Parse mode. Defaults to ``markdown``
-        retry: Retry reply in case reply failed because of parsing.
-
-    See Also:
-        - | This is a dual-intent function that can either send a new message or
-          | reply to an existing one based on 'message_id'
-        - Includes a built-in retry logic if the default Markdown parser fails on the first attempt.
-
-    Warnings:
-        - Python has a design limitation where callbacks for async tasks need to be synchronous.
-        - This function is **ONLY** meant to be used by synchronous functions that handle callbacks.
-
-    Returns:
-        httpx.Response:
-        Httpx response object.
-    """
-    url = BASE_URL + "/sendMessage"
-    payload = {"chat_id": chat_id, "text": response, "parse_mode": parse_mode}
-    if message_id:
-        payload["message_id"] = message_id
-    result = httpx.post(url=url, data=payload, timeout=httpx.Timeout(None, connect=2, read=3))
-    if result.is_success:
-        return result
-    # Retry with response as plain text
-    if result.status_code == 400 and parse_mode and not retry:
-        LOGGER.warning("Retrying response as plain text with no parsing")
-        synchronous_message(chat_id=chat_id, message_id=message_id, response=response, parse_mode=None, retry=True)
-    return result
 
 
 async def _make_request(

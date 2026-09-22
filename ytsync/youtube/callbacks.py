@@ -61,7 +61,7 @@ def process_callback(
                 txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
             else:
                 txt = f"❌ *Download failed for {name!r}*\n\n{error}"
-            bot.synchronous_message(chat_id=chat_id, message_id=message_id, response=txt)
+            asyncio.create_task(bot.reply_to(chat_id=chat_id, message_id=message_id, response=txt))
         LOGGER.error("Process failed for %s", name)
         return
 
@@ -99,11 +99,7 @@ def process_callback(
     save_checkpoint(final_checkpoint)
     LOGGER.info(response)
     if chat_id:
-        bot.synchronous_message(
-            chat_id=chat_id,
-            message_id=message_id,
-            response=response,
-        )
+        asyncio.create_task(bot.reply_to(chat_id=chat_id, message_id=message_id, response=response))
 
 
 def save_checkpoint(final_checkpoint: checkpoint.Checkpoint) -> None:
