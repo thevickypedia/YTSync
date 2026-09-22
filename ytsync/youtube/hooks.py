@@ -1,8 +1,7 @@
-import functools
+import asyncio
 import logging
 import pathlib
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List
+from typing import Any, Awaitable, Dict, List
 
 from ytsync.youtube import callbacks
 
@@ -12,23 +11,24 @@ TRANSIENT_FILES = (".webm", ".part")
 
 def postprocess_hook(
     local_path: str,
-    transfer_pool: ThreadPoolExecutor,
     stats: Dict[str, List[str]],
-) -> None:
-    """Submit a completed file to the thread pool."""
+) -> Awaitable | None:
+    """Create a task to transfer the file.
+
+    Args:
+        local_path: Local filepath to transfer.
+        stats: Stats to pass to the callback function.
+
+    Returns:
+        Awaitable | None:
+        Returns an awaitable task if there is an async task to gather.
+    """
     local_path = pathlib.Path(local_path.strip())
     if local_path.suffix in TRANSIENT_FILES:
         LOGGER.debug("Transient download complete; awaiting final - %s", local_path)
-        return
+        return None
     LOGGER.info("Ready to transfer: %s", local_path)
-    future = transfer_pool.submit(callbacks.transfer_file, local_path)
-    future.add_done_callback(
-        functools.partial(
-            callbacks.transfer_callback,
-            filepath=local_path,
-            stats=stats,
-        )
-    )
+    return asyncio.create_task(callbacks.transfer_file(local_path, stats))
 
 
 def download_progress_hook(

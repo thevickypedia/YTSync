@@ -20,7 +20,7 @@ async def queue_download(
 ) -> str:
     """Queue an input url to download per the next available time."""
     LOGGER.debug("Input URL: %s", url)
-    ydl, info = squire.get_info(url)
+    ydl, info = squire.get_info(str(url))
     name = info.get("title", None) or None
     if not name or not isinstance(name, str):
         LOGGER.error("'title' not found in info dict: %s", info)
@@ -32,7 +32,7 @@ async def queue_download(
         destination = config.env.video_dir.joinpath(subdir)
     destination.mkdir(exist_ok=True, parents=True)
 
-    preprocessed = squire.get_missing_entries(url, ydl, info, destination, source_system)
+    preprocessed = await squire.get_missing_entries(url, ydl, info, destination, source_system)
     intended_path = posixpath.join(transfer.rsync.remote_path, subdir) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
         if not preprocessed.preflight:

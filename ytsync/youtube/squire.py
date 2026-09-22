@@ -44,7 +44,7 @@ class PreProcessor:
     total_files: int | None = None
 
 
-def filter_existing(
+async def filter_existing(
     base_url_file_map: Dict[str, pathlib.Path], sfx: str, source_system: checkpoint.SourceSystem | None = None
 ) -> Dict[str, pathlib.Path]:
     """Filter out the existing files from the given URL-file map.
@@ -63,10 +63,10 @@ def filter_existing(
         for url, destination in base_url_file_map.items():
             mapper[url] = destination.joinpath(destination.name).with_suffix(sfx)
         base_url_file_map = mapper
-    # Exist check only apply for 'files', not directories, since the directory will be created if it doesn't exist
+    # Exist check only applies for 'files', not directories, since the directory will be created if it doesn't exist
     if transfer.rsync.is_enabled:
         # Check files' presence in remote server
-        existing = transfer.rsync.remote_files_exist(list(base_url_file_map.values()))
+        existing = await transfer.rsync.remote_files_exist(list(base_url_file_map.values()))
     else:
         # Check files' presence in local data directory
         existing = {str(file) for file in base_url_file_map.values() if file.is_file()}
@@ -108,6 +108,7 @@ def generate_file_map(
             LOGGER.warning("Invalid entry found: %s", entry or "None")
             continue
         try:
+            # TODO: Must use filename from prepared instead of 'with_suffix' - might break mp3
             with ydl:
                 # noinspection bad-argument-type
                 filename = (
@@ -124,7 +125,7 @@ def generate_file_map(
     return url_file_map
 
 
-def get_missing_entries(
+async def get_missing_entries(
     url: HttpUrl,
     ydl: yt_dlp.YoutubeDL,
     info: Dict[str, Any],
@@ -157,7 +158,7 @@ def get_missing_entries(
         # No entries found, likely a single video/audio file, no preflight check needed
         LOGGER.debug("No entries found; returning the parent URL as-is")
         return PreProcessor(
-            url_file_map=filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
+            url_file_map=await filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
         )
 
     if base_url_file_map := generate_file_map(ydl, entries, destination, sfx):
@@ -170,10 +171,10 @@ def get_missing_entries(
         LOGGER.debug("Unable to generate URL file map; returning the parent URL as-is")
         LOGGER.debug(preflight.model_dump(mode="json"))
         return PreProcessor(
-            url_file_map=filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
+            url_file_map=await filter_existing({str(url): destination}, sfx, source_system), preflight=preflight
         )
 
-    if url_file_map := filter_existing(base_url_file_map, sfx):
+    if url_file_map := await filter_existing(base_url_file_map, sfx):
         preflight.unavailable = len(url_file_map)
         preflight.available = len(base_url_file_map) - preflight.unavailable
     else:
@@ -192,7 +193,7 @@ def get_missing_entries(
         LOGGER.info(
             "Error count %d EXCEEDS the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
         )
-        return PreProcessor(url_file_map=filter_existing({str(url): destination}, sfx), preflight=preflight)
+        return PreProcessor(url_file_map=await filter_existing({str(url): destination}, sfx), preflight=preflight)
     # Happy path - no unavailability and error rate is within the acceptable bounds
     LOGGER.info(
         "Error count %d is within the acceptable threshold of %d pct", preflight.error, config.env.max_error_threshold
@@ -219,7 +220,7 @@ def add_optional_params(options: Dict[str, Any]) -> Dict[str, Any]:
     return options
 
 
-def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
+def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     """Get info based on the given YT URL.
 
     Args:
@@ -233,7 +234,7 @@ def get_info(url: HttpUrl) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     # noinspection bad-argument-type
     with yt_dlp.YoutubeDL(options) as ydl:
         info = ydl.extract_info(
-            str(url),
+            url,
             download=False,
             process=False,
         )

@@ -4,7 +4,6 @@ import logging
 import os
 import pathlib
 import time
-from concurrent.futures import Future
 from datetime import datetime
 from typing import Dict, List
 
@@ -16,34 +15,24 @@ from ytsync.youtube import queue, squire
 LOGGER = logging.getLogger("ytsync")
 
 
-def transfer_file(local_path: pathlib.Path) -> None:
+async def transfer_file(local_path: pathlib.Path, stats: Dict[str, List[str]]) -> None:
     """Transfer a completed file."""
     LOGGER.info("Transferring: %s", local_path)
-    transfer.rsync.run(source=local_path)
-    LOGGER.info("Successfully synced %s", local_path)
-    if transfer.rsync.is_enabled and config.env.delete_after_sync:
-        LOGGER.info(
-            "Transfer complete; deleting: %s",
-            local_path,
-        )
-        os.remove(local_path)
-
-
-def transfer_callback(
-    future: Future,
-    filepath: pathlib.Path,
-    stats: Dict[str, List[str]],
-) -> None:
-    """Called when an individual transfer thread completes."""
     try:
-        future.result()
+        await transfer.rsync.run(source=local_path)
     except Exception as exc:
-        stats["transfer_failed"].append(filepath.name)
-        LOGGER.exception("Transfer failed for %s: %s", filepath, exc)
+        stats["transfer_failed"].append(local_path.name)
+        LOGGER.exception("Transfer failed for %s: %s", local_path, exc)
     else:
-        stats["transferred"].append(filepath.name)
-        LOGGER.info("Transfer completed: %s", filepath)
-    LOGGER.info("Transfers: successful=%d failed=%d", len(stats["transferred"]), len(stats["transfer_failed"]))
+        stats["transferred"].append(local_path.name)
+        LOGGER.info("Transfer completed: %s", local_path)
+        LOGGER.debug("Transfers: successful=%d failed=%d", len(stats["transferred"]), len(stats["transfer_failed"]))
+        if config.env.delete_after_sync:
+            LOGGER.info(
+                "Transfer complete; deleting: %s",
+                local_path,
+            )
+            os.remove(local_path)
 
 
 def process_callback(

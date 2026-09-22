@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import pathlib
@@ -12,14 +13,34 @@ from ytsync.modules import config, retry
 LOGGER = logging.getLogger("ytsync")
 
 
-def runner(cmd: str, source: pathlib.Path) -> subprocess.CompletedProcess:
-    """Runs a given command with a subprocess module."""
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=config.env.max_timeout, check=False)
-    if result.returncode == 0:
+async def runner(cmd: str, source: pathlib.Path) -> None:
+    """Runs a given command with an asyncio subprocess."""
+    proc = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(),
+            timeout=config.env.max_timeout,
+        )
+    except asyncio.TimeoutError as warn:
+        LOGGER.warning(f"Timeout error occurred while running command: {cmd}")
+        LOGGER.warning(warn)
+        proc.kill()
+        await proc.wait()
+        raise
+    stdout = stdout.decode()
+    stderr = stderr.decode()
+    if proc.returncode == 0:
         LOGGER.info(f"Successfully synced {source}")
-        return result  # Success, exit function
+        return
     raise subprocess.CalledProcessError(
-        returncode=result.returncode, cmd=cmd, output=result.stdout, stderr=result.stderr
+        cmd=cmd,
+        output=stdout,
+        stderr=stderr,
+        returncode=proc.returncode or 1,
     )
 
 
@@ -55,31 +76,35 @@ class Rsync:
             pathlib.Path(relative_path).as_posix(),
         )
 
-    def exist_check(self, checks: str, local_paths: List[pathlib.Path]) -> Set[str]:
+    async def exist_check(self, checks: str, local_paths: List[pathlib.Path]) -> Set[str]:
         """Checks if a list of files exists on the remote server and returns the existing ones."""
-        result = subprocess.run(
-            [
-                "ssh",
-                f"{self.remote_user}@{self.remote_host}",
-                "bash",
-                "-s",
-            ],
-            input=checks,
-            text=True,
-            capture_output=True,
-            check=True,
-            timeout=config.env.max_timeout,
+        proc = await asyncio.create_subprocess_shell(
+            f"ssh {self.remote_user}@{self.remote_host} bash -s",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        existing = set()
-        for line in result.stdout.splitlines():
-            try:
-                existing.add(local_paths[int(line)])
-            except (ValueError, IndexError):
-                # Unexpected output from the remote shell.
-                continue
-        return existing
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=checks.encode()),
+                timeout=config.env.max_timeout,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return set()
+        if proc.returncode == 0:
+            existing = set()
+            for line in stdout.decode().splitlines():
+                try:
+                    existing.add(local_paths[int(line)])
+                except (ValueError, IndexError):
+                    # Unexpected output from the remote shell.
+                    continue
+            return existing
+        return set()
 
-    def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
+    async def remote_files_exist(self, local_paths: List[pathlib.Path]) -> Set[str]:
         """Return the local paths whose corresponding remote files exist.
 
         All files are checked in a single SSH invocation. If the SSH call fails,
@@ -97,12 +122,15 @@ class Rsync:
         checks = "\n".join(f"test -f {shlex.quote(path)} && printf '%d\\n' {i}" for i, path in enumerate(remote_paths))
         checks += "\nexit 0\n"
 
-        existing = retry.retry(
-            function=self.exist_check, max_retries=2, backoff_factor=1, **dict(checks=checks, local_paths=local_paths)
+        existing = await retry.retry(
+            name=self.exist_check.__name__,
+            function=lambda: self.exist_check(checks=checks, local_paths=local_paths),
+            max_retries=2,
+            backoff_factor=1,
         )
         return existing.response or set()
 
-    def run(self, source: pathlib.Path) -> None:
+    async def run(self, source: pathlib.Path) -> None:
         """Syncs a file to a remote server with exponential backoff retry logic."""
         destination = self.get_remote_path(source)
         remote_location = f"{self.remote_user}@{self.remote_host}:" f"{destination}"
@@ -120,9 +148,11 @@ class Rsync:
             remote_location,
         ]
 
-        retry.retry(function=runner, raise_error=True, **dict(cmd=cmd, source=source))
+        await retry.retry(
+            name=runner.__name__, function=lambda: runner(cmd=" ".join(cmd), source=source), raise_error=True
+        )
 
-    def create_playlist(self, name: str) -> str:
+    async def create_playlist(self, name: str) -> str:
         """Create a .m3u file on the remote machine."""
         remote_loc = posixpath.join(self.remote_path, name)
         filepath = posixpath.join(self.remote_path, name, f"{name}.m3u")
@@ -136,15 +166,14 @@ class Rsync:
             f"ls *.mp3 > {shlex.quote(filepath)}",
         ]
         LOGGER.debug("Command: %s", cmd)
-        try:
-            subprocess.run(
-                cmd,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-        except subprocess.CalledProcessError as error:
-            LOGGER.error("Failed to create playlist for %r: %s", name, error)
+        proc = await asyncio.create_subprocess_shell(
+            " ".join(cmd),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            LOGGER.error("Failed to create playlist for %r: %s", name, stderr.decode())
         return filepath
 
 
