@@ -56,12 +56,11 @@ def process_callback(
     if schedule:
         schedule = schedule.value.lstrip("@").capitalize()
     if error := task.exception():
-        # TODO: Transfer fails might also be caught in this block; handle it separately or just make message agnostic
         if chat_id:
             if schedule:
-                txt = f"❌ *{schedule} download failed for {name!r}*\n\n{error}"
+                txt = f"❌ *{schedule} sync failed for {name!r}*\n\n{error}"
             else:
-                txt = f"❌ *Download failed for {name!r}*\n\n{error}"
+                txt = f"❌ *Sync failed for {name!r}*\n\n{error}"
             asyncio.create_task(bot.reply_to(chat_id=chat_id, message_id=message_id, response=txt))
         LOGGER.error("Process failed for %s", name)
         return

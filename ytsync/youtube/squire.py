@@ -239,7 +239,6 @@ def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     return ydl, info
 
 
-# TODO: Add size converter for every files' statistics in the response object
 def size_converter(byte_size: int | float) -> str:
     """Gets the current memory consumed and converts it to human friendly format.
 
