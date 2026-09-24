@@ -16,7 +16,7 @@ from ytsync.api import auth, models
 from ytsync.database import tracker
 from ytsync.modules import checkpoint, config
 from ytsync.telegram import bot, webhook
-from ytsync.youtube import youtube
+from ytsync.youtube import queue, youtube
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(
@@ -291,3 +291,51 @@ async def get_checkpoint(
     with open(target) as file:
         data = json.load(file)
     return checkpoint.Checkpoint(**data)
+
+
+async def get_queue(
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+) -> List[queue.Queue]:
+    """**API endpoint to get the current queue.**"""
+    auth.validate(apikey, False)
+    return list(queue.get())
+
+
+async def add_queue(
+    payload: queue.Queue,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """**API endpoint to add a queue item into the database.**
+
+    **Args**
+
+        ‣‣ payload: Queue object stored in the database.
+    """
+    auth.validate(apikey, False)
+    queue.insert(payload)
+    return {"ok": True}
+
+
+async def delete_queue(
+    timestamp: float,
+    payload: queue.Queue,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """**API endpoint to delete a queue from the database.**
+
+    **Args**
+
+        ‣‣ timestamp: Timestamp of the queue.
+        ‣‣ payload: Queue object stored in the database.
+    """
+    auth.validate(apikey, False)
+    with config.db.connection as connection:
+        cursor = connection.cursor()
+        cursor.execute(
+            "DELETE FROM queue WHERE timestamp = ? AND data = ?",
+            (
+                timestamp,
+                payload.model_dump_json(),
+            ),
+        )
+    return {"ok": True}
