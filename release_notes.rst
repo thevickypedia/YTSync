@@ -1,6 +1,51 @@
 Release Notes
 =============
 
+v1.0.0 (09/24/2026)
+-------------------
+- `0563add <https://github.com/thevickypedia/YTSync/commit/0563add5ecf72cc48e9cd2a0fb984e0e9f034e32>`_ chore: Release ``v1.0.0``
+- `6440ba3 <https://github.com/thevickypedia/YTSync/commit/6440ba357877dbd427d9e2a1b5b790a39fdf0a49>`_ refactor: Re-structure error message for telegram sync failures; remove TODOs
+- `7b4365c <https://github.com/thevickypedia/YTSync/commit/7b4365c526c9ddfe2b0e19425e3309604fbf8ae6>`_ perf: Avoid re-downloading files when they exist locally; minor performance improvements and size conversion stats for logging
+- `20f0bc8 <https://github.com/thevickypedia/YTSync/commit/20f0bc8fa98b4f5c7b57281fda5927e6123e057d>`_ feat: Enforce ONLY ``mp3`` and ``mp4`` formats for downloads
+- `736c4d3 <https://github.com/thevickypedia/YTSync/commit/736c4d3ba2e7b3812c0081d1566c6c2e2779a66c>`_ perf: Replace synchronous messaging with an async task instead
+- `3e2ad16 <https://github.com/thevickypedia/YTSync/commit/3e2ad1613f7823287578b31fe19ac1d649c54c56>`_ perf: Make all transfers including CLI based functionalities to be asynchronous
+- `e921764 <https://github.com/thevickypedia/YTSync/commit/e921764b3aa2113f05f2b4b490d5b2761da50224>`_ perf: Breakdown a monolith for download into multiple async functions for better modularity
+- `b0fbef3 <https://github.com/thevickypedia/YTSync/commit/b0fbef3e8a5b9c94d012767af6b106f2f3681db5>`_ perf: Re-use one ``httpx.AsyncClient`` object through the session; remove all usage for the ``requests`` module
+- `2c7a179 <https://github.com/thevickypedia/YTSync/commit/2c7a1797ba3c5d1856aa83d1a7059aac2af7caf9>`_ refactor: Distinguish connect vs read timeout for ``httpx`` requests
+- `27f95e7 <https://github.com/thevickypedia/YTSync/commit/27f95e7e4632987ed7b414f2ff5c7dca1fd4de8a>`_ feat: Create an end to end asynchronous ecosystem that hydrates long-polling, queueing, and tracking with no overhead
+- `6a2ab04 <https://github.com/thevickypedia/YTSync/commit/6a2ab04d209800d7614a9eb04c14242dfcb6fbac>`_ fix: Avoid producing time in the past when scheduling new tasks
+- `8733d66 <https://github.com/thevickypedia/YTSync/commit/8733d6644f38216e4ee7f215ed7decd6616cad50>`_ perf: Update queue status and add a buffer for queue trigger
+- `6c709cc <https://github.com/thevickypedia/YTSync/commit/6c709cc89331d9cf28fd442485bfd7396568b2d6>`_ perf: Move queue mechanism from JSON based to DB based logic
+- `d39a79b <https://github.com/thevickypedia/YTSync/commit/d39a79bde957bf54fddc8bc9198a5e5c2c3dd1cb>`_ perf: Replace process pool executor with a JSON file based logic for queued system execution
+- `db4f050 <https://github.com/thevickypedia/YTSync/commit/db4f05073010815e5dbf3c4c145deb3d4d04387d>`_ perf: Replace all assert statements with conditional value errors
+- `f29b104 <https://github.com/thevickypedia/YTSync/commit/f29b1040e649cfa3b904d2c6c5d5225a519ecf1d>`_ perf: Sanitize destination dir path names; create parents upon startup for fileIO; add a check for cli commands
+- `ca4cac4 <https://github.com/thevickypedia/YTSync/commit/ca4cac4793200c4251f84d7431f25f10efe6c3b6>`_ perf: Add stricter validations for list and get checkpoints
+- `245afca <https://github.com/thevickypedia/YTSync/commit/245afca8600988cb62fcd6b5b377f5a5699c9850>`_ perf: Add a callback function and a broad exception handler for background task; avoid breaking for broad exception during polling
+- `0a7d9b2 <https://github.com/thevickypedia/YTSync/commit/0a7d9b2cc421db7683fb757feb880dd91ad7367c>`_ chore: Add todos
+- `cadf8a1 <https://github.com/thevickypedia/YTSync/commit/cadf8a143266d9c3ff30b24b629f46614093d02d>`_ fix: Add file extension based on ``audio_only`` flag when checking for redundancies
+- `b11114a <https://github.com/thevickypedia/YTSync/commit/b11114a816e7cf61d541c40a71fa65253fca2f5f>`_ perf: Avoid awaiting futures during process shutdown; create parent dirs in destination; fix end time resolution in results
+- `1e53dfb <https://github.com/thevickypedia/YTSync/commit/1e53dfb59d5ab41a715e085d410844a6384438b6>`_ fix: Remove false positive when checking ``rsync.is_installed`` ; add a ``max_timeout`` for egress calls
+- `eca4212 <https://github.com/thevickypedia/YTSync/commit/eca421247f20de44193549460aa7d12ce686de92>`_ fix: Change inversed condition logic for trackers in the DB
+- `c12038b <https://github.com/thevickypedia/YTSync/commit/c12038b1b405ab55a72097e8670ea83f344aee3c>`_ refactor: Reduce noise in egress message for download completion
+- `e6fbe01 <https://github.com/thevickypedia/YTSync/commit/e6fbe01a2a12c8ce08f203a282fdcb7baddf7c5f>`_ refactor: Download immediately when download tester is enabled
+- `bcb131b <https://github.com/thevickypedia/YTSync/commit/bcb131b6ad5c48b7bf13ed23a655bbe2fdc4fba4>`_ feat: Include dedicated ``audio`` and ``video`` locations
+- `40a40e6 <https://github.com/thevickypedia/YTSync/commit/40a40e658a28d5fb9bda5d69bd63f982611fbdbd>`_ perf: Check for files instead of directories in exist check logic
+- `af2a615 <https://github.com/thevickypedia/YTSync/commit/af2a6155daa70b628168d483583a66b36264acab>`_ perf: Add ``UID`` and ``GID`` env vars for docker user configuration
+- `993cbd7 <https://github.com/thevickypedia/YTSync/commit/993cbd7699103b9bd2024f63303db5fdbb904b04>`_ perf: Add exception handler around create playlist that can occur based on docker container mounting
+- `d708758 <https://github.com/thevickypedia/YTSync/commit/d708758646af943cd1b636f986f946c32fb5dc9c>`_ perf: Create one background task to handle both scheduling and long polling for telegram messages
+- `8b15798 <https://github.com/thevickypedia/YTSync/commit/8b157980315a74ee1beb146fb7a982f6a68d7d8d>`_ feat: Include exist-check functionality even for single file downloads; break out the preprocessor tasks into individual functions
+- `387ef75 <https://github.com/thevickypedia/YTSync/commit/387ef754785867fbb392e174522eb06289206757>`_ perf: Replace tuple return with a dataclass model for better stability
+- `98c34b3 <https://github.com/thevickypedia/YTSync/commit/98c34b3e628abb19964a70fa03111d4dbf639e82>`_ perf: Add ``progress_hooks`` only for video downloads; handle results manually for audio files
+- `919dc91 <https://github.com/thevickypedia/YTSync/commit/919dc91c8cf53dfcfdc1f1b0ce87bfcb91e4cc86>`_ feat: Update CLI command to honor the ``audio_only`` flag
+- `c40e02e <https://github.com/thevickypedia/YTSync/commit/c40e02ee08ce70922e0171294432cb45a2aac393>`_ fix: Create parent directory in playlist function by default to avoid race condition; move generate params to a dedicated function
+- `ec684f0 <https://github.com/thevickypedia/YTSync/commit/ec684f042c62656def52adae08801fcb17676425>`_ feat: Include a feature to download video files along with user input to pick audio vs. video downloads
+- `d00ff6a <https://github.com/thevickypedia/YTSync/commit/d00ff6a8cc7647f56b4b4823b1de226f350e412f>`_ perf: Set playlist URLs based on the number of resolved URLs
+- `afdc3fe <https://github.com/thevickypedia/YTSync/commit/afdc3fe38ea504725e786843340c6c1cb29dd5ea>`_ refactor: Restrict ``/track`` only for playlists and ``playlist_url`` to just a generic ``url`` for compatability
+- `d3d5eee <https://github.com/thevickypedia/YTSync/commit/d3d5eee69adc910c7630fc0c02d260373ce3f913>`_ feat: Include a download tester to mimic a download; add TODOs
+- `34953bf <https://github.com/thevickypedia/YTSync/commit/34953bf05f25196a4cd9447f495dc947b8eb9050>`_ refactor: Update docstrings and docker-compose config
+- `78a4243 <https://github.com/thevickypedia/YTSync/commit/78a4243a90b0089a7c20c7ac32597dd69a13b57d>`_ fix: Create destination directory if missing when generating playlist file (edge-case)
+- `c753ed3 <https://github.com/thevickypedia/YTSync/commit/c753ed34fe435e7c80c51fe16f6b4c2867215c65>`_ chore: Update release notes for v0.2.0
+
 v0.2.0 (08/30/2026)
 -------------------
 - `cfede0d <https://github.com/thevickypedia/YTSync/commit/cfede0d25f97fbd924ea47e6bfdc67cd9c7f3ff3>`_ chore: Release ``v0.2.0``
