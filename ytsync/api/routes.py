@@ -7,7 +7,7 @@ from json.decoder import JSONDecodeError
 from typing import Dict, List
 
 import httpx
-from fastapi import Depends, Request
+from fastapi import Depends, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from yt_dlp.utils import DownloadError
@@ -294,11 +294,20 @@ async def get_checkpoint(
 
 
 async def get_queue(
+    response: Response,
+    include_history: bool = False,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ) -> List[queue.Queue]:
-    """**API endpoint to get the current queue.**"""
+    """**API endpoint to get the current queue.**
+
+    **Args**
+
+        ‣‣ include_history: Boolean flag to include past queue objects.
+    """
     auth.validate(apikey, False)
-    return list(queue.get())
+    queued_items = list(queue.get(include_history))
+    response.headers["total-count"] = str(len(queued_items))
+    return queued_items
 
 
 async def add_queue(
@@ -317,7 +326,6 @@ async def add_queue(
 
 
 async def delete_queue(
-    timestamp: float,
     payload: queue.Queue,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
@@ -325,17 +333,13 @@ async def delete_queue(
 
     **Args**
 
-        ‣‣ timestamp: Timestamp of the queue.
         ‣‣ payload: Queue object stored in the database.
     """
     auth.validate(apikey, False)
     with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
-            "DELETE FROM queue WHERE timestamp = ? AND data = ?",
-            (
-                timestamp,
-                payload.model_dump_json(),
-            ),
+            "DELETE FROM queue WHERE data = ?",
+            (payload.model_dump_json(),),
         )
     return {"ok": True}
