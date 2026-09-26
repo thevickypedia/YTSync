@@ -13,7 +13,6 @@ from fastapi.routing import APIRoute
 from ytsync.api import routes
 from ytsync.crontab import agent
 from ytsync.modules import config
-from ytsync.version import __version__
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -158,7 +157,7 @@ api_routes = [
     ),
 ]
 
-app = FastAPI(title="YTSync", version=__version__, lifespan=lifespan, routes=api_routes)
+app = FastAPI(title="YTSync", version=config.API_VERSION, lifespan=lifespan, routes=api_routes)
 
 
 def start():
