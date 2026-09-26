@@ -76,7 +76,18 @@ async def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
+async def version() -> str:
+    """Version endpoint."""
+    return config.API_VERSION
+
+
 api_routes = [
+    APIRoute(
+        endpoint=docs_redirect,
+        methods=["GET"],
+        path="/",
+        include_in_schema=False,
+    ),
     APIRoute(
         endpoint=health,
         methods=["GET"],
@@ -84,9 +95,9 @@ api_routes = [
         include_in_schema=False,
     ),
     APIRoute(
-        endpoint=docs_redirect,
+        endpoint=version,
         methods=["GET"],
-        path="/",
+        path="/version",
         include_in_schema=False,
     ),
     APIRoute(

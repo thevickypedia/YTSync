@@ -46,6 +46,7 @@ class Commands(StrEnum):
     start = "/start"
     help = "/help"
     status = "/status"
+    version = "/version"
 
     audio = "/audio"
     video = "/video"
@@ -456,8 +457,15 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
-        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n{txt}\n\n{get_queue_status()}"
+        final = (
+            f"🕐 *Server Timestamp:* `{config.now()}`\n\n"
+            f"⚙️ *Server Version:* `{config.API_VERSION}`\n\n"
+            f"{txt}\n\n{get_queue_status()}"
+        )
         await reply_to(chat.id, chat.message_id, final)
+        return
+    if data_class.text == Commands.version:
+        await reply_to(chat.id, chat.message_id, f"```\n{config.API_VERSION}\n```")
         return
     try:
         await executor(data_class.text, chat)

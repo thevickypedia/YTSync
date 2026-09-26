@@ -10,16 +10,30 @@ LOGGER = logging.getLogger("ytsync")
 
 
 class GitHub:
-    """Provides asynchronous access to GitHub release information."""
+    """Provides asynchronous access to GitHub release information.
+
+    >>> GitHub
+
+    """
+
+    BASE_URL = "https://api.github.com/repos/thevickypedia/YTSync"
 
     def __init__(self):
         """Initialize the GitHub API client."""
-        self.base_url = "https://api.github.com/repos/thevickypedia/YTSync"
+        git_token = (
+            os.getenv("GIT_TOKEN")
+            or os.getenv("git_token")
+            or os.getenv("GITHUB_TOKEN")
+            or os.getenv("github_token")
+            or ""
+        )
+        headers = {
+            "Accept": "application/vnd.github.v3+json",
+        }
+        if git_token:
+            headers["Authorization"] = f"Bearer {git_token}"
         self.client = httpx.AsyncClient(
-            headers={
-                "Authorization": f"Bearer {os.getenv('GIT_TOKEN') or os.getenv('git_token')}",
-                "Accept": "application/vnd.github.v3+json",
-            },
+            headers=headers,
             timeout=httpx.Timeout(None, connect=3, read=3),
         )
 
@@ -37,7 +51,7 @@ class GitHub:
         while True:
             try:
                 response = await self.client.get(
-                    f"{self.base_url}/releases?per_page=100&page={page}",
+                    f"{self.BASE_URL}/releases?per_page=100&page={page}",
                 )
                 response.raise_for_status()
             except httpx.HTTPError:
@@ -63,7 +77,7 @@ class GitHub:
         """
         try:
             response = await self.client.get(
-                f"{self.base_url}/git/ref/tags/{tag}",
+                f"{self.BASE_URL}/git/ref/tags/{tag}",
             )
             response.raise_for_status()
         except httpx.HTTPError:
@@ -72,7 +86,7 @@ class GitHub:
         if response_json := response.json():
             return (response_json.get("object", {}) or {}).get("sha")
 
-    async def get_latest_sha(self) -> str:
+    async def get_latest_sha(self) -> str | None:
         """Get the SHA of the latest commit on the default branch.
 
         Returns:
@@ -81,7 +95,7 @@ class GitHub:
         """
         try:
             response = await self.client.get(
-                f"{self.base_url}/commits",
+                f"{self.BASE_URL}/commits",
                 params={"per_page": 1},  # only need the latest
             )
             response.raise_for_status()
@@ -92,7 +106,7 @@ class GitHub:
         if isinstance(response_json, list):
             return response_json[0].get("sha")
 
-    async def resolve_api_version(self):
+    async def resolve_api_version(self) -> str:
         """Resolve the current API version from GitHub release information.
 
         Returns:
