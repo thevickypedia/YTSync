@@ -37,13 +37,11 @@ class GitHub:
             headers["Authorization"] = f"Bearer {git_token}"
         self.client = httpx.AsyncClient(
             headers=headers,
-            timeout=httpx.Timeout(None, connect=3, read=3),
+            timeout=httpx.Timeout(None, connect=3, read=5),
         )
 
     async def get_git_releases(self) -> AsyncGenerator[str]:
-        """Get GitHub release tag names asynchronously.
-
-        Handles pagination so that large release lists can be processed.
+        """Get GitHub release tag names with pagination for large release lists.
 
         Yields:
             str:
@@ -107,7 +105,8 @@ class GitHub:
 
         response_json = response.json()
         if isinstance(response_json, list):
-            return response_json[0].get("sha")
+            if isinstance(response_json[0], dict):
+                return response_json[0].get("sha")
 
     async def resolve_api_version(self) -> str:
         """Resolve the current API version from GitHub release information.
@@ -127,8 +126,8 @@ class GitHub:
 
         else:
             if current_sha:
-                self.BASE_WEB_URL += f"/commit/{current_sha[:8]}"
-                return f"{__version__}:{current_sha[:8]}"
+                self.BASE_WEB_URL += f"/commit/{current_sha[:7]}"
+                return f"{__version__}:{current_sha[:7]}"
             return f"{__version__}:dev"
 
 

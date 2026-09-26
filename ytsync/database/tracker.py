@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from http import HTTPStatus
 from typing import List, Tuple
 
@@ -43,21 +43,22 @@ def row_to_schema(row: Tuple[str, str, str, str]) -> DBSchema:
     return DBSchema(**wrapped)
 
 
-def get() -> Generator[DBSchema]:
+async def get() -> AsyncGenerator[DBSchema]:
     """Get trackers stored in the database.
 
     Yields:
         DBSchema:
         Yields a DBSchema object for each entry in the database.
     """
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         data = cursor.execute("SELECT * FROM ytsync").fetchall()
+
     for row in data:
         yield row_to_schema(row)
 
 
-def insert(
+async def insert(
     playlist_url: HttpUrl, schedule: config.AllowedCronSchedule, chat_id: int, raise_for_exception: bool = False
 ) -> str | int:
     """Handles tracker for a playlist URL.
@@ -73,7 +74,7 @@ def insert(
         Returns the response string for Telegram and HTTP code for API calls.
     """
     playlist_url = str(playlist_url)
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         # Selecting with 'chat_id' prevents cross-user access OR data corruption
         # However, selecting with 'chat_id' means the API should also pass the original 'chat_id',
@@ -114,7 +115,7 @@ def insert(
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced {schedule.name.lower()}"
 
 
-def stringified_get(trackers: List[DBSchema] | None = None) -> str:
+async def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     """Get trackers in a markdown-friendly format.
 
     Args:
@@ -126,7 +127,7 @@ def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     """
     txt = ""
     if trackers is None:
-        trackers = list(get())
+        trackers = [item async for item in get()]
     if trackers:
         txt += "\n\n*Trackers:*\n"
         for tracked in trackers:
@@ -150,7 +151,7 @@ async def sync(chat: settings.Chat, name: str | None = None, url: str | None = N
         str:
         Returns the response string for Telegram.
     """
-    trackers = list(get())
+    trackers = [item async for item in get()]
     source_system = checkpoint.SourceSystem(telegram=chat)
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
@@ -180,12 +181,12 @@ async def sync(chat: settings.Chat, name: str | None = None, url: str | None = N
             timeout=config.env.response_timeout,
         )
     elif trackers:
-        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}"
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers)}"
     else:
         return "⚠️ *Warning*\n\nNo trackers found on the server."
 
 
-def delete(
+async def delete(
     name: str | None = None,
     url: str | None = None,
     chat_id: int | None = None,
@@ -203,7 +204,7 @@ def delete(
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
-    trackers = list(get())
+    trackers = [item async for item in get()]
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
@@ -217,14 +218,14 @@ def delete(
                 status_code=HTTPStatus.BAD_REQUEST.real,
                 detail=f"Invalid tracker received: {name or url!r}. Select one from {trackers}",
             )
-        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{stringified_get(trackers)}"
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers)}"
     else:
         if raise_for_exception:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail="No trackers found on the server")
         return "⚠️ No trackers found!"
     tracker = tracker[0]
     url = str(tracker.url)
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         # Using 'chat_id' condition prevents cross-user access OR data corruption
         # However, deleting with 'chat_id' means the API should also pass the original 'chat_id',

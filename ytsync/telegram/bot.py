@@ -55,10 +55,20 @@ class Commands(StrEnum):
     delete = "/delete"
 
 
-def get_help():
-    """Get the help text for telegram interactions."""
+def get_help(start: bool):
+    """Get the help text for telegram interactions.
+
+    Args:
+        start: Boolean flag to indicate the help button should be a regular icon.
+    """
+    # Red emoji appears only when an invalid command is entered
+    sos = "ℹ️" if start else "🆘"
     return (
         "🎵 *YTSync Bot Commands*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"{sos} *{Commands.help}*\n"
+        f"🆙 *{Commands.status}*\n"
+        f"↪️ *{Commands.version}*\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         f"⬇️ *{Commands.audio}* `<URL>`\n"
         f"⬇️ *{Commands.video}* `<URL>`\n"
@@ -80,7 +90,7 @@ def intro() -> str:
     Returns:
         str:
     """
-    return f"\nTo start, send any YT link in the following format:\n\n{get_help()}"
+    return f"\nTo start, send any YT link in the following format:\n\n{get_help(True)}"
 
 
 async def _make_request(
@@ -412,9 +422,9 @@ async def process_document(
     await reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
-def get_queue_status() -> str:
+async def get_queue_status() -> str:
     """Get the status text for the queued system."""
-    status = queue.count()
+    status = await queue.count()
     txt = f"Total downloads submitted: {status.total}"
     if status.pending:
         txt += f"\nPending downloads: {status.pending}"
@@ -453,14 +463,14 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
     if data_class.text == Commands.status:
         txt = get_channel()
         try:
-            txt += tracker.stringified_get()
+            txt += await tracker.stringified_get()
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
         final = (
             f"🕐 *Server Timestamp:* `{config.now()}`\n\n"
             f"⚙️ *Server Version:* `{config.API_VERSION}`\n\n"
-            f"{txt}\n\n{get_queue_status()}"
+            f"{txt}\n\n{await get_queue_status()}"
         )
         await reply_to(chat.id, chat.message_id, final)
         return
@@ -521,11 +531,11 @@ async def executor(command: str, chat: settings.Chat) -> None:
                 if len(payload) == 1:
                     url = HttpUrl(payload[0])
                     schedule = config.AllowedCronSchedule.DAILY
-                    response = str(tracker.insert(url, schedule, chat.id))
+                    response = str(await tracker.insert(url, schedule, chat.id))
                 elif len(payload) == 2:
                     url = HttpUrl(payload[0])
                     schedule = getattr(config.AllowedCronSchedule, payload[1].upper())
-                    response = str(tracker.insert(url, schedule, chat.id))
+                    response = str(await tracker.insert(url, schedule, chat.id))
                 else:
                     response = invalid_msg.format(pretext="")
             except (AttributeError, ValidationError) as error:
@@ -544,15 +554,15 @@ async def executor(command: str, chat: settings.Chat) -> None:
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
-                response = str(tracker.delete(url=identifier))
+                response = str(await tracker.delete(url=identifier))
             else:
-                response = str(tracker.delete(name=identifier))
+                response = str(await tracker.delete(name=identifier))
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`."
     else:
         await send_message(
             chat_id=chat.id,
-            response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help()}",
+            response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help(False)}",
         )
         return
     await reply_to(chat.id, chat.message_id, response)

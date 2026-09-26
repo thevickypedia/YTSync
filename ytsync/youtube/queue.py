@@ -1,6 +1,6 @@
 import json
 import logging
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel
@@ -39,14 +39,14 @@ class QueueCount(BaseModel):
     pending: int
 
 
-def count() -> QueueCount:
+async def count() -> QueueCount:
     """Count the number of entries in the queue.
 
     Returns:
         QueueCount:
         Get the Queue count of total and pending items.
     """
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
         now = datetime.now(tz=timezone.utc).timestamp()
@@ -54,14 +54,14 @@ def count() -> QueueCount:
         return QueueCount(total=total, pending=pending)
 
 
-def get(include_past: bool = False) -> Generator[Queue]:
+async def get(include_past: bool = False) -> AsyncGenerator[Queue]:
     """Get queues stored in the database.
 
     Yields:
         Queue:
         Yields a Queue object for each entry in the database.
     """
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         if include_past:
             data = cursor.execute("SELECT data FROM queue").fetchall()
@@ -73,7 +73,7 @@ def get(include_past: bool = False) -> Generator[Queue]:
             yield Queue(**json.loads(row[0]))
 
 
-def insert(queue: Queue) -> None:
+async def insert(queue: Queue) -> None:
     """Handles tracker for a playlist URL.
 
     Args:
@@ -81,7 +81,7 @@ def insert(queue: Queue) -> None:
     """
     timestamp = datetime.fromisoformat(queue.scheduled_time).timestamp()
     data = queue.model_dump_json()
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
             "INSERT OR REPLACE INTO queue (timestamp, data) VALUES (?,?);",
@@ -93,20 +93,20 @@ def insert(queue: Queue) -> None:
         connection.commit()
 
 
-def latest_timestamp() -> Queue:
+async def latest_timestamp() -> Queue:
     """Get the latest Queue based on the timestamp in the table.
 
     Returns:
         Queue:
         Retrieves a Queue object for the latest timestamp.
     """
-    with config.db.connection as connection:
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         latest_data = cursor.execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()[0]
         return Queue(**json.loads(latest_data))
 
 
-def submit(
+async def submit(
     name: str,
     checkpoint_stats: checkpoint.Checkpoint,
     preprocessor_stats: squire.PreProcessor,
@@ -131,7 +131,7 @@ def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
-    q_count = count()
+    q_count = await count()
     now = datetime.now(timezone.utc)
 
     if config.env.download_tester:
@@ -153,7 +153,7 @@ def submit(
             scheduled_time = now + timedelta(seconds=config.env.next_buffer)
             LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     else:
-        last_queue = latest_timestamp()
+        last_queue = await latest_timestamp()
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
         # Out of last_scheduled_time and now; pick the most recent one
         base_time = max(now, last_scheduled_time)
@@ -165,7 +165,7 @@ def submit(
         )
     cooldown = max(0, (scheduled_time - now).total_seconds())
     LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
-    insert(
+    await insert(
         Queue(
             scheduled_time=scheduled_time.isoformat(),
             checkpoint=checkpoint_stats,

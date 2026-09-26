@@ -56,7 +56,7 @@ async def queue_download(
         preflight=preprocessed.preflight,
     )
 
-    cooldown = queue.submit(
+    cooldown = await queue.submit(
         name=name, checkpoint_stats=checkpoint_stats, preprocessor_stats=preprocessed, cron_schedule=cron_schedule
     )
 

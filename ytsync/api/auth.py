@@ -11,7 +11,7 @@ from ytsync.modules import config
 LOGGER = logging.getLogger("ytsync")
 
 
-def validate(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
+async def validate(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
     """Function to authenticate inbound requests.
 
     Args:
@@ -25,7 +25,7 @@ def validate(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
         )
 
 
-def two_factor(request: Request) -> bool:
+async def two_factor(request: Request) -> bool:
     """Two-factor verification for messages coming via webhook.
 
     Args:

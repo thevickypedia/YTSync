@@ -68,12 +68,12 @@ def create_task(coro: Coroutine, name: str) -> asyncio.Task:
 
 async def run_tracker() -> None:
     """Run all the trackers, per the schedule."""
-    for track in tracker.get():
+    async for track in tracker.get():
         try:
             cron_expr = expression.CronExpression(track.schedule.value)
         except exceptions.InvalidArgument as error:
             LOGGER.error("Invalid cron expression for '%s': %s", track.name, error)
-            tracker.delete(name=track.name, url=str(track.url), chat_id=track.chat_id, raise_for_exception=False)
+            await tracker.delete(name=track.name, url=str(track.url), chat_id=track.chat_id, raise_for_exception=False)
             continue
         # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
         # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly
@@ -101,7 +101,7 @@ async def run_queued(now: datetime) -> None:
         - If the current datetime matches the 'scheduled_time', then creates an asynchronous task for download
         - Once a task has been scheduled, the 'process_callback' is added as a callback to notify the user
     """
-    for q in queue.get():
+    async for q in queue.get():
         scheduled_time = datetime.fromisoformat(q.scheduled_time)
         if scheduled_time.replace(second=0, microsecond=0) != now:
             continue

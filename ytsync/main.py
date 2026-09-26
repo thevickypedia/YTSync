@@ -17,7 +17,7 @@ from ytsync.modules import config, releases
 LOGGER = logging.getLogger("ytsync")
 
 
-def log_config() -> None:
+async def log_config() -> None:
     """Log all safe env configuration."""
     LOGGER.debug("***************************** CONFIGURATION START *****************************")
     sensitive = ("log_config", "bot_token", "bot_secret", "apikey", "bot_users", "bot_chat_ids")
@@ -52,7 +52,7 @@ async def lifespan(_: FastAPI):
     """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
     # noinspection HttpUrlsUsage
     if LOGGER.isEnabledFor(logging.DEBUG):
-        log_config()
+        await log_config()
     LOGGER.info("Initiating background tasks...")
     bg_task = asyncio.create_task(agent.executor())
     bg_task.add_done_callback(bg_task_callback)

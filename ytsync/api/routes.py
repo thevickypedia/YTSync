@@ -50,7 +50,7 @@ async def telegram_webhook(request: Request):
             detail=HTTPStatus.BAD_REQUEST.phrase,
         )
     # Ensure only the owner who set the webhook can interact with the Bot
-    if not auth.two_factor(request):
+    if not await auth.two_factor(request):
         LOGGER.error("Request received from a non-webhook source")
         LOGGER.error(response)
         raise HTTPException(status_code=HTTPStatus.FORBIDDEN.real, detail=HTTPStatus.FORBIDDEN.phrase)
@@ -83,7 +83,7 @@ async def api_set_webhook(
         ‣‣ 'secret_token' is required to authenticate the incoming request to avoid man-in-the-middle attacks.
         ‣‣ 'webhook_ip' is optional; useful for bots behind a NAT or complex network configurations.
     """
-    auth.validate(apikey, True)
+    await auth.validate(apikey, True)
     # Invalid URL scheme - only 'https' is accepted
     if body.webhook.scheme != "https":
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL scheme")
@@ -117,7 +117,7 @@ async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """**API endpoint to GET a webhook.**"""
-    auth.validate(apikey, True)
+    await auth.validate(apikey, True)
     try:
         return await webhook.get_webhook()
     except httpx.HTTPError as error:
@@ -131,7 +131,7 @@ async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """**API endpoint to DELETE a webhook.**"""
-    auth.validate(apikey, True)
+    await auth.validate(apikey, True)
     try:
         response = await webhook.delete_webhook()
         config.telegram_beat.poll_for_messages = True
@@ -147,8 +147,8 @@ async def api_get_trackers(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ) -> List[tracker.DBSchema]:
     """**API endpoint to GET all trackers.**"""
-    auth.validate(apikey, False)
-    return list(tracker.get())
+    await auth.validate(apikey, False)
+    return [item async for item in tracker.get()]
 
 
 async def api_add_trackers(
@@ -168,8 +168,8 @@ async def api_add_trackers(
         ‣‣ 'schedule' must be @hourly, @daily, @weekly, or @monthly as a string.
         ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
     """
-    auth.validate(apikey, False)
-    tracker.insert(body.url, body.schedule, body.chat_id, raise_for_exception=True)
+    await auth.validate(apikey, False)
+    await tracker.insert(body.url, body.schedule, body.chat_id, raise_for_exception=True)
 
 
 async def api_delete_trackers(
@@ -190,12 +190,12 @@ async def api_delete_trackers(
         ‣‣ 'url' to identify and delete the tracker.
         ‣‣ 'chat_id' the tracker was requested with. If the original request was an API call, set it to 0.
     """
-    auth.validate(apikey, False)
+    await auth.validate(apikey, False)
     if not any((body.name, body.url)):
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required for each entry."
         )
-    tracker.delete(name=body.name, url=body.url, chat_id=body.chat_id, raise_for_exception=True)
+    await tracker.delete(name=body.name, url=body.url, chat_id=body.chat_id, raise_for_exception=True)
 
 
 async def download(
@@ -215,7 +215,7 @@ async def download(
         ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
         ‣‣ 'chat_id' is optional to send a telegram notification when the download completes/fails.
     """
-    auth.validate(apikey, False)
+    await auth.validate(apikey, False)
     try:
         api_source = checkpoint.APISource(
             host=request.client.host,
@@ -249,7 +249,7 @@ async def list_checkpoints(
           ]
         }
     """
-    auth.validate(apikey, False)
+    await auth.validate(apikey, False)
     return {
         parent.name: [
             int(match.group())
@@ -274,7 +274,7 @@ async def get_checkpoint(
         ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
-    auth.validate(apikey, False)
+    await auth.validate(apikey, False)
     if not timestamp.isdigit():
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST.real,
@@ -304,8 +304,8 @@ async def get_queue(
 
         ‣‣ include_history: Boolean flag to include past queue objects.
     """
-    auth.validate(apikey, False)
-    queued_items = list(queue.get(include_history))
+    await auth.validate(apikey, False)
+    queued_items = [item async for item in queue.get(include_history)]
     response.headers["total-count"] = str(len(queued_items))
     return queued_items
 
@@ -320,8 +320,8 @@ async def add_queue(
 
         ‣‣ payload: Queue object stored in the database.
     """
-    auth.validate(apikey, False)
-    queue.insert(payload)
+    await auth.validate(apikey, False)
+    await queue.insert(payload)
     return {"ok": True}
 
 
@@ -335,8 +335,8 @@ async def delete_queue(
 
         ‣‣ payload: Queue object stored in the database.
     """
-    auth.validate(apikey, False)
-    with config.db.connection as connection:
+    await auth.validate(apikey, False)
+    async with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
             "DELETE FROM queue WHERE data = ?",

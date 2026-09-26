@@ -1,16 +1,14 @@
-import logging
-import os
+import asyncio
 import pathlib
-import random
 import sqlite3
 from types import TracebackType
 from typing import List, Tuple, Type
 
 
-class DatabaseConnection:
-    """Context manager for SQLite database connections.
+class AsyncDatabaseConnection:
+    """Context manager for asynchronous SQLite database connections.
 
-    >>> DatabaseConnection
+    >>> AsyncDatabaseConnection
 
     """
 
@@ -26,16 +24,21 @@ class DatabaseConnection:
         self.datastore = datastore
         self.timeout = timeout
 
-    def __enter__(self) -> sqlite3.Connection:
+    async def __aenter__(self) -> sqlite3.Connection:
         """Creates and returns a database connection.
 
         Returns:
             sqlite3.Connection: An active connection to the database.
         """
-        self.connection = sqlite3.connect(database=self.datastore, check_same_thread=False, timeout=self.timeout)
+        self.connection = await asyncio.to_thread(
+            sqlite3.connect,
+            self.datastore,
+            check_same_thread=False,
+            timeout=self.timeout,
+        )
         return self.connection
 
-    def __exit__(
+    async def __aexit__(
         self,
         exc_type: Type[BaseException] | None,
         exc_val: BaseException | None,
@@ -49,10 +52,11 @@ class DatabaseConnection:
             exc_tb: Exception traceback, if an exception was raised, otherwise ``None``.
         """
         if exc_type:
-            self.connection.rollback()
+            await asyncio.to_thread(self.connection.rollback)
         else:
-            self.connection.commit()
-        self.connection.close()
+            await asyncio.to_thread(self.connection.commit)
+
+        await asyncio.to_thread(self.connection.close)
 
 
 class Database:
@@ -76,14 +80,14 @@ class Database:
         self.timeout = timeout
 
     @property
-    def connection(self) -> DatabaseConnection:
+    def connection(self) -> AsyncDatabaseConnection:
         """Creates a database connection.
 
         Returns:
             DatabaseConnection:
             Returns a ``DatabaseConnection`` object and ensures it is committed and closed after execution.
         """
-        return DatabaseConnection(self.datastore, self.timeout)
+        return AsyncDatabaseConnection(self.datastore, self.timeout)
 
     def create_table(self, table_name: str, columns: List[str] | Tuple[str], primary_key: str | None = None) -> None:
         """Creates the table with the required columns.
@@ -98,75 +102,7 @@ class Database:
                 raise ValueError(f"{primary_key!r} should be one of the columns")
             # Rebuild the column definition with PRIMARY KEY
             columns = [f"{col} PRIMARY KEY" if col == primary_key else col for col in columns]
-        with self.connection as connection:
+        with sqlite3.connect(database=self.datastore, check_same_thread=False, timeout=self.timeout) as connection:
             cursor = connection.cursor()
             # Use f-string or %s as table names cannot be parametrized
             cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns)})")
-
-
-class __TestDatabase:
-    """Basic examples of a test database.
-
-    >>> __TestDatabase
-
-    """
-
-    def __init__(self):
-        """Initiates all the imported modules and creates a database file named ``sample``."""
-        handler = logging.StreamHandler()
-        fmt_ = logging.Formatter(
-            fmt="%(asctime)s - %(levelname)s - [%(module)s:%(lineno)d] - %(funcName)s - %(message)s",
-            datefmt="%b-%d-%Y %I:%M:%S %p",
-        )
-        handler.setFormatter(fmt=fmt_)
-        logging.root.addHandler(hdlr=handler)
-        logging.root.setLevel(level=logging.DEBUG)
-        self.db = Database(database="sample")
-
-    def at_exit(self):
-        """Deletes the database file ``sample``."""
-        os.remove(self.db.datastore)
-
-    def random_single(self) -> None:
-        """Example using a single column."""
-        self.db.create_table(table_name="TestDatabase", columns=["column"], primary_key="column")
-        with self.db.connection as connection:
-            cursor_ = connection.cursor()
-            cursor_.execute("INSERT INTO TestDatabase (column) VALUES (?);", (True,))
-            connection.commit()
-            if foo := cursor_.execute("SELECT column FROM TestDatabase").fetchone():
-                logging.info(foo[0])
-                cursor_.execute("DELETE FROM TestDatabase WHERE column=1")
-                connection.commit()
-            if bar := cursor_.execute("SELECT column FROM TestDatabase").fetchone():
-                logging.warning(bar[0])
-            cursor_.execute("DROP TABLE IF EXISTS TestDatabase")
-            connection.commit()
-
-    def random_double(self) -> None:
-        """Example using two columns with only one holding a value at any given time."""
-        self.db.create_table(table_name="TestDatabase", columns=["row", "column"])
-        with self.db.connection as connection:
-            cursor_ = connection.cursor()
-            cursor_.execute(
-                f"INSERT INTO TestDatabase ({random.choice(['row', 'column'])}) VALUES (?);",
-                (True,),
-            )
-            connection.commit()
-            if (row := cursor_.execute("SELECT row FROM TestDatabase").fetchone()) and row[0]:
-                logging.info(f"Row: {row[0]}")
-                cursor_.execute("DELETE FROM TestDatabase WHERE row=1")
-                connection.commit()
-            if (col := cursor_.execute("SELECT column FROM TestDatabase").fetchone()) and col[0]:
-                logging.info(f"Column: {col[0]}")
-                cursor_.execute("DELETE FROM TestDatabase WHERE column=1")
-                connection.commit()
-            cursor_.execute("DROP TABLE IF EXISTS TestDatabase")
-            connection.commit()
-
-
-if __name__ == "__main__":
-    test_db = __TestDatabase()
-    test_db.random_single()
-    test_db.random_double()
-    test_db.at_exit()
