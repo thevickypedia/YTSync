@@ -16,7 +16,10 @@ class GitHub:
 
     """
 
-    BASE_URL = "https://api.github.com/repos/thevickypedia/YTSync"
+    OWNER = "thevickypedia"
+    REPO = "YTSync"
+    BASE_WEB_URL = f"https://github.com/{OWNER}/{REPO}"
+    BASE_API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}"
 
     def __init__(self):
         """Initialize the GitHub API client."""
@@ -51,7 +54,7 @@ class GitHub:
         while True:
             try:
                 response = await self.client.get(
-                    f"{self.BASE_URL}/releases?per_page=100&page={page}",
+                    f"{self.BASE_API_URL}/releases?per_page=100&page={page}",
                 )
                 response.raise_for_status()
             except httpx.HTTPError:
@@ -77,7 +80,7 @@ class GitHub:
         """
         try:
             response = await self.client.get(
-                f"{self.BASE_URL}/git/ref/tags/{tag}",
+                f"{self.BASE_API_URL}/git/ref/tags/{tag}",
             )
             response.raise_for_status()
         except httpx.HTTPError:
@@ -95,7 +98,7 @@ class GitHub:
         """
         try:
             response = await self.client.get(
-                f"{self.BASE_URL}/commits",
+                f"{self.BASE_API_URL}/commits",
                 params={"per_page": 1},  # only need the latest
             )
             response.raise_for_status()
@@ -119,10 +122,14 @@ class GitHub:
         async for tag_name in self.get_git_releases():
             if tag_name.lstrip("v") == __version__:
                 if current_sha == (await self.get_release_sha(tag_name) or ""):
+                    self.BASE_WEB_URL += f"/releases/tag/v{__version__}"
                     return __version__
 
         else:
-            return f"{__version__}:{current_sha[:8]}" if current_sha else f"{__version__}:dev"
+            if current_sha:
+                self.BASE_WEB_URL += f"/commit/{current_sha[:8]}"
+                return f"{__version__}:{current_sha[:8]}"
+            return f"{__version__}:dev"
 
 
 github = GitHub()

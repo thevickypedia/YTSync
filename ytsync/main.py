@@ -12,7 +12,7 @@ from fastapi.routing import APIRoute
 
 from ytsync.api import routes
 from ytsync.crontab import agent
-from ytsync.modules import config
+from ytsync.modules import config, releases
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -168,7 +168,16 @@ api_routes = [
     ),
 ]
 
-app = FastAPI(title="YTSync", version=config.API_VERSION, lifespan=lifespan, routes=api_routes)
+app = FastAPI(
+    title=releases.github.REPO,
+    description=(
+        f"#### Gateway to communicate with {releases.github.REPO}\n\n"
+        f"**Source Code:** [{releases.github.OWNER}/{releases.github.REPO}]({releases.github.BASE_WEB_URL})"
+    ),
+    version=config.API_VERSION,
+    lifespan=lifespan,
+    routes=api_routes,
+)
 
 
 def start():
