@@ -1,6 +1,29 @@
 Release Notes
 =============
 
+v1.1.0 (09/27/2026)
+-------------------
+- `4096b2a <https://github.com/thevickypedia/YTSync/commit/4096b2a83accdcd44daadb3824f107d98585e0c6>`_ chore: Release ``v1.1.0``
+- `cd746a8 <https://github.com/thevickypedia/YTSync/commit/cd746a89ee184d600c5904bacdc204398d3de890>`_ refactor: Move telegram settings and update all references
+- `f3d2543 <https://github.com/thevickypedia/YTSync/commit/f3d25437f2ec24af76545a3cec8cfc3c0b09191f>`_ feat: Add ``queue_retention_period`` to handle auto-delete queue entries in database
+- `5674cdf <https://github.com/thevickypedia/YTSync/commit/5674cdf902e9707fe0bbc814dffab9ef56c8548a>`_ perf: Add an outer deadline independent of the per-request timeouts for version resolution
+- `63db6b7 <https://github.com/thevickypedia/YTSync/commit/63db6b7198db6b0303b1f8e8b83456172bfc5db9>`_ refactor: Move queue deletion logic to a separate function
+- `9199127 <https://github.com/thevickypedia/YTSync/commit/91991276337bf1cff24ae4fd9c1ff2ca00f01e7f>`_ fix: Handle missing extension for playlist creation
+- `680e3d3 <https://github.com/thevickypedia/YTSync/commit/680e3d340ee28386ce9f459f32e72f00bc157744>`_ perf: Avoid network calls when DB connection is open; improve asynchronous handler for ``get_info`` block
+- `f6b30d9 <https://github.com/thevickypedia/YTSync/commit/f6b30d991b30239afdd3ee04f0c8096d3cbdb69d>`_ perf: Improve thread-safe async tasks; handle run-time errors for API versioning; update ``uvicorn`` dependency
+- `c9d3f2a <https://github.com/thevickypedia/YTSync/commit/c9d3f2a7d0ea78f4b362271b3a1c4bb00b56a7c1>`_ fix: Add missing timeout handler for remote playlist creation
+- `73cfaa8 <https://github.com/thevickypedia/YTSync/commit/73cfaa8c57c8e0ff51cef387c912c47f3adf176c>`_ refactor: Change input type for ``DELETE /delete-queue``; Honor timeouts for CLI downloads
+- `5172f04 <https://github.com/thevickypedia/YTSync/commit/5172f04ead8ed6f872872256eee3fa28e2868b59>`_ fix: Use ``pending`` queued items to calculate the ``scheduled_time`` for the remaining Q elements
+- `48dca11 <https://github.com/thevickypedia/YTSync/commit/48dca11c07a24ce46cfabd1f8f9b4a4b74b62821>`_ fix: Avoid adding ``cooldown_interval`` for queued downloads when last scheduled is older than cooldwon
+- `82216f5 <https://github.com/thevickypedia/YTSync/commit/82216f54f0563d671b450dff1d8cc6fcc3208d52>`_ perf: Make network bound YT download operations asynchronous
+- `8876dd7 <https://github.com/thevickypedia/YTSync/commit/8876dd75fded75ddb7859e71ddc235b081050815>`_ perf: Make all DB connections and SQL query executions asynchronous
+- `147c1d7 <https://github.com/thevickypedia/YTSync/commit/147c1d7e579ded4e9b8d4c2c4ab66d47b00ae6af>`_ refactor: Add API description
+- `462538e <https://github.com/thevickypedia/YTSync/commit/462538e24f1b1b819ca79ae6c8a16b2629a98a60>`_ feat: Add ``GET /version`` endpoint and telegram responses for ``/version`` and ``/status`` requests
+- `85291df <https://github.com/thevickypedia/YTSync/commit/85291df3bb81fc8acda2bc885302c52dbc6737a2>`_ feat: Set API version based on GitHub releases
+- `0dab5b6 <https://github.com/thevickypedia/YTSync/commit/0dab5b63643302a6fe8616521e7a00ad265a2fa6>`_ feat: Update ``GET /get-queue`` endpoint to fetch historically queued elements along with ``total-count`` response header
+- `c4264cf <https://github.com/thevickypedia/YTSync/commit/c4264cf82e8417a59012161165e4913f60600594>`_ feat: Add new routes to ``GET``, ``PUT``, and ``DELETE`` queues
+- `d3caf0f <https://github.com/thevickypedia/YTSync/commit/d3caf0f3d34760f0b80afca271b96ccf75d3b6e3>`_ chore: Update release notes for v1.0.0
+
 v1.0.0 (09/24/2026)
 -------------------
 - `0563add <https://github.com/thevickypedia/YTSync/commit/0563add5ecf72cc48e9cd2a0fb984e0e9f034e32>`_ chore: Release ``v1.0.0``
