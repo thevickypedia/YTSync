@@ -60,6 +60,7 @@ async def lifespan(_: FastAPI):
         # SET: app.state.http_client = client
         # USE: client: httpx.AsyncClient = request.app.state.http_client
         config.ASYNC_CLIENT = client
+        config.MAIN_EVENT_LOOP = asyncio.get_running_loop()
         yield
     # Stop the background task
     bg_task.cancel()

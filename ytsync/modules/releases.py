@@ -74,7 +74,7 @@ class GitHub:
 
         Returns:
             str | None:
-            The tag's SHA, or None if the request fails or the response does not contain a SHA.
+            The tag's SHA, or None if the request fails or the response does not contain a commit SHA.
         """
         try:
             response = await self.client.get(
@@ -86,13 +86,14 @@ class GitHub:
 
         if response_json := response.json():
             return (response_json.get("object", {}) or {}).get("sha")
+        return None
 
     async def get_latest_sha(self) -> str | None:
         """Get the SHA of the latest commit on the default branch.
 
         Returns:
             str | None:
-            The latest commit SHA, or None if the request fails or the response does not contain a SHA.
+            The latest commit SHA, or None if the request fails or the response does not contain a commit SHA.
         """
         try:
             response = await self.client.get(
@@ -107,8 +108,16 @@ class GitHub:
         if isinstance(response_json, list):
             if isinstance(response_json[0], dict):
                 return response_json[0].get("sha")
+        return None
 
     async def resolve_api_version(self) -> str:
+        """Return the resolver result and close the async client."""
+        try:
+            return await self._resolve_api_version()
+        finally:
+            await self.client.aclose()
+
+    async def _resolve_api_version(self) -> str:
         """Resolve the current API version from GitHub release information.
 
         Returns:
@@ -120,7 +129,8 @@ class GitHub:
 
         async for tag_name in self.get_git_releases():
             if tag_name.lstrip("v") == __version__:
-                if current_sha == (await self.get_release_sha(tag_name) or ""):
+                release_sha = await self.get_release_sha(tag_name)
+                if current_sha and release_sha and current_sha == release_sha:
                     self.BASE_WEB_URL += f"/releases/tag/v{__version__}"
                     return __version__
 

@@ -32,7 +32,11 @@ LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 ASYNC_CLIENT: httpx.AsyncClient
-API_VERSION = asyncio.run(releases.github.resolve_api_version())
+MAIN_EVENT_LOOP: asyncio.AbstractEventLoop
+try:
+    API_VERSION = asyncio.run(releases.github.resolve_api_version())
+except RuntimeError:
+    API_VERSION = releases.__version__
 
 
 @dataclass
@@ -154,7 +158,7 @@ def now() -> str:
     return datetime.now(env.tz).strftime("%a %b %d %Y %H:%M %Z")
 
 
-# 'bot_webhook' is optional but 'bot_endpoint' is mandatory
+# 'bot_webhook' is optional, but 'bot_endpoint' is mandatory
 # 'bot_endpoint' is registered in FastAPI during startup to serve incoming requests via webhooks
 if env.bot_webhook and env.bot_webhook.path != env.bot_endpoint:
     raise ValidationError.from_exception_data(
