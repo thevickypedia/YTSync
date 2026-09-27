@@ -152,7 +152,7 @@ class Rsync:
             name=runner.__name__, function=lambda: runner(cmd=" ".join(cmd), source=source), raise_error=True
         )
 
-    async def create_playlist(self, name: str) -> str:
+    async def create_playlist(self, name: str, extension: str) -> str:
         """Create a .m3u file on the remote machine."""
         remote_loc = posixpath.join(self.remote_path, name)
         filepath = posixpath.join(self.remote_path, name, f"{name}.m3u")
@@ -163,7 +163,7 @@ class Rsync:
             f"{self.remote_user}@{self.remote_host}",
             f"mkdir -p {shlex.quote(remote_loc)} && "
             f"cd {shlex.quote(remote_loc)} && "
-            f"ls *.mp3 > {shlex.quote(filepath)}",
+            f"ls *{extension} > {shlex.quote(filepath)}",
         ]
         LOGGER.debug("Command: %s", cmd)
         proc = await asyncio.create_subprocess_shell(
@@ -180,7 +180,8 @@ class Rsync:
             proc.kill()
             await proc.wait()
             raise
-        assert proc.returncode == 0, f"Failed to create playlist for {name}: {stderr.decode()}"
+        if proc.returncode != 0:
+            raise RuntimeError(f"Failed to create playlist for {name}: {stderr.decode()}")
         return filepath
 
 

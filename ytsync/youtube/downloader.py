@@ -190,6 +190,7 @@ async def download(
     total_files = preprocess_stats.total_files or len(preprocess_stats.url_file_map)
     destination = checkpoint_stats.initial_destination
     audio_only = checkpoint_stats.source_system.audio_only
+    extension = ".mp3" if audio_only else ".mp4"
     options = generate_params(audio_only=audio_only, destination=destination, stats=stats)
     transfer_pool = []
     if transfer.rsync.is_enabled:
@@ -241,13 +242,15 @@ async def download(
             raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
         LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
         try:
-            playlist_id = await transfer.rsync.create_playlist(name) if checkpoint_stats.is_playlist else None
+            playlist_id = (
+                await transfer.rsync.create_playlist(name, extension) if checkpoint_stats.is_playlist else None
+            )
         except Exception as error:
             LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
             playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
     else:
         try:
-            playlist_id = create_local_playlist(destination) if checkpoint_stats.is_playlist else None
+            playlist_id = create_local_playlist(destination, extension) if checkpoint_stats.is_playlist else None
         except Exception as error:
             LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
             playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
@@ -256,11 +259,11 @@ async def download(
     return checkpoint_stats
 
 
-def create_local_playlist(destination: pathlib.Path) -> str | None:
+def create_local_playlist(destination: pathlib.Path, extension: str) -> str | None:
     """Create a .m3u file on the local machine."""
     destination.mkdir(parents=True, exist_ok=True)
     filepath = destination / f"{destination.name}.m3u"
-    if files := [file.name for file in destination.glob("*.mp3")]:
+    if files := [file.name for file in destination.glob(f"*{extension}")]:
         with filepath.open("w", encoding="utf-8") as playlist_file:
             playlist_file.write("\n".join(files) + "\n")
         return str(filepath)
