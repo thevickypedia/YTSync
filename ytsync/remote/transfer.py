@@ -171,9 +171,16 @@ class Rsync:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            LOGGER.error("Failed to create playlist for %r: %s", name, stderr.decode())
+        try:
+            _stdout, stderr = await asyncio.wait_for(
+                proc.communicate(),
+                timeout=config.env.max_timeout,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
+        assert proc.returncode == 0, f"Failed to create playlist for {name}: {stderr.decode()}"
         return filepath
 
 

@@ -240,7 +240,11 @@ async def download(
             joined = "\n".join(f"• {item}" for item in stats["transfer_failed"])
             raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
         LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
-        playlist_id = await transfer.rsync.create_playlist(name) if checkpoint_stats.is_playlist else None
+        try:
+            playlist_id = await transfer.rsync.create_playlist(name) if checkpoint_stats.is_playlist else None
+        except Exception as error:
+            LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
+            playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
     else:
         try:
             playlist_id = create_local_playlist(destination) if checkpoint_stats.is_playlist else None
