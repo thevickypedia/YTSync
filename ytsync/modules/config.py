@@ -4,7 +4,6 @@ import os
 import pathlib
 import socket
 import warnings
-from dataclasses import dataclass
 from datetime import datetime, tzinfo
 from enum import StrEnum
 from ipaddress import IPv4Address
@@ -21,11 +20,12 @@ from pydantic import (
     PositiveFloat,
     PositiveInt,
     ValidationError,
+    field_validator,
 )
 from pydantic_core import InitErrorDetails
 
 from ytsync.database import database
-from ytsync.modules import pydantic_config, releases
+from ytsync.modules import pydantic_config, releases, startup
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
@@ -39,23 +39,7 @@ except RuntimeError:
     API_VERSION = releases.__version__
 
 
-@dataclass
-class TelegramBeat:
-    """Telegram beat class.
-
-    >>> TelegramBeat
-
-    """
-
-    offset: int = 0
-    failed_connections: int = 0
-
-    polling_in_progress: bool = False
-    poll_for_messages: bool = False
-    restart_loop: bool = False
-
-
-telegram_beat = TelegramBeat()
+telegram_beat = startup.TelegramBeat()
 
 
 class AllowedCronSchedule(StrEnum):
@@ -127,11 +111,20 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # 'cooldown_interval' with # of seconds is used to propagate delay between each download
     cooldown_interval: PositiveInt = Field(300, ge=60, le=10_800)  # 60s to 3h; default: 5m
 
+    # Cleanup queued
+    queue_retention_period: str = Field("3d")
+
     # Remote config
     remote_host: str | None = None
     remote_user: str | None = None
     remote_path: str | None = None
     delete_after_sync: bool = True
+
+    @field_validator("queue_retention_period")
+    @classmethod
+    def validate_retention_period(cls, value: str) -> str:
+        """Validates a retention period."""
+        return startup.validate_retention_period(value)
 
     class Config:
         """Environment variables configuration."""

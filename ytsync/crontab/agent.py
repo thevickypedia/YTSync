@@ -3,11 +3,11 @@ import functools
 import logging
 import time
 from collections.abc import Coroutine
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config, exceptions
+from ytsync.modules import checkpoint, config, exceptions, startup
 from ytsync.telegram import handler, poll
 from ytsync.youtube import callbacks, downloader, queue, youtube
 
@@ -114,6 +114,30 @@ async def run_queued(now: datetime) -> None:
         task.add_done_callback(functools.partial(callbacks.process_callback, payload=q))
 
 
+async def cleanup_queue() -> None:
+    """Clean up the queue by deleting entries that are older than the retention period."""
+    retention = timedelta(minutes=startup.duration_to_minutes(config.env.queue_retention_period))
+    cutoff = datetime.now(timezone.utc) - retention
+    async for q in queue.get(include_past=True):
+        if datetime.fromisoformat(q.scheduled_time) < cutoff:
+            LOGGER.info("Deleting queue entry %s scheduled at %s", q.checkpoint.name, q.scheduled_time)
+            await queue.delete(q.scheduled_time)
+            log_parms = {
+                "name": q.checkpoint.name,
+                "runtime": q.checkpoint.runtime,
+                "scheduled_time": q.scheduled_time,
+                "urls": q.checkpoint.preflight.total,
+                "downloaded": len(q.checkpoint.downloaded),
+                "transferred": len(q.checkpoint.transferred),
+                "download_failed": len(q.checkpoint.download_failed),
+                "transfer_failed": len(q.checkpoint.transfer_failed),
+            }
+            LOGGER.debug("***************************** DELETION START *****************************")
+            for key, value in log_parms.items():
+                LOGGER.debug("%s: %s", key, value)
+            LOGGER.debug("***************************** DELETION END *****************************")
+
+
 async def run_polling() -> None:
     """Runs a set of conditional logic to poll for incoming messages from the telegram bot.
 
@@ -148,6 +172,7 @@ async def single_task() -> None:
     LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
     await run_tracker()
     await run_queued(now)
+    await cleanup_queue()
 
 
 async def executor() -> None:
