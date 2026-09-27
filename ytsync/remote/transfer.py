@@ -13,10 +13,10 @@ from ytsync.modules import config, retry
 LOGGER = logging.getLogger("ytsync")
 
 
-async def runner(cmd: str, source: pathlib.Path) -> None:
+async def runner(cmd: list[str], source: pathlib.Path) -> None:
     """Runs a given command with an asyncio subprocess."""
-    proc = await asyncio.create_subprocess_shell(
-        cmd,
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -25,22 +25,28 @@ async def runner(cmd: str, source: pathlib.Path) -> None:
             proc.communicate(),
             timeout=config.env.max_timeout,
         )
-    except asyncio.TimeoutError as warn:
-        LOGGER.warning(f"Timeout error occurred while running command: {cmd}")
-        LOGGER.warning(warn)
+    except asyncio.TimeoutError:
+        LOGGER.warning("Timeout error occurred while running command: %s", cmd)
         proc.kill()
         await proc.wait()
         raise
     stdout = stdout.decode()
     stderr = stderr.decode()
     if proc.returncode == 0:
-        LOGGER.info(f"Successfully synced {source}")
+        LOGGER.info("Successfully synced %s", source)
         return
+    LOGGER.error(
+        "Command failed (exit %s): %s\nstdout: %s\nstderr: %s",
+        proc.returncode,
+        cmd,
+        stdout,
+        stderr,
+    )
     raise subprocess.CalledProcessError(
+        returncode=proc.returncode or 1,
         cmd=cmd,
         output=stdout,
         stderr=stderr,
-        returncode=proc.returncode or 1,
     )
 
 
@@ -133,14 +139,29 @@ class Rsync:
     async def run(self, source: pathlib.Path) -> None:
         """Syncs a file to a remote server with exponential backoff retry logic."""
         destination = self.get_remote_path(source)
-        remote_location = f"{self.remote_user}@{self.remote_host}:" f"{destination}"
+        remote_location = f"{self.remote_user}@{self.remote_host}:{destination}"
         LOGGER.info("Syncing: '%s' -> '%s'", source, remote_location)
+
+        remote_parent = posixpath.dirname(destination)
+        LOGGER.debug("remote_path=%r", self.remote_path)
+        LOGGER.debug("destination=%r", destination)
+        LOGGER.debug("remote_parent=%r", remote_parent)
+        mkdir_cmd = [
+            "ssh",
+            "-o",
+            "StrictHostKeyChecking=no",
+            f"{self.remote_user}@{self.remote_host}",
+            f"mkdir -p {shlex.quote(remote_parent)}",
+        ]
+        await retry.retry(
+            name=runner.__name__,
+            function=lambda: runner(cmd=mkdir_cmd, source=source),
+            raise_error=True,
+        )
 
         cmd = [
             "rsync",
             "-avzi",
-            "--protect-args",
-            "--mkpath",
             "--partial",
             "-e",
             "ssh -o StrictHostKeyChecking=no",
@@ -149,7 +170,9 @@ class Rsync:
         ]
 
         await retry.retry(
-            name=runner.__name__, function=lambda: runner(cmd=" ".join(cmd), source=source), raise_error=True
+            name=runner.__name__,
+            function=lambda: runner(cmd=cmd, source=source),
+            raise_error=True,
         )
 
     async def create_playlist(self, name: str, extension: str) -> str:
@@ -167,7 +190,7 @@ class Rsync:
         ]
         LOGGER.debug("Command: %s", cmd)
         proc = await asyncio.create_subprocess_shell(
-            " ".join(cmd),
+            shlex.join(cmd),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
