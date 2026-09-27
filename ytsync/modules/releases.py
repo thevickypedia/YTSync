@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from collections.abc import AsyncGenerator
@@ -20,6 +21,10 @@ class GitHub:
     REPO = "YTSync"
     BASE_WEB_URL = f"https://github.com/{OWNER}/{REPO}"
     BASE_API_URL = f"https://api.github.com/repos/{OWNER}/{REPO}"
+
+    MAX_RELEASE_PAGES = 5
+    # Overall wall-clock budget for the whole resolution, in seconds
+    RESOLVE_TIMEOUT = 30
 
     def __init__(self):
         """Initialize the GitHub API client."""
@@ -47,9 +52,10 @@ class GitHub:
             str:
             The tag name of each GitHub release.
         """
-        # Handle pagination for large release lists
+        # Releases are returned newest-first, so a match for the running version is almost
+        # always on page 1. Capping pagination bounds both startup latency and API usage.
         page = 1
-        while True:
+        while page <= self.MAX_RELEASE_PAGES:
             try:
                 response = await self.client.get(
                     f"{self.BASE_API_URL}/releases?per_page=100&page={page}",
@@ -113,7 +119,12 @@ class GitHub:
     async def resolve_api_version(self) -> str:
         """Return the resolver result and close the async client."""
         try:
-            return await self._resolve_api_version()
+            return await asyncio.wait_for(self._resolve_api_version(), timeout=self.RESOLVE_TIMEOUT)
+        except asyncio.TimeoutError:
+            LOGGER.warning(
+                "GitHub version resolution exceeded %ds; falling back to local version", self.RESOLVE_TIMEOUT
+            )
+            return f"{__version__}:dev"
         finally:
             await self.client.aclose()
 
