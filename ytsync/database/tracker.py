@@ -86,25 +86,29 @@ async def insert(
                 chat_id,
             ),
         )
-        if row := cursor.fetchone():
-            tracked = row_to_schema(row)
-            LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
-            title = tracked.name
+        row = cursor.fetchone()
+
+    needs_delete = False
+    if row:
+        tracked = row_to_schema(row)
+        LOGGER.warning("Schedule updated for %s from %s to %s", tracked.name, tracked.schedule.name, schedule.name)
+        title = tracked.name
+        needs_delete = True
+    else:
+        _, yt_info = await squire.get_info(playlist_url)
+        if all((yt_info, yt_info.get("title"))):
+            title = yt_info["title"]
+        else:
+            raise ValueError(f"Failed to get the playlist title for {playlist_url!r}")
+
+    async with config.db.connection as connection:
+        cursor = connection.cursor()
+        if needs_delete:
             # Since there is no primary key, 'INSERT OR REPLACE' will NOT prevent duplicates
             cursor.execute(
                 "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
-                (
-                    playlist_url,
-                    chat_id,
-                ),
+                (playlist_url, chat_id),
             )
-        else:
-            _, yt_info = await asyncio.to_thread(squire.get_info, playlist_url)
-            if all((yt_info, yt_info.get("title"))):
-                title = yt_info["title"]
-            else:
-                raise ValueError(f"Failed to get the playlist title for {playlist_url!r}")
-            title = yt_info["title"]
         cursor.execute(
             "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);",
             (playlist_url, title, schedule.name, chat_id),

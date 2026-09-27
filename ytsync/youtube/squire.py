@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import math
 import pathlib
@@ -218,7 +219,7 @@ def add_optional_params(options: Dict[str, Any]) -> Dict[str, Any]:
     return options
 
 
-def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
+async def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
     """Get info based on the given YT URL.
 
     Args:
@@ -229,14 +230,15 @@ def get_info(url: str) -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
         Returns a tuple of YoutubeDL object, and a dictionary of information block.
     """
     options = add_optional_params({})
-    # noinspection bad-argument-type
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(
-            url,
-            download=False,
-            process=False,
-        )
-    return ydl, info
+
+    def _extract() -> Tuple[yt_dlp.YoutubeDL, Dict[str, Any]]:
+        """Extracts info from the given URL."""
+        # noinspection bad-argument-type
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=False, process=False)
+        return ydl, info
+
+    return await asyncio.to_thread(_extract)
 
 
 def size_converter(byte_size: int | float) -> str:
