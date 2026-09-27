@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import pathlib
 import posixpath
@@ -20,7 +21,7 @@ async def queue_download(
 ) -> str:
     """Queue an input url to download per the next available time."""
     LOGGER.debug("Input URL: %s", url)
-    ydl, info = squire.get_info(str(url))
+    ydl, info = await asyncio.to_thread(squire.get_info, str(url))
     name = info.get("title", None) or None
     if not name or not isinstance(name, str):
         LOGGER.error("'title' not found in info dict: %s", info)

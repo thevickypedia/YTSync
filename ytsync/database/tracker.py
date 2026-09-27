@@ -99,7 +99,7 @@ async def insert(
                 ),
             )
         else:
-            _, yt_info = squire.get_info(playlist_url)
+            _, yt_info = await asyncio.to_thread(squire.get_info, playlist_url)
             if all((yt_info, yt_info.get("title"))):
                 title = yt_info["title"]
             else:

@@ -77,7 +77,7 @@ async def download_ydl(
 ) -> None:
     """Downloads using the yt-dlp library."""
     with ydl:
-        if ydl.download([url]):
+        if await asyncio.to_thread(ydl.download, [url]):
             raise DownloadError(msg=f"Download failed for url: {url} -> {filepath.name}")
         if audio_only:
             LOGGER.info("Download successful for url: %s -> %s", url, filepath.name)
