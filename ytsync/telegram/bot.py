@@ -18,7 +18,8 @@ from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config, exceptions, settings
+from ytsync.modules import checkpoint, config, exceptions
+from ytsync.telegram import models
 from ytsync.youtube import queue, youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
@@ -260,7 +261,7 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
     """
     LOGGER.debug(payload)
     # noinspection not-mapping
-    chat = settings.Chat(**{**payload, **payload["chat"], **payload["from"]})
+    chat = models.Chat(**{**payload, **payload["chat"], **payload["from"]})
     if not await authenticate(chat):
         LOGGER.warning(payload)
         return
@@ -269,28 +270,28 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         return
     if payload.get("text"):
         chat.message_type = "text"
-        await process_text(chat, settings.Text(**payload))
+        await process_text(chat, models.Text(**payload))
     elif payload.get("voice"):
         chat.message_type = "voice"
         # noinspection not-mapping
-        await process_voice(chat, settings.Voice(**payload["voice"]))
+        await process_voice(chat, models.Voice(**payload["voice"]))
     elif payload.get("document"):
         chat.message_type = "document"
         # noinspection not-mapping
-        await process_document(chat, settings.Document(**payload["document"]))
+        await process_document(chat, models.Document(**payload["document"]))
     elif payload.get("video"):
         chat.message_type = "video"
         # noinspection not-mapping
-        await process_video(chat, settings.Video(**payload["video"]))
+        await process_video(chat, models.Video(**payload["video"]))
     elif payload.get("audio"):
         chat.message_type = "audio"
         # noinspection not-mapping
-        await process_audio(chat, settings.Audio(**payload["audio"]))
+        await process_audio(chat, models.Audio(**payload["audio"]))
     elif payload.get("photo"):
         # Matches for compressed images
         chat.message_type = "photo"
         # noinspection not-mapping,not-iterable
-        await process_photo(chat, [settings.PhotoFragment(**d) for d in payload["photo"]])
+        await process_photo(chat, [models.PhotoFragment(**d) for d in payload["photo"]])
     else:
         await reply_to(chat.id, chat.message_id, "Payload type is not allowed.")
 
@@ -305,7 +306,7 @@ def username_is_valid(username: str | None) -> bool:
     return False
 
 
-async def authenticate(chat: settings.Chat) -> bool:
+async def authenticate(chat: models.Chat) -> bool:
     """Authenticates the user with ``userId`` and ``userName``.
 
     Args:
@@ -329,7 +330,7 @@ async def authenticate(chat: settings.Chat) -> bool:
     return True
 
 
-async def verify_timeout(chat: settings.Chat) -> bool:
+async def verify_timeout(chat: models.Chat) -> bool:
     """Verifies whether the message was received in the past 60 seconds.
 
     Args:
@@ -358,7 +359,7 @@ async def verify_timeout(chat: settings.Chat) -> bool:
     return False
 
 
-async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFragment]) -> None:
+async def process_photo(chat: models.Chat, data_class: List[models.PhotoFragment]) -> None:
     """Processes a photo input.
 
     Args:
@@ -374,7 +375,7 @@ async def process_photo(chat: settings.Chat, data_class: List[settings.PhotoFrag
     )
 
 
-async def process_audio(chat: settings.Chat, data_class: settings.Audio) -> None:
+async def process_audio(chat: models.Chat, data_class: models.Audio) -> None:
     """Processes an audio input.
 
     Args:
@@ -384,7 +385,7 @@ async def process_audio(chat: settings.Chat, data_class: settings.Audio) -> None
     await process_document(chat, data_class)
 
 
-async def process_video(chat: settings.Chat, data_class: settings.Video) -> None:
+async def process_video(chat: models.Chat, data_class: models.Video) -> None:
     """Processes a video input.
 
     Args:
@@ -394,7 +395,7 @@ async def process_video(chat: settings.Chat, data_class: settings.Video) -> None
     await process_document(chat, data_class)
 
 
-async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None:
+async def process_voice(chat: models.Chat, data_class: models.Voice) -> None:
     """Processes the audio file in the payload received after checking for authentication.
 
     Args:
@@ -407,9 +408,7 @@ async def process_voice(chat: settings.Chat, data_class: settings.Voice) -> None
     await reply_to(chat.id, chat.message_id, "Audio inputs are not supported at the moment. Please try text input.")
 
 
-async def process_document(
-    chat: settings.Chat, data_class: settings.Document | settings.Audio | settings.Video
-) -> None:
+async def process_document(chat: models.Chat, data_class: models.Document | models.Audio | models.Video) -> None:
     """Processes the document in the payload received after checking for authentication.
 
     Args:
@@ -444,7 +443,7 @@ def get_channel() -> str:
     return txt
 
 
-async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
+async def process_text(chat: models.Chat, data_class: models.Text) -> None:
     """Processes the text in the payload received after checking for authentication.
 
     Args:
@@ -484,7 +483,7 @@ async def process_text(chat: settings.Chat, data_class: settings.Text) -> None:
         await reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
-async def executor(command: str, chat: settings.Chat) -> None:
+async def executor(command: str, chat: models.Chat) -> None:
     """Executes the command via offline communicator.
 
     Args:

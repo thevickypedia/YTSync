@@ -1,98 +1,51 @@
-"""Telegram settings with different types of objects and members as received in the payload."""
+import re
+from dataclasses import dataclass
 
-from pydantic import BaseModel
-
-
-class Chat(BaseModel):
-    """Base class for Chat model."""
-
-    message_id: int
-    message_type: str | None = None
-    date: int
-
-    first_name: str
-    last_name: str
-    id: int
-    type: str
-    username: str
-    is_bot: bool
-    language_code: str
+UNIT_TO_MINUTES = {
+    "w": 7 * 24 * 60,
+    "d": 24 * 60,
+    "h": 60,
+}
 
 
-# Below are the DataClass objects
-class Text(BaseModel):
-    """Base class for Text model."""
+@dataclass
+class TelegramBeat:
+    """Telegram beat class.
 
-    text: str
+    >>> TelegramBeat
 
+    """
 
-class PhotoFragment(BaseModel):
-    """Base class for PhotoFragment model."""
+    offset: int = 0
+    failed_connections: int = 0
 
-    file_id: str
-    file_size: int
-    file_unique_id: str
-    height: int
-    width: int
-
-
-class Audio(BaseModel):
-    """Base class for Audio model."""
-
-    duration: int
-    file_id: str
-    file_name: str
-    file_size: int
-    file_unique_id: str
-    mime_type: str
+    polling_in_progress: bool = False
+    poll_for_messages: bool = False
+    restart_loop: bool = False
 
 
-class Voice(BaseModel):
-    """Base class for Voice model."""
-
-    duration: int
-    file_id: str
-    file_size: int
-    file_unique_id: str
-    mime_type: str
-
-
-class Document(BaseModel):
-    """Base class for Document model."""
-
-    file_id: str
-    file_name: str
-    file_size: int
-    file_unique_id: str
-    mime_type: str
+def duration_to_minutes(value: str) -> int:
+    """Converts user-input duration to minutes."""
+    if match := re.fullmatch(r"(\d+)([wdh])", value):
+        amount = int(match.group(1))
+        unit = match.group(2)
+        return amount * UNIT_TO_MINUTES[unit]
+    raise ValueError("Duration must be in the format <number><unit>, " "where unit is w, d, or h")
 
 
-class Video(BaseModel):
-    """Base class for Video model."""
-
-    duration: int
-    file_id: str
-    file_name: str
-    file_size: int
-    file_unique_id: str
-    height: int
-    mime_type: str
-    width: int
-
-    class Thumb(BaseModel):
-        """Nested class for Thumb model."""
-
-        file_id: str
-        file_size: int
-        file_unique_id: str
-        height: int
-        width: int
-
-    class Thumbnail(BaseModel):
-        """Nested class for Thumbnail model."""
-
-        file_id: str
-        file_size: int
-        file_unique_id: str
-        height: int
-        width: int
+def validate_retention_period(value: str) -> str:
+    """Validates a retention period."""
+    minutes = duration_to_minutes(value)
+    max_q_tolerance = 52  # weeks
+    max_minutes = max_q_tolerance * UNIT_TO_MINUTES["w"]
+    if minutes > max_minutes:
+        days = minutes // UNIT_TO_MINUTES["d"]
+        text = f"'queue_retention_period' cannot exceed {max_q_tolerance} weeks"
+        if value.endswith("w"):
+            text += f", received {value.replace('w', ' weeks')}"
+        elif value.endswith("d"):
+            text += f", received {value.replace('d', ' days')}"
+        else:
+            text += f", received {value!r} [{days} days]"
+        raise ValueError(text)
+    return value

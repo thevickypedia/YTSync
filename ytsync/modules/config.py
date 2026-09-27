@@ -25,7 +25,7 @@ from pydantic import (
 from pydantic_core import InitErrorDetails
 
 from ytsync.database import database
-from ytsync.modules import pydantic_config, releases, startup
+from ytsync.modules import pydantic_config, releases, settings
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 LOGICAL_CORES = os.cpu_count() or 2
@@ -39,7 +39,7 @@ except RuntimeError:
     API_VERSION = releases.__version__
 
 
-telegram_beat = startup.TelegramBeat()
+telegram_beat = settings.TelegramBeat()
 
 
 class AllowedCronSchedule(StrEnum):
@@ -124,7 +124,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     @classmethod
     def validate_retention_period(cls, value: str) -> str:
         """Validates a retention period."""
-        return startup.validate_retention_period(value)
+        return settings.validate_retention_period(value)
 
     class Config:
         """Environment variables configuration."""

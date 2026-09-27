@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config, exceptions, startup
+from ytsync.modules import checkpoint, config, exceptions, settings
 from ytsync.telegram import handler, poll
 from ytsync.youtube import callbacks, downloader, queue, youtube
 
@@ -116,7 +116,7 @@ async def run_queued(now: datetime) -> None:
 
 async def cleanup_queue() -> None:
     """Clean up the queue by deleting entries that are older than the retention period."""
-    retention = timedelta(minutes=startup.duration_to_minutes(config.env.queue_retention_period))
+    retention = timedelta(minutes=settings.duration_to_minutes(config.env.queue_retention_period))
     cutoff = datetime.now(timezone.utc) - retention
     async for q in queue.get(include_past=True):
         if datetime.fromisoformat(q.scheduled_time) < cutoff:
@@ -159,7 +159,7 @@ async def run_polling() -> None:
 async def single_task() -> None:
     """Executes a single iteration of the main loop.
 
-    Polls for incoming messages, read the database and execute the YouTube sync for the requested URL.
+    Polls for incoming messages, read the database, and execute the YouTube sync for the requested URL.
     """
     global LAST_CHECK
     # Polling needs to run on every iteration

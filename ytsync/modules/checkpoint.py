@@ -4,7 +4,8 @@ from typing import List
 
 from pydantic import BaseModel, HttpUrl
 
-from ytsync.modules import config, settings
+from ytsync.modules import config
+from ytsync.telegram import models
 
 
 class APISource(BaseModel):
@@ -18,7 +19,7 @@ class SourceSystem(BaseModel):
     """Source system for checkpoint."""
 
     api: APISource | None = None
-    telegram: settings.Chat | None = None
+    telegram: models.Chat | None = None
     scheduled: config.AllowedCronSchedule | None = None
     audio_only: bool = True
 

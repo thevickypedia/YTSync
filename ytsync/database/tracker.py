@@ -7,7 +7,8 @@ from typing import List, Tuple
 from fastapi import HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from ytsync.modules import checkpoint, config, settings
+from ytsync.modules import checkpoint, config
+from ytsync.telegram import models
 from ytsync.youtube import squire, youtube
 
 LOGGER = logging.getLogger("ytsync")
@@ -143,7 +144,7 @@ async def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     return txt
 
 
-async def sync(chat: settings.Chat, name: str | None = None, url: str | None = None) -> str:
+async def sync(chat: models.Chat, name: str | None = None, url: str | None = None) -> str:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
     Args:
