@@ -155,9 +155,38 @@ async def submit(
     else:
         last_queue = await latest_timestamp()
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
-        # Out of last_scheduled_time and now; pick the most recent one
-        base_time = max(now, last_scheduled_time)
-        scheduled_time = base_time + timedelta(seconds=(config.env.cooldown_interval + config.env.next_buffer))
+        elapsed = (now - last_scheduled_time).total_seconds()
+        if elapsed >= config.env.cooldown_interval:
+            # The previous cooldown has completely elapsed.
+            scheduled_time = now + timedelta(seconds=config.env.next_buffer)
+            LOGGER.info(
+                "Previous queue was scheduled %s ago; cooldown has elapsed. " "Scheduling %s at %s",
+                str(timedelta(seconds=int(elapsed))),
+                name,
+                scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+            )
+        elif elapsed >= 0:
+            # The previous cooldown is partially elapsed.
+            remaining = config.env.cooldown_interval - elapsed
+            scheduled_time = now + timedelta(seconds=remaining + (2 * config.env.next_buffer))
+            LOGGER.info(
+                "Previous queue was scheduled %s ago; %s of cooldown remains. " "Scheduling %s at %s",
+                str(timedelta(seconds=int(elapsed))),
+                str(timedelta(seconds=int(remaining))),
+                name,
+                scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+            )
+        else:
+            # The previous scheduled time is still in the future.
+            scheduled_time = last_scheduled_time + timedelta(
+                seconds=config.env.cooldown_interval + config.env.next_buffer
+            )
+            LOGGER.info(
+                "Previous queue is scheduled for %s; adding cooldown and buffer. " "Scheduling %s at %s",
+                last_scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+                name,
+                scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+            )
         LOGGER.info(
             "Submitting %s at: %s",
             name,
