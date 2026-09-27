@@ -337,10 +337,5 @@ async def delete_queue(
         ‣‣ scheduled_time: Queue item's scheduled time.
     """
     await auth.validate(apikey, False)
-    async with config.db.connection as connection:
-        cursor = connection.cursor()
-        cursor.execute(
-            "DELETE FROM queue WHERE timestamp = ?",
-            (datetime.fromisoformat(str(scheduled_time)).timestamp(),),
-        )
+    await queue.delete(str(scheduled_time))
     return {"ok": True}

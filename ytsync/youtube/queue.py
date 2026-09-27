@@ -93,6 +93,19 @@ async def insert(queue: Queue) -> None:
         connection.commit()
 
 
+async def delete(scheduled_time: str) -> None:
+    """Delete a queue entry by its scheduled time.
+
+    Args:
+        scheduled_time: ISO-8601 scheduled time of the queue entry to remove.
+    """
+    timestamp = datetime.fromisoformat(scheduled_time).timestamp()
+    async with config.db.connection as connection:
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM queue WHERE timestamp = ?", (timestamp,))
+        connection.commit()
+
+
 async def latest_timestamp() -> Queue:
     """Get the latest Queue based on the timestamp in the table.
 
