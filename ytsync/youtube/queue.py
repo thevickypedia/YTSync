@@ -168,7 +168,7 @@ async def submit(
         elif elapsed >= 0:
             # The previous cooldown is partially elapsed.
             remaining = config.env.cooldown_interval - elapsed
-            scheduled_time = now + timedelta(seconds=remaining + (2 * config.env.next_buffer))
+            scheduled_time = now + timedelta(seconds=remaining + ((q_count.pending + 1) * config.env.next_buffer))
             LOGGER.info(
                 "Previous queue was scheduled %s ago; %s of cooldown remains. " "Scheduling %s at %s",
                 str(timedelta(seconds=int(elapsed))),
