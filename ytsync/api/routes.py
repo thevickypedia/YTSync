@@ -337,5 +337,9 @@ async def delete_queue(
         ‣‣ scheduled_time: Queue item's scheduled time.
     """
     await auth.validate(apikey, False)
-    await queue.delete(str(scheduled_time))
-    return {"ok": True}
+    if await queue.delete(str(scheduled_time)):
+        return {"ok": True}
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_FOUND.real,
+        detail=f"Queue item with scheduled_time {scheduled_time} not found",
+    )

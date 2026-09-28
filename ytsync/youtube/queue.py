@@ -93,17 +93,26 @@ async def insert(queue: Queue) -> None:
         connection.commit()
 
 
-async def delete(scheduled_time: str) -> None:
+async def delete(scheduled_time: str) -> bool:
     """Delete a queue entry by its scheduled time.
 
     Args:
         scheduled_time: ISO-8601 scheduled time of the queue entry to remove.
+
+    Returns:
+        bool:
+        Returns True if the entry was deleted, False if no entry was found.
     """
     timestamp = datetime.fromisoformat(scheduled_time).timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
+        cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp = ?", (timestamp,))
+        if cursor.fetchone()[0] == 0:
+            LOGGER.warning("No queue entry found for scheduled_time: %s with timestamp: %s", scheduled_time, timestamp)
+            return False
         cursor.execute("DELETE FROM queue WHERE timestamp = ?", (timestamp,))
         connection.commit()
+        return True
 
 
 async def latest_timestamp() -> Queue:

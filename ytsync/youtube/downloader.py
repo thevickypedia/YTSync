@@ -229,7 +229,7 @@ async def download(
     checkpoint_stats.downloaded = stats["downloaded"]
     checkpoint_stats.download_failed = stats["download_failed"]
     if transfer.rsync.is_enabled:
-        LOGGER.info("Waiting for transfers for %s", name)
+        LOGGER.info("Waiting on transfers for: %s", name)
         await asyncio.gather(*transfer_pool)
         checkpoint_stats.transferred = stats["transferred"]
         checkpoint_stats.transfer_failed = stats["transfer_failed"]

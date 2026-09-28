@@ -9,11 +9,12 @@ import subprocess
 from typing import List, Set
 
 from ytsync.modules import config, retry
+from ytsync.youtube import squire
 
 LOGGER = logging.getLogger("ytsync")
 
 
-async def runner(cmd: list[str], source: pathlib.Path) -> None:
+async def runner(cmd: list[str]) -> None:
     """Runs a given command with an asyncio subprocess."""
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -33,7 +34,6 @@ async def runner(cmd: list[str], source: pathlib.Path) -> None:
     stdout = stdout.decode()
     stderr = stderr.decode()
     if proc.returncode == 0:
-        LOGGER.info("Successfully synced %s", source)
         return
     LOGGER.error(
         "Command failed (exit %s): %s\nstdout: %s\nstderr: %s",
@@ -140,7 +140,7 @@ class Rsync:
         """Syncs a file to a remote server with exponential backoff retry logic."""
         destination = self.get_remote_path(source)
         remote_location = f"{self.remote_user}@{self.remote_host}:{destination}"
-        LOGGER.info("Syncing: '%s' -> '%s'", source, remote_location)
+        LOGGER.info("Syncing [%s]: '%s' -> '%s'", squire.size_converter(source.stat().st_size), source, remote_location)
 
         remote_parent = posixpath.dirname(destination)
         LOGGER.debug("remote_path=%r", self.remote_path)
@@ -153,9 +153,10 @@ class Rsync:
             f"{self.remote_user}@{self.remote_host}",
             f"mkdir -p {shlex.quote(remote_parent)}",
         ]
+        LOGGER.info("Creating remote directory: %s", remote_parent)
         await retry.retry(
             name=runner.__name__,
-            function=lambda: runner(cmd=mkdir_cmd, source=source),
+            function=lambda: runner(cmd=mkdir_cmd),
             raise_error=True,
         )
 
@@ -168,10 +169,10 @@ class Rsync:
             str(source),
             remote_location,
         ]
-
+        LOGGER.info("Starting rsync for file: %s", source)
         await retry.retry(
             name=runner.__name__,
-            function=lambda: runner(cmd=cmd, source=source),
+            function=lambda: runner(cmd=cmd),
             raise_error=True,
         )
 

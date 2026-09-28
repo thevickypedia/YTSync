@@ -120,8 +120,9 @@ async def cleanup_queue() -> None:
     cutoff = datetime.now(timezone.utc) - retention
     async for q in queue.get(include_past=True):
         if datetime.fromisoformat(q.scheduled_time) < cutoff:
-            LOGGER.info("Deleting queue entry %s scheduled at %s", q.checkpoint.name, q.scheduled_time)
-            await queue.delete(q.scheduled_time)
+            if not await queue.delete(q.scheduled_time):
+                continue
+            LOGGER.info("Deleted queue entry %s scheduled at %s", q.checkpoint.name, q.scheduled_time)
             log_parms = {
                 "name": q.checkpoint.name,
                 "runtime": q.checkpoint.runtime,
