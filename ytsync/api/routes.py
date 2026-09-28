@@ -9,6 +9,7 @@ import httpx
 from fastapi import Depends, Request, Response
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.api import auth, models
@@ -274,6 +275,11 @@ async def get_checkpoint(
         return checkpoint.get(datestamp, int(timestamp))
     except FileNotFoundError as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
+    except ValidationError as error:
+        LOGGER.exception(error)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR.real, detail=HTTPStatus.INTERNAL_SERVER_ERROR.description
+        )
 
 
 async def delete_checkpoint(
@@ -300,6 +306,9 @@ async def delete_checkpoint(
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
     except NotADirectoryError as error:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail=error)
+    except OSError as error:
+        LOGGER.exception(error)
+        raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.real, detail=error)
 
 
 async def get_queue(

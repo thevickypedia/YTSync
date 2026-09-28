@@ -111,8 +111,8 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # 'cooldown_interval' with # of seconds is used to propagate delay between each download
     cooldown_interval: PositiveInt = Field(300, ge=60, le=10_800)  # 60s to 3h; default: 5m
 
-    # Cleanup queued
-    queue_retention_period: str = Field("3d")
+    # Cleanup checkpoints
+    checkpoint_retention_period: str = Field("3d")
 
     # Remote config
     remote_host: str | None = None
@@ -120,10 +120,10 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     remote_path: str | None = None
     delete_after_sync: bool = True
 
-    @field_validator("queue_retention_period")
+    @field_validator("checkpoint_retention_period")
     @classmethod
     def validate_retention_period(cls, value: str) -> str:
-        """Validates a retention period."""
+        """Validates the retention period."""
         return settings.validate_retention_period(value)
 
     class Config:

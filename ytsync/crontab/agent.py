@@ -1,6 +1,7 @@
 import asyncio
 import functools
 import logging
+import shutil
 import time
 from collections.abc import Coroutine
 from datetime import datetime, timedelta, timezone
@@ -110,30 +111,22 @@ async def run_queued(now: datetime) -> None:
         await queue.delete(q.scheduled_time)
 
 
-# TODO: Use this for checkpoints instead (queue will not be retained)
-async def cleanup_queue() -> None:
-    """Clean up the queue by deleting entries that are older than the retention period."""
-    retention = timedelta(minutes=settings.duration_to_minutes(config.env.queue_retention_period))
-    cutoff = datetime.now(timezone.utc) - retention
-    async for q in queue.get(include_past=True):
-        if datetime.fromisoformat(q.scheduled_time) < cutoff:
-            if not await queue.delete(q.scheduled_time):
-                continue
-            LOGGER.info("Deleted queue entry %s scheduled at %s", q.checkpoint.name, q.scheduled_time)
-            log_parms = {
-                "name": q.checkpoint.name,
-                "runtime": q.checkpoint.runtime,
-                "scheduled_time": q.scheduled_time,
-                "urls": q.checkpoint.preflight.total,
-                "downloaded": len(q.checkpoint.downloaded),
-                "transferred": len(q.checkpoint.transferred),
-                "download_failed": len(q.checkpoint.download_failed),
-                "transfer_failed": len(q.checkpoint.transfer_failed),
-            }
-            LOGGER.debug("***************************** DELETION START *****************************")
-            for key, value in log_parms.items():
-                LOGGER.debug("%s: %s", key, value)
-            LOGGER.debug("***************************** DELETION END *****************************")
+async def cleanup_checkpoint() -> None:
+    """Clean up the checkpoint by deleting entries that are older than the retention period."""
+    retention = timedelta(days=settings.duration_to_days(config.env.checkpoint_retention_period))
+    today = datetime.now(timezone.utc)
+    cutoff = today - retention
+    for datestamp, timestamps in checkpoint.ls().items():
+        checkpoint_date = datetime.strptime(datestamp, config.checkpoint_dir_format).replace(tzinfo=timezone.utc)
+        # Delete the entire directory if 'checkpoint_date' is older than the 'cutoff' date
+        if checkpoint_date < cutoff:
+            LOGGER.info("Deleting checkpoint for: %s, with %d files", datestamp, len(timestamps))
+            LOGGER.debug("%s: %s", datestamp, timestamps)
+            directory = config.checkpoints_dir / datestamp
+            try:
+                shutil.rmtree(directory)
+            except (FileNotFoundError, PermissionError, OSError) as error:
+                LOGGER.error("Failed to delete directory: %s - %s", directory, error)
 
 
 async def run_polling() -> None:
@@ -170,7 +163,7 @@ async def single_task() -> None:
     LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
     await run_tracker()
     await run_queued(now)
-    # await cleanup_queue()
+    await cleanup_checkpoint()
 
 
 async def executor() -> None:
