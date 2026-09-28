@@ -8,9 +8,9 @@ from typing import Any, Awaitable, Dict, List, Tuple
 import yt_dlp
 from yt_dlp.utils import DownloadError
 
-from ytsync.modules import checkpoint, config
+from ytsync.modules import config
 from ytsync.remote import transfer
-from ytsync.youtube import cli, hooks, squire
+from ytsync.youtube import checkpoint, cli, hooks, squire
 
 LOGGER = logging.getLogger("ytsync")
 

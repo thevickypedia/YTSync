@@ -7,9 +7,9 @@ from datetime import datetime, timedelta, timezone
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config, exceptions, settings
+from ytsync.modules import config, exceptions, settings
 from ytsync.telegram import handler, poll
-from ytsync.youtube import callbacks, downloader, queue, youtube
+from ytsync.youtube import callbacks, checkpoint, downloader, queue, youtube
 
 LOGGER = logging.getLogger("ytsync")
 LAST_CHECK: datetime | None = None

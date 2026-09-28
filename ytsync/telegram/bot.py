@@ -18,9 +18,9 @@ from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config, exceptions
+from ytsync.modules import config, exceptions
 from ytsync.telegram import models
-from ytsync.youtube import queue, youtube
+from ytsync.youtube import checkpoint, queue, youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")

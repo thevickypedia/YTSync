@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import BaseModel
 
-from ytsync.modules import checkpoint, config
-from ytsync.youtube import squire
+from ytsync.modules import config
+from ytsync.youtube import checkpoint, squire
 
 LOGGER = logging.getLogger("ytsync")
 QUEUE_SOURCE = config.env.data_dir / "queue.json"

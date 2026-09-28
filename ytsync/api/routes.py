@@ -13,9 +13,9 @@ from yt_dlp.utils import DownloadError
 
 from ytsync.api import auth, models
 from ytsync.database import tracker
-from ytsync.modules import checkpoint, config
+from ytsync.modules import config
 from ytsync.telegram import bot, webhook
-from ytsync.youtube import queue, youtube
+from ytsync.youtube import checkpoint, queue, youtube
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(

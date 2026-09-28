@@ -7,9 +7,9 @@ from typing import List, Tuple
 from fastapi import HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from ytsync.modules import checkpoint, config
+from ytsync.modules import config
 from ytsync.telegram import models
-from ytsync.youtube import squire, youtube
+from ytsync.youtube import checkpoint, squire, youtube
 
 LOGGER = logging.getLogger("ytsync")
 

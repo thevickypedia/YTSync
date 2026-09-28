@@ -6,9 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import HttpUrl
 
-from ytsync.modules import checkpoint, config
+from ytsync.modules import config
 from ytsync.remote import transfer
-from ytsync.youtube import queue, squire
+from ytsync.youtube import checkpoint, queue, squire
 
 LOGGER = logging.getLogger("ytsync")
 

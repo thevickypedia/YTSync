@@ -10,8 +10,9 @@ import yt_dlp
 from pydantic import HttpUrl
 from yt_dlp.utils import YoutubeDLError
 
-from ytsync.modules import checkpoint, config
+from ytsync.modules import config
 from ytsync.remote import transfer
+from ytsync.youtube import checkpoint
 
 LOGGER = logging.getLogger("ytsync")
 

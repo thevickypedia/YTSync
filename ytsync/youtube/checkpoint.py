@@ -12,14 +12,22 @@ from ytsync.telegram import models
 
 
 class APISource(BaseModel):
-    """Source for API checkpoint."""
+    """Source for API checkpoint.
+
+    >>> APISource
+
+    """
 
     host: str | IPv4Address
     host_header: str | HttpUrl | None = None
 
 
 class SourceSystem(BaseModel):
-    """Source system for checkpoint."""
+    """Source system for checkpoint.
+
+    >>> SourceSystem
+
+    """
 
     api: APISource | None = None
     telegram: models.Chat | None = None
@@ -28,7 +36,11 @@ class SourceSystem(BaseModel):
 
 
 class PreFlight(BaseModel):
-    """Pre-flight model."""
+    """Pre-flight model.
+
+    >>> PreFlight
+
+    """
 
     total: int = 0
     error: int = 0
@@ -37,7 +49,11 @@ class PreFlight(BaseModel):
 
 
 class Checkpoint(BaseModel):
-    """Checkpoint model."""
+    """Checkpoint model.
+
+    >>> Checkpoint
+
+    """
 
     # Can be determined before the download starts
     source_system: SourceSystem
