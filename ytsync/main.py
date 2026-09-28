@@ -1,178 +1,12 @@
-import asyncio
 import logging
-import pathlib
-from contextlib import asynccontextmanager
-from typing import Dict
 
-import httpx
 import uvicorn
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
-from fastapi.routing import APIRoute
 
-from ytsync.api import routes
-from ytsync.crontab import agent
+from ytsync.api import models, serve
 from ytsync.modules import config, releases
 
 LOGGER = logging.getLogger("ytsync")
-
-
-async def log_config() -> None:
-    """Log all safe env configuration."""
-    LOGGER.debug("***************************** CONFIGURATION START *****************************")
-    sensitive = ("log_config", "bot_token", "bot_secret", "apikey", "bot_users", "bot_chat_ids")
-    for key, value in config.env.model_dump().items():
-        if key in sensitive:
-            continue
-        key = key.capitalize().replace("_", " ").replace("dir", "directory")
-        LOGGER.debug("%s: %s", key, value)
-    LOGGER.debug("***************************** CONFIGURATION END *****************************")
-
-
-def bg_task_callback(task: asyncio.Task) -> None:
-    """Callback for background tasks.
-
-    Args:
-        task: Takes the async task object as a parameter.
-    """
-    name = task.get_name()
-    try:
-        result = task.result()
-        LOGGER.info("Background task [%s] completed successfully", name)
-        LOGGER.info(result)
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        LOGGER.debug("Terminated due to event cancellation.")
-    except Exception as error:
-        LOGGER.exception(error)
-        LOGGER.error("Background task [%s] failed to finish", name)
-
-
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
-    # noinspection HttpUrlsUsage
-    if LOGGER.isEnabledFor(logging.DEBUG):
-        await log_config()
-    LOGGER.info("Initiating background tasks...")
-    bg_task = asyncio.create_task(agent.executor())
-    bg_task.add_done_callback(bg_task_callback)
-    async with httpx.AsyncClient() as client:
-        # SET: app.state.http_client = client
-        # USE: client: httpx.AsyncClient = request.app.state.http_client
-        config.ASYNC_CLIENT = client
-        config.MAIN_EVENT_LOOP = asyncio.get_running_loop()
-        yield
-    # Stop the background task
-    bg_task.cancel()
-    LOGGER.info("Shutting down API server.")
-
-
-async def docs_redirect() -> RedirectResponse:
-    """Redirect the root path to the ``/docs`` page."""
-    return RedirectResponse("/docs")
-
-
-async def health() -> Dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
-
-
-async def version() -> str:
-    """Version endpoint."""
-    return config.API_VERSION
-
-
-api_routes = [
-    APIRoute(
-        endpoint=docs_redirect,
-        methods=["GET"],
-        path="/",
-        include_in_schema=False,
-    ),
-    APIRoute(
-        endpoint=health,
-        methods=["GET"],
-        path="/health",
-        include_in_schema=False,
-    ),
-    APIRoute(
-        endpoint=version,
-        methods=["GET"],
-        path="/version",
-        include_in_schema=False,
-    ),
-    APIRoute(
-        endpoint=routes.telegram_webhook,
-        methods=["POST"],
-        path=config.env.bot_endpoint,
-        include_in_schema=False,
-    ),
-    APIRoute(
-        endpoint=routes.api_get_webhook,
-        methods=["GET"],
-        path="/get-webhook",
-    ),
-    APIRoute(
-        endpoint=routes.api_set_webhook,
-        methods=["POST"],
-        path="/set-webhook",
-    ),
-    APIRoute(
-        endpoint=routes.api_delete_webhook,
-        methods=["DELETE"],
-        path="/delete-webhook",
-    ),
-    APIRoute(
-        endpoint=routes.api_get_trackers,
-        methods=["GET"],
-        path="/get-trackers",
-    ),
-    APIRoute(
-        endpoint=routes.api_add_trackers,
-        methods=["PUT"],
-        path="/add-trackers",
-    ),
-    APIRoute(
-        endpoint=routes.api_delete_trackers,
-        methods=["DELETE"],
-        path="/delete-trackers",
-    ),
-    APIRoute(
-        endpoint=routes.download,
-        methods=["POST"],
-        path="/download",
-    ),
-    APIRoute(
-        endpoint=routes.list_checkpoints,
-        methods=["GET"],
-        path="/list-checkpoints",
-    ),
-    APIRoute(
-        endpoint=routes.get_checkpoint,
-        methods=["GET"],
-        path="/get-checkpoint",
-    ),
-    APIRoute(
-        endpoint=routes.delete_checkpoint,
-        methods=["DELETE"],
-        path="/delete-checkpoint",
-    ),
-    APIRoute(
-        endpoint=routes.get_queue,
-        methods=["GET"],
-        path="/get-queue",
-    ),
-    APIRoute(
-        endpoint=routes.add_queue,
-        methods=["PUT"],
-        path="/add-queue",
-    ),
-    APIRoute(
-        endpoint=routes.delete_queue,
-        methods=["DELETE"],
-        path="/delete-queue",
-    ),
-]
 
 app = FastAPI(
     title=releases.github.REPO,
@@ -181,18 +15,18 @@ app = FastAPI(
         f"**Source Code:** [{releases.github.OWNER}/{releases.github.REPO}]({releases.github.BASE_WEB_URL})"
     ),
     version=config.API_VERSION,
-    lifespan=lifespan,
-    routes=api_routes,
+    lifespan=serve.lifespan,
+    routes=serve.api_routes,
+    openapi_tags=[dict(name=tag.name, description=tag.value) for tag in models.Tags],
 )
 
 
 def start():
     """Start the Jarvis API server using uvicorn."""
-    module_name = pathlib.Path(__file__)
     kwargs = dict(
+        app=app,
         host=config.env.host,
         port=config.env.port,
-        app=f"{module_name.parent.stem}.main:app",
         workers=1,
     )
     if config.env.log_config:
