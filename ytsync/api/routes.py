@@ -1,7 +1,5 @@
 import asyncio
-import json
 import logging
-import re
 from datetime import datetime
 from http import HTTPStatus
 from json.decoder import JSONDecodeError
@@ -251,21 +249,12 @@ async def list_checkpoints(
         }
     """
     await auth.validate(apikey, False)
-    return {
-        parent.name: [
-            int(match.group())
-            for child in parent.iterdir()
-            if child.suffix == ".json"
-            if (match := re.search(r"\d+", child.name))
-        ]
-        for parent in config.checkpoints_dir.iterdir()
-        if parent.is_dir() and config.is_valid_checkpoint_dir(parent.name)
-    }
+    return checkpoint.ls()
 
 
 async def get_checkpoint(
     datestamp: str,
-    timestamp: str,
+    timestamp: int,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ) -> checkpoint.Checkpoint:
     """**API endpoint to get a specific checkpoint.**
@@ -276,22 +265,41 @@ async def get_checkpoint(
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
     await auth.validate(apikey, False)
-    if not timestamp.isdigit():
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST.real,
-            detail=f"Invalid checkpoint timestamp: {timestamp!r}",
-        )
     if not config.is_valid_checkpoint_dir(datestamp):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND.real,
             detail=f"Checkpoint directory {datestamp} not found",
         )
-    target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
-    if not target.exists():
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=f"Checkpoint {target.name} not found")
-    with open(target) as file:
-        data = json.load(file)
-    return checkpoint.Checkpoint(**data)
+    try:
+        return checkpoint.get(datestamp, int(timestamp))
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
+
+
+async def delete_checkpoint(
+    datestamp: str,
+    timestamp: int,
+    apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
+):
+    """**API endpoint to delete a specific checkpoint.**
+
+    **Args**
+
+        ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
+        ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
+    """
+    await auth.validate(apikey, False)
+    if not config.is_valid_checkpoint_dir(datestamp):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND.real,
+            detail=f"Checkpoint directory {datestamp} not found",
+        )
+    try:
+        checkpoint.delete(datestamp, int(timestamp))
+    except FileNotFoundError as error:
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
+    except NotADirectoryError as error:
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail=error)
 
 
 async def get_queue(

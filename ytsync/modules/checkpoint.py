@@ -1,6 +1,9 @@
+import json
+import os
 import pathlib
+import re
 from ipaddress import IPv4Address
-from typing import List
+from typing import Dict, List
 
 from pydantic import BaseModel, HttpUrl
 
@@ -55,3 +58,55 @@ class Checkpoint(BaseModel):
     playlist_id: str | None = None
     download_start: str = ""
     download_end: str = ""
+
+
+def ls() -> Dict[str, List[int]]:
+    """List all the available checkpoints.
+
+    Returns:
+        Dict[str, List[int]]:
+        A dictionary with datestamps as keys and timestamps as values.
+    """
+    return {
+        parent.name: [
+            int(match.group())
+            for child in parent.iterdir()
+            if child.suffix == ".json"
+            if (match := re.search(r"\d+", child.name))
+        ]
+        for parent in config.checkpoints_dir.iterdir()
+        if parent.is_dir() and config.is_valid_checkpoint_dir(parent.name)
+    }
+
+
+def get(datestamp: str, timestamp: int) -> Checkpoint:
+    """Get a specific checkpoint.
+
+    Args:
+        datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
+        timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
+
+    Returns:
+        Checkpoint:
+        The checkpoint object.
+    """
+    target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
+    with open(target) as file:
+        data = json.load(file)
+    return Checkpoint(**data)
+
+
+def delete(datestamp: str, timestamp: int) -> None:
+    """Delete a specific checkpoint.
+
+    Args:
+        datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
+        timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
+    """
+    directory = config.checkpoints_dir / datestamp
+    # If it's a single file, delete the directory
+    if len([file for file in directory.iterdir() if file.suffix == ".json"]) == 1:
+        directory.rmdir()
+    else:
+        target = directory / f"checkpoint_{timestamp}.json"
+        os.remove(target)

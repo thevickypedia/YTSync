@@ -153,6 +153,11 @@ api_routes = [
         path="/get-checkpoint",
     ),
     APIRoute(
+        endpoint=routes.delete_checkpoint,
+        methods=["DELETE"],
+        path="/delete-checkpoint",
+    ),
+    APIRoute(
         endpoint=routes.get_queue,
         methods=["GET"],
         path="/get-queue",

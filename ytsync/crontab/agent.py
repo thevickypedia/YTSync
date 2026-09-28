@@ -105,9 +105,7 @@ async def run_queued(now: datetime) -> None:
         scheduled_time = datetime.fromisoformat(q.scheduled_time)
         if scheduled_time.replace(second=0, microsecond=0) > now:
             continue
-        task = asyncio.create_task(
-            downloader.download(checkpoint_stats=q.checkpoint, preprocess_stats=q.preprocessor)
-        )
+        task = asyncio.create_task(downloader.download(checkpoint_stats=q.checkpoint, preprocess_stats=q.preprocessor))
         task.add_done_callback(functools.partial(callbacks.process_callback, payload=q))
         await queue.delete(q.scheduled_time)
 
