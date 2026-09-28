@@ -1,6 +1,21 @@
 Release Notes
 =============
 
+v1.2.0 (09/28/2026)
+-------------------
+- `30d2c85 <https://github.com/thevickypedia/YTSync/commit/30d2c8521cc06b03aadd46b26f54413130523a07>`_ chore: Release ``v1.2.0``
+- `dd5d1dd <https://github.com/thevickypedia/YTSync/commit/dd5d1dd824c549747a74981c2169e9edb9080d06>`_ fix: Keep checkpoint cleanup comparison a 1:1 date match
+- `57881e3 <https://github.com/thevickypedia/YTSync/commit/57881e389a66fda0ea44025fd5918eda7f80a9d4>`_ refactor: Improve logging for checkpoint retention; change ``checkpoint_retention_period`` to ``checkpoint_retention``; reduce code redundancies
+- `de45e2b <https://github.com/thevickypedia/YTSync/commit/de45e2bc72de8d4baa513073c9f0f9ec8e24abbd>`_ perf: Avoid listing all checkpoint files every minute
+- `d385eb1 <https://github.com/thevickypedia/YTSync/commit/d385eb1ce6c28ca198406308f128958b756686f9>`_ feat: Delete unused checkpoint directories
+- `a45938a <https://github.com/thevickypedia/YTSync/commit/a45938ac37550bf170ac1e37b4e13dec9331e48f>`_ refactor: Move checkpoint module from ``modules`` to ``youtube``
+- `9a712f2 <https://github.com/thevickypedia/YTSync/commit/9a712f267c915a3e56ee8f4ce3fabdd99c52d6fc>`_ feat: Group API routes by tags for SwaggerUI; refactor routes
+- `c2ed83f <https://github.com/thevickypedia/YTSync/commit/c2ed83fde1a208529bc431111f7965682434898b>`_ feat: Add a ``DELETE /delete-checkpoint`` endpoint
+- `026b196 <https://github.com/thevickypedia/YTSync/commit/026b19660042b229c34dc9bac5d1c0a2c44edeef>`_ fix: Adjust queue processing logic to avoid skipping a task due to difference in milliseconds
+- `3592b28 <https://github.com/thevickypedia/YTSync/commit/3592b285b1ebf10b4f26c4939ac49747cc8f9f6e>`_ refactor: Avoid silently failing to delete when requested resource was not found in queue table
+- `1c44247 <https://github.com/thevickypedia/YTSync/commit/1c4424730f67a40fdf3624e2956315dd442535f7>`_ fix: Intermittent remote sync failures
+- `8874dc5 <https://github.com/thevickypedia/YTSync/commit/8874dc5463c4c47a662b09809d8c8dc2386a6294>`_ chore: Update release notes for v1.1.0
+
 v1.1.0 (09/27/2026)
 -------------------
 - `4096b2a <https://github.com/thevickypedia/YTSync/commit/4096b2a83accdcd44daadb3824f107d98585e0c6>`_ chore: Release ``v1.1.0``
