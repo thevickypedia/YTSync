@@ -114,15 +114,29 @@ async def run_queued(now: datetime) -> None:
 
 async def cleanup_checkpoint() -> None:
     """Clean up the checkpoint by deleting entries that are older than the retention period."""
-    retention = timedelta(days=settings.duration_to_days(config.env.checkpoint_retention_period))
+    retention_days, _ = settings.duration_to_days(config.env.checkpoint_retention)
+    retention = timedelta(days=retention_days)
     today = datetime.now(timezone.utc)
     cutoff = today - retention
+    cutoff_date = cutoff.strftime(config.checkpoint_dir_format)
+    LOGGER.info(
+        "Today [%s]: Looking for checkpoints older than '%s' [%d days]",
+        today.strftime(config.checkpoint_dir_format),
+        cutoff_date,
+        retention_days,
+    )
     for datestamp, timestamps in checkpoint.ls().items():
         checkpoint_date = datetime.strptime(datestamp, config.checkpoint_dir_format).replace(tzinfo=timezone.utc)
         # Delete the entire directory if 'checkpoint_date' is older than the 'cutoff' date
         if checkpoint_date < cutoff:
-            LOGGER.info("Deleting checkpoint for: %s, with %d files", datestamp, len(timestamps))
-            LOGGER.debug("%s: %s", datestamp, timestamps)
+            LOGGER.info(
+                "Deleting checkpoint '%s', with %d file(s) older than %s [%d days]",
+                datestamp,
+                len(timestamps),
+                cutoff_date,
+                (today - checkpoint_date).days,
+            )
+            LOGGER.debug("%s -> %s", datestamp, timestamps)
             directory = config.checkpoints_dir / datestamp
             try:
                 shutil.rmtree(directory)

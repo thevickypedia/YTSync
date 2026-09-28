@@ -112,7 +112,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     cooldown_interval: PositiveInt = Field(300, ge=60, le=10_800)  # 60s to 3h; default: 5m
 
     # Cleanup checkpoints
-    checkpoint_retention_period: str = Field("3d")
+    checkpoint_retention: str = Field("3d")
 
     # Remote config
     remote_host: str | None = None
@@ -120,7 +120,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     remote_path: str | None = None
     delete_after_sync: bool = True
 
-    @field_validator("checkpoint_retention_period")
+    @field_validator("checkpoint_retention")
     @classmethod
     def validate_retention_period(cls, value: str) -> str:
         """Validates the retention period."""
