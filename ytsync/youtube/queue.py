@@ -66,7 +66,9 @@ async def get(include_past: bool = False) -> AsyncGenerator[Queue]:
         if include_past:
             data = cursor.execute("SELECT data FROM queue").fetchall()
         else:
-            now = datetime.now(tz=timezone.utc).timestamp()
+            # Floor to the start of the current minute so a row scheduled earlier in this
+            # same minute isn't excluded just because the tick ran a few milliseconds late
+            now = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0).timestamp()
             data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
     for row in data:
         if row:

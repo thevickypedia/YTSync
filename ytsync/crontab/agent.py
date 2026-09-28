@@ -103,17 +103,16 @@ async def run_queued(now: datetime) -> None:
     """
     async for q in queue.get():
         scheduled_time = datetime.fromisoformat(q.scheduled_time)
-        if scheduled_time.replace(second=0, microsecond=0) != now:
+        if scheduled_time.replace(second=0, microsecond=0) > now:
             continue
         task = asyncio.create_task(
-            downloader.download(
-                checkpoint_stats=q.checkpoint,
-                preprocess_stats=q.preprocessor,
-            )
+            downloader.download(checkpoint_stats=q.checkpoint, preprocess_stats=q.preprocessor)
         )
         task.add_done_callback(functools.partial(callbacks.process_callback, payload=q))
+        await queue.delete(q.scheduled_time)
 
 
+# TODO: Use this for checkpoints instead (queue will not be retained)
 async def cleanup_queue() -> None:
     """Clean up the queue by deleting entries that are older than the retention period."""
     retention = timedelta(minutes=settings.duration_to_minutes(config.env.queue_retention_period))
@@ -173,7 +172,7 @@ async def single_task() -> None:
     LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
     await run_tracker()
     await run_queued(now)
-    await cleanup_queue()
+    # await cleanup_queue()
 
 
 async def executor() -> None:
