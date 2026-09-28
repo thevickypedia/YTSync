@@ -4,7 +4,7 @@ import logging
 import shutil
 import time
 from collections.abc import Coroutine
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from ytsync.crontab import expression
 from ytsync.database import tracker
@@ -14,6 +14,7 @@ from ytsync.youtube import callbacks, checkpoint, downloader, queue, youtube
 
 LOGGER = logging.getLogger("ytsync")
 LAST_CHECK: datetime | None = None
+LAST_CLEANUP: date | None = None
 BG_INTERVAL: int = 5
 
 
@@ -150,20 +151,25 @@ async def run_polling() -> None:
 async def single_task() -> None:
     """Executes a single iteration of the main loop.
 
-    Polls for incoming messages, read the database, and execute the YouTube sync for the requested URL.
+    Polls for incoming messages, reads the database, and executes the YouTube sync for the requested URL.
     """
-    global LAST_CHECK
+    global LAST_CHECK, LAST_CLEANUP
     # Polling needs to run on every iteration
     await run_polling()
     now = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0)
-    if now == LAST_CHECK:
-        return
+
     # MARK: Runs every minute
-    LAST_CHECK = now
-    LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
-    await run_tracker()
-    await run_queued(now)
-    await cleanup_checkpoint()
+    if now != LAST_CHECK:
+        LAST_CHECK = now
+        LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
+        await run_tracker()
+        await run_queued(now)
+
+    # MARK: Runs once per day
+    today = now.date()
+    if today != LAST_CLEANUP:
+        LAST_CLEANUP = today
+        await cleanup_checkpoint()
 
 
 async def executor() -> None:
