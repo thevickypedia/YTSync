@@ -28,6 +28,7 @@ from ytsync.database import database
 from ytsync.modules import pydantic_config, releases, settings
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
+CONFIG_PATH = os.environ.get("CONFIG_PATH") or os.environ.get("config_path") or ".env.json"
 LOGICAL_CORES = os.cpu_count() or 2
 PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
@@ -131,6 +132,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
 
         vault_table = "ytsync"
         env_file = SECRETS_PATH
+        config_file = CONFIG_PATH
         extra = "ignore"
 
 

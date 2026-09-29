@@ -1,8 +1,10 @@
 import json
 import os
+import pathlib
 import warnings
 from typing import Any, Dict, List, Tuple, Type
 
+import yaml
 from pydantic.aliases import AliasChoices
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource
@@ -114,6 +116,53 @@ class VaultSettings(PydanticBaseSettingsSource):
         return normalize_vault_secrets(self.settings_cls, vault_client.get_table(self.table))
 
 
+class ConfigFileSettings(PydanticBaseSettingsSource):
+    """Load settings from a JSON or YAML configuration file."""
+
+    def __init__(self, settings_cls: Type[BaseSettings]):
+        super().__init__(settings_cls)
+        self.config = settings_cls.model_config
+        # noinspection PyTypedDict
+        self.filepath = self.config["config_file"]
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> Tuple[Any, str, bool]:
+        """Get the value for the given field.
+
+        Args:
+            field: Field instance with information about the field.
+            field_name: Name of the field.
+
+        Returns:
+            Tuple[Any, str, bool]
+            A tuple containing the key, value, and a flag to determine whether a value is complex.
+        """
+        return None, field_name, False
+
+    def __call__(self) -> Dict[str, Any]:
+        """Retrieve and normalize the JSON secrets.
+
+        Returns:
+            Dict[str, Any]
+            Returns the normalized JSON secrets.
+        """
+        if not self.filepath:
+            return {}
+
+        path = pathlib.Path(str(self.filepath))
+        if not path.is_file():
+            return {}
+
+        with path.open() as file:
+            if path.suffix.lower() == ".json":
+                data = json.load(file)
+            elif path.suffix.lower() in {".yaml", ".yml"}:
+                data = yaml.safe_load(file)
+            else:
+                return {}
+
+        return data or {}
+
+
 class PydanticEnvConfig(BaseSettings):
     """Pydantic BaseSettings with custom order for loading environment variables.
 
@@ -131,6 +180,17 @@ class PydanticEnvConfig(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ):
         """Order: vault, dotenv, env, init, secrets files."""
+        # noinspection typed-dict
+        config_file = settings_cls.model_config.get("config_file")
+        if config_file and pathlib.Path(str(config_file)).is_file():
+            # noinspection argument-list
+            return (
+                VaultSettings(settings_cls),
+                ConfigFileSettings(settings_cls),
+                env_settings,
+                init_settings,
+                file_secret_settings,
+            )
         # noinspection argument-list
         return (
             VaultSettings(settings_cls),
@@ -141,6 +201,6 @@ class PydanticEnvConfig(BaseSettings):
         )
 
     class Config:
-        """Extra configuration for PydanticEnvConfig object."""
+        """Extra configuration for a PydanticEnvConfig object."""
 
         hide_input_in_errors = True
