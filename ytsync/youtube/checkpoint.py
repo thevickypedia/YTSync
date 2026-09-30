@@ -2,9 +2,11 @@ import json
 import os
 import pathlib
 import re
+from collections.abc import AsyncGenerator
 from ipaddress import IPv4Address
-from typing import Dict, List
+from typing import List, Tuple
 
+import anyio
 from pydantic import BaseModel, HttpUrl
 
 from ytsync.modules import config
@@ -29,6 +31,7 @@ class SourceSystem(BaseModel):
 
     """
 
+    profile_name: str
     api: APISource | None = None
     telegram: models.Chat | None = None
     scheduled: config.AllowedCronSchedule | None = None
@@ -76,29 +79,33 @@ class Checkpoint(BaseModel):
     download_end: str = ""
 
 
-def ls() -> Dict[str, List[int]]:
+async def ls(profile_name: str) -> AsyncGenerator[Tuple[str, List[int]]]:
     """List all the available checkpoints.
+
+    Args:
+        profile_name: Name of the profile.
 
     Returns:
         Dict[str, List[int]]:
         A dictionary with datestamps as keys and timestamps as values.
     """
-    return {
-        parent.name: [
+    async for parent in anyio.Path(config.checkpoints_dir / profile_name).iterdir():
+        if not await parent.is_dir() or not config.is_valid_checkpoint_dir(parent.name):
+            continue
+        timestamps = [
             int(match.group())
-            for child in parent.iterdir()
+            async for child in parent.iterdir()
             if child.suffix == ".json"
             if (match := re.search(r"\d+", child.name))
         ]
-        for parent in config.checkpoints_dir.iterdir()
-        if parent.is_dir() and config.is_valid_checkpoint_dir(parent.name)
-    }
+        yield parent.name, timestamps
 
 
-def get(datestamp: str, timestamp: int) -> Checkpoint:
+def get(profile_name: str, datestamp: str, timestamp: int) -> Checkpoint:
     """Get a specific checkpoint.
 
     Args:
+        profile_name: Name of the profile.
         datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
 
@@ -106,20 +113,21 @@ def get(datestamp: str, timestamp: int) -> Checkpoint:
         Checkpoint:
         The checkpoint object.
     """
-    target = config.checkpoints_dir / datestamp / f"checkpoint_{timestamp}.json"
+    target = config.checkpoints_dir / profile_name / datestamp / f"checkpoint_{timestamp}.json"
     with open(target) as file:
         data = json.load(file)
     return Checkpoint(**data)
 
 
-def delete(datestamp: str, timestamp: int) -> None:
+def delete(profile_name: str, datestamp: str, timestamp: int) -> None:
     """Delete a specific checkpoint.
 
     Args:
+        profile_name: Name of the profile.
         datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
-    directory = config.checkpoints_dir / datestamp
+    directory = config.checkpoints_dir / profile_name / datestamp
     # If it's a single file, delete the directory
     if len([file for file in directory.iterdir() if file.suffix == ".json"]) == 1:
         directory.rmdir()
