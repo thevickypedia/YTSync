@@ -7,7 +7,6 @@
 
 import asyncio
 import logging
-import secrets
 import time
 from datetime import datetime
 from enum import StrEnum
@@ -17,10 +16,10 @@ import httpx
 from pydantic import HttpUrl, ValidationError
 from yt_dlp.utils import DownloadError
 
-from ytsync.database import tracker
+from ytsync.database import queue, tracker
 from ytsync.modules import config, exceptions
 from ytsync.telegram import models
-from ytsync.youtube import checkpoint, queue, youtube
+from ytsync.youtube import checkpoint, youtube
 
 BASE_URL = f"https://api.telegram.org/bot{config.env.bot_token}"
 LOGGER = logging.getLogger("ytsync")
@@ -60,7 +59,7 @@ def get_help(start: bool):
     """Get the help text for telegram interactions.
 
     Args:
-        start: Boolean flag to indicate the help button should be a regular icon.
+        start: A boolean flag to indicate the help button should be a regular icon.
     """
     # Red emoji appears only when an invalid command is entered
     sos = "ℹ️" if start else "🆘"
@@ -296,16 +295,6 @@ async def process_request(payload: Dict[str, int | dict]) -> None:
         await reply_to(chat.id, chat.message_id, "Payload type is not allowed.")
 
 
-def username_is_valid(username: str | None) -> bool:
-    """Compares username and returns True if username is allowed."""
-    if not username:
-        return False
-    for user in config.env.bot_users:
-        if secrets.compare_digest(user, username):
-            return True
-    return False
-
-
 async def authenticate(chat: models.Chat) -> bool:
     """Authenticates the user with ``userId`` and ``userName``.
 
@@ -323,11 +312,13 @@ async def authenticate(chat: models.Chat) -> bool:
             response=f"Sorry {chat.first_name}! I can't process requests from bots.",
         )
         return False
-    if chat.id not in config.env.bot_chat_ids or not username_is_valid(username=chat.username):
+    for profile in config.env.profiles:
+        if chat.id == profile.bot_chat_id and chat.username == profile.bot_username:
+            return True
+    else:
         LOGGER.error("Unauthorized chatID [%d] or userName [%s]", chat.id, chat.username)
         await send_message(chat_id=chat.id, response=f"401 Unauthorized user: ({chat.username})")
         return False
-    return True
 
 
 async def verify_timeout(chat: models.Chat) -> bool:
@@ -421,9 +412,9 @@ async def process_document(chat: models.Chat, data_class: models.Document | mode
     await reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
-async def get_queue_status() -> str:
+async def get_queue_status(profile_name: str) -> str:
     """Get the status text for the queued system."""
-    status = await queue.count()
+    status = await queue.count(profile_name)
     txt = f"Total downloads submitted: {status.total}"
     if status.pending:
         txt += f"\nPending downloads: {status.pending}"
@@ -450,6 +441,7 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
         chat: Required section of the payload as a Chat object.
         data_class: Required section of the payload as a Text object.
     """
+    profile = config.get_profile_by_bot_user(username=chat.username)
     if data_class.text:
         data_class.text = data_class.text.strip()
     else:
@@ -462,14 +454,14 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
     if data_class.text == Commands.status:
         txt = get_channel()
         try:
-            txt += await tracker.stringified_get()
+            txt += await tracker.stringified_get(profile_name=profile.name)
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
         final = (
             f"🕐 *Server Timestamp:* `{config.now()}`\n\n"
             f"⚙️ *Server Version:* `{config.API_VERSION}`\n\n"
-            f"{txt}\n\n{await get_queue_status()}"
+            f"{txt}\n\n{await get_queue_status(profile.name)}"
         )
         await reply_to(chat.id, chat.message_id, final)
         return
@@ -477,16 +469,17 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
         await reply_to(chat.id, chat.message_id, f"```\n{config.API_VERSION}\n```")
         return
     try:
-        await executor(data_class.text, chat)
+        await executor(profile, data_class.text, chat)
     except Exception as error:
         LOGGER.exception(error)
         await reply_to(chat.id, chat.message_id, f"❌ *Error*\n\n`{error}`")
 
 
-async def executor(command: str, chat: models.Chat) -> None:
+async def executor(profile: config.Profile, command: str, chat: models.Chat) -> None:
     """Executes the command via offline communicator.
 
     Args:
+        profile: Profile object.
         command: Command to be executed.
         chat: Required section of the payload as a Chat object.
     """
@@ -499,7 +492,7 @@ async def executor(command: str, chat: models.Chat) -> None:
                     youtube.queue_download(
                         url=HttpUrl(url),
                         source_system=checkpoint.SourceSystem(
-                            telegram=chat, audio_only=command.startswith(Commands.audio)
+                            profile_name=profile.name, telegram=chat, audio_only=command.startswith(Commands.audio)
                         ),
                     ),
                     timeout=config.env.response_timeout,
@@ -530,11 +523,11 @@ async def executor(command: str, chat: models.Chat) -> None:
                 if len(payload) == 1:
                     url = HttpUrl(payload[0])
                     schedule = config.AllowedCronSchedule.DAILY
-                    response = str(await tracker.insert(url, schedule, chat.id))
+                    response = str(await tracker.insert(profile.name, url, schedule, chat.id))
                 elif len(payload) == 2:
                     url = HttpUrl(payload[0])
                     schedule = getattr(config.AllowedCronSchedule, payload[1].upper())
-                    response = str(await tracker.insert(url, schedule, chat.id))
+                    response = str(await tracker.insert(profile.name, url, schedule, chat.id))
                 else:
                     response = invalid_msg.format(pretext="")
             except (AttributeError, ValidationError) as error:
@@ -545,17 +538,17 @@ async def executor(command: str, chat: models.Chat) -> None:
     elif command.startswith(Commands.sync):
         if identifier := command.replace(Commands.sync, "").strip():
             if identifier.startswith("http"):
-                response = await tracker.sync(chat=chat, url=identifier)
+                response = await tracker.sync(profile_name=profile.name, chat=chat, url=identifier)
             else:
-                response = await tracker.sync(chat=chat, name=identifier)
+                response = await tracker.sync(profile_name=profile.name, chat=chat, name=identifier)
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`."
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
-                response = str(await tracker.delete(url=identifier))
+                response = str(await tracker.delete(profile_name=profile.name, url=identifier))
             else:
-                response = str(await tracker.delete(name=identifier))
+                response = str(await tracker.delete(profile_name=profile.name, name=identifier))
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`."
     else:

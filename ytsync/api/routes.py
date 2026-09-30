@@ -13,10 +13,10 @@ from pydantic import ValidationError
 from yt_dlp.utils import DownloadError
 
 from ytsync.api import auth, models
-from ytsync.database import tracker
+from ytsync.database import queue, tracker
 from ytsync.modules import config
 from ytsync.telegram import bot, webhook
-from ytsync.youtube import checkpoint, queue, youtube
+from ytsync.youtube import checkpoint, youtube
 
 LOGGER = logging.getLogger("ytsync")
 SECURITY = HTTPBearer(
@@ -83,7 +83,7 @@ async def api_set_webhook(
         ‣‣ 'secret_token' is required to authenticate the incoming request to avoid man-in-the-middle attacks.
         ‣‣ 'webhook_ip' is optional; useful for bots behind a NAT or complex network configurations.
     """
-    await auth.validate(apikey, True)
+    await auth.validate_bot_request(apikey)
     # Invalid URL scheme - only 'https' is accepted
     if body.webhook.scheme != "https":
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST.real, detail="Invalid URL scheme")
@@ -117,7 +117,7 @@ async def api_get_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """**API endpoint to GET a webhook.**"""
-    await auth.validate(apikey, True)
+    await auth.validate_bot_request(apikey)
     try:
         return await webhook.get_webhook()
     except httpx.HTTPError as error:
@@ -131,7 +131,7 @@ async def api_delete_webhook(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ):
     """**API endpoint to DELETE a webhook.**"""
-    await auth.validate(apikey, True)
+    await auth.validate_bot_request(apikey)
     try:
         response = await webhook.delete_webhook()
         config.telegram_beat.poll_for_messages = True
@@ -147,8 +147,8 @@ async def api_get_trackers(
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ) -> List[tracker.DBSchema]:
     """**API endpoint to GET all trackers.**"""
-    await auth.validate(apikey, False)
-    return [item async for item in tracker.get()]
+    profile = await auth.validate_api_request(apikey)
+    return [item async for item in tracker.get(profile.name)]
 
 
 async def api_add_trackers(
@@ -168,8 +168,14 @@ async def api_add_trackers(
         ‣‣ 'schedule' must be @hourly, @daily, @weekly, or @monthly as a string.
         ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
     """
-    await auth.validate(apikey, False)
-    await tracker.insert(body.url, body.schedule, body.chat_id, raise_for_exception=True)
+    profile = await auth.validate_api_request(apikey)
+    await tracker.insert(
+        profile_name=profile.name,
+        playlist_url=body.url,
+        schedule=body.schedule,
+        chat_id=body.chat_id,
+        raise_for_exception=True,
+    )
 
 
 async def api_delete_trackers(
@@ -190,12 +196,14 @@ async def api_delete_trackers(
         ‣‣ 'url' to identify and delete the tracker.
         ‣‣ 'chat_id' the tracker was requested with. If the original request was an API call, set it to 0.
     """
-    await auth.validate(apikey, False)
+    profile = await auth.validate_api_request(apikey)
     if not any((body.name, body.url)):
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST.real, detail="Either name or url is required for each entry."
         )
-    await tracker.delete(name=body.name, url=body.url, chat_id=body.chat_id, raise_for_exception=True)
+    await tracker.delete(
+        profile_name=profile.name, name=body.name, url=body.url, chat_id=body.chat_id, raise_for_exception=True
+    )
 
 
 async def download(
@@ -215,7 +223,7 @@ async def download(
         ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
         ‣‣ 'chat_id' is optional to send a telegram notification when the download completes/fails.
     """
-    await auth.validate(apikey, False)
+    profile = await auth.validate_api_request(apikey)
     try:
         api_source = checkpoint.APISource(
             host=request.client.host,
@@ -224,7 +232,9 @@ async def download(
         response = await asyncio.wait_for(
             youtube.queue_download(
                 url=body.url,
-                source_system=checkpoint.SourceSystem(api=api_source, audio_only=body.audio_only),
+                source_system=checkpoint.SourceSystem(
+                    profile_name=profile.name, api=api_source, audio_only=body.audio_only
+                ),
             ),
             timeout=config.env.response_timeout,
         )
@@ -249,8 +259,8 @@ async def list_checkpoints(
           ]
         }
     """
-    await auth.validate(apikey, False)
-    return checkpoint.ls()
+    profile = await auth.validate_api_request(apikey)
+    return {k: v async for k, v in checkpoint.ls(profile.name)}
 
 
 async def get_checkpoint(
@@ -265,14 +275,14 @@ async def get_checkpoint(
         ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
-    await auth.validate(apikey, False)
+    profile = await auth.validate_api_request(apikey)
     if not config.is_valid_checkpoint_dir(datestamp):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND.real,
             detail=f"Checkpoint directory {datestamp} not found",
         )
     try:
-        return checkpoint.get(datestamp, int(timestamp))
+        return checkpoint.get(profile.name, datestamp, int(timestamp))
     except FileNotFoundError as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
     except ValidationError as error:
@@ -294,14 +304,14 @@ async def delete_checkpoint(
         ‣‣ datestamp: Datestamp of the checkpoint. Example: Aug_29_2026 (directory name)
         ‣‣ timestamp: Timestamp of the checkpoint. Example: 1788010080 (file name identifier)
     """
-    await auth.validate(apikey, False)
+    profile = await auth.validate_api_request(apikey)
     if not config.is_valid_checkpoint_dir(datestamp):
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND.real,
             detail=f"Checkpoint directory {datestamp} not found",
         )
     try:
-        checkpoint.delete(datestamp, int(timestamp))
+        checkpoint.delete(profile.name, datestamp, int(timestamp))
     except FileNotFoundError as error:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail=error)
     except NotADirectoryError as error:
@@ -322,8 +332,8 @@ async def get_queue(
 
         ‣‣ include_history: Boolean flag to include past queue objects.
     """
-    await auth.validate(apikey, False)
-    queued_items = [item async for item in queue.get(include_history)]
+    profile = await auth.validate_api_request(apikey)
+    queued_items = [item async for item in queue.get(profile.name, include_history)]
     response.headers["total-count"] = str(len(queued_items))
     return queued_items
 
@@ -338,8 +348,8 @@ async def add_queue(
 
         ‣‣ payload: Queue object stored in the database.
     """
-    await auth.validate(apikey, False)
-    await queue.insert(payload)
+    profile = await auth.validate_api_request(apikey)
+    await queue.insert(profile.name, payload)
     return {"ok": True}
 
 
@@ -353,8 +363,8 @@ async def delete_queue(
 
         ‣‣ scheduled_time: Queue item's scheduled time.
     """
-    await auth.validate(apikey, False)
-    if await queue.delete(str(scheduled_time)):
+    profile = await auth.validate_api_request(apikey)
+    if await queue.delete(profile.name, str(scheduled_time)):
         return {"ok": True}
     raise HTTPException(
         status_code=HTTPStatus.NOT_FOUND.real,

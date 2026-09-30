@@ -50,6 +50,7 @@ async def runner(cmd: list[str]) -> None:
     )
 
 
+# TODO: Honor profile names, audio and video dir
 class Rsync:
     """Rsync object to copy individual files to a remote server.
 

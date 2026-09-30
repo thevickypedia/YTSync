@@ -7,10 +7,10 @@ from collections.abc import Coroutine
 from datetime import date, datetime, timedelta, timezone
 
 from ytsync.crontab import expression
-from ytsync.database import tracker
+from ytsync.database import queue, tracker
 from ytsync.modules import config, exceptions, settings
 from ytsync.telegram import handler, poll
-from ytsync.youtube import callbacks, checkpoint, downloader, queue, youtube
+from ytsync.youtube import callbacks, checkpoint, downloader, youtube
 
 LOGGER = logging.getLogger("ytsync")
 LAST_CHECK: datetime | None = None
@@ -70,12 +70,18 @@ def create_task(coro: Coroutine, name: str) -> asyncio.Task:
 
 async def run_tracker() -> None:
     """Run all the trackers, per the schedule."""
-    async for track in tracker.get():
+    async for track in tracker.get("*"):
         try:
             cron_expr = expression.CronExpression(track.schedule.value)
         except exceptions.InvalidArgument as error:
             LOGGER.error("Invalid cron expression for '%s': %s", track.name, error)
-            await tracker.delete(name=track.name, url=str(track.url), chat_id=track.chat_id, raise_for_exception=False)
+            await tracker.delete(
+                profile_name=track.profile_name,
+                name=track.name,
+                url=str(track.url),
+                chat_id=track.chat_id,
+                raise_for_exception=False,
+            )
             continue
         # Since check_trigger() is true for the whole minute, the last_check guard handles the twice-per-minute case
         # schedule.value is used ONLY here, all inbound and outbound requests follow schedule.name for user-friendly
@@ -85,7 +91,7 @@ async def run_tracker() -> None:
             create_task(
                 youtube.queue_download(
                     url=track.url,
-                    source_system=checkpoint.SourceSystem(scheduled=track.schedule),
+                    source_system=checkpoint.SourceSystem(profile_name=track.profile_name, scheduled=track.schedule),
                     cron_schedule=track.schedule,
                 ),
                 name=track.name,
@@ -103,13 +109,13 @@ async def run_queued(now: datetime) -> None:
         - If the current datetime matches the 'scheduled_time', then creates an asynchronous task for download
         - Once a task has been scheduled, the 'process_callback' is added as a callback to notify the user
     """
-    async for q in queue.get():
+    async for q in queue.get(profile_name="*"):
         scheduled_time = datetime.fromisoformat(q.scheduled_time)
         if scheduled_time.replace(second=0, microsecond=0) > now:
             continue
         task = asyncio.create_task(downloader.download(checkpoint_stats=q.checkpoint, preprocess_stats=q.preprocessor))
         task.add_done_callback(functools.partial(callbacks.process_callback, payload=q))
-        await queue.delete(q.scheduled_time)
+        await queue.delete(q.checkpoint.source_system.profile_name, q.scheduled_time)
 
 
 async def cleanup_checkpoint() -> None:
@@ -118,13 +124,27 @@ async def cleanup_checkpoint() -> None:
     today = datetime.now(timezone.utc).date()
     cutoff = today - timedelta(days=retention_days)
     cutoff_date = cutoff.strftime(config.checkpoint_dir_format)
-    LOGGER.info(
-        "Today [%s]: Looking for checkpoints older than '%s' [%d days]",
-        today.strftime(config.checkpoint_dir_format),
-        cutoff_date,
-        retention_days,
-    )
-    for datestamp, timestamps in checkpoint.ls().items():
+    for profile in config.env.profiles:
+        LOGGER.info(
+            "Today [%s]: Scanning checkpoints for '%s' older than '%s' [%d days]",
+            today.strftime(config.checkpoint_dir_format),
+            profile.name,
+            cutoff_date,
+            retention_days,
+        )
+        await cleanup_per_profile(profile.name, today, cutoff, cutoff_date)
+
+
+async def cleanup_per_profile(profile_name: str, today: date, cutoff: date, cutoff_date: str) -> None:
+    """Clean up the checkpoint by deleting entries that are older than the retention period.
+
+    Args:
+        profile_name: Name of the profile.
+        cutoff: The cutoff date for deletion.
+        today: The current date.
+        cutoff_date: The cutoff date in string format.
+    """
+    async for datestamp, timestamps in checkpoint.ls(profile_name):
         checkpoint_date = datetime.strptime(datestamp, config.checkpoint_dir_format).replace(tzinfo=timezone.utc).date()
         # Delete the entire directory if 'checkpoint_date' is older than the 'cutoff' date
         if checkpoint_date < cutoff:

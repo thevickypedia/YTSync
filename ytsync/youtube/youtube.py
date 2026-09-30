@@ -6,9 +6,10 @@ from datetime import datetime, timedelta, timezone
 
 from pydantic import HttpUrl
 
+from ytsync.database import queue
 from ytsync.modules import config
 from ytsync.remote import transfer
-from ytsync.youtube import checkpoint, queue, squire
+from ytsync.youtube import checkpoint, squire
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -27,9 +28,9 @@ async def queue_download(
         raise ValueError("Failed to extract the title from the URL")
     subdir = re.sub(r'[<>:"/\\|?*]', "_", name)
     if source_system.audio_only:
-        destination = config.env.audio_dir.joinpath(subdir)
+        destination = config.env.audio_dir.joinpath(source_system.profile_name).joinpath(subdir)
     else:
-        destination = config.env.video_dir.joinpath(subdir)
+        destination = config.env.video_dir.joinpath(source_system.profile_name).joinpath(subdir)
     destination.mkdir(exist_ok=True, parents=True)
 
     preprocessed = await squire.get_missing_entries(url, ydl, info, destination, source_system)
@@ -57,7 +58,11 @@ async def queue_download(
     )
 
     cooldown = await queue.submit(
-        name=name, checkpoint_stats=checkpoint_stats, preprocessor_stats=preprocessed, cron_schedule=cron_schedule
+        profile_name=source_system.profile_name,
+        name=name,
+        checkpoint_stats=checkpoint_stats,
+        preprocessor_stats=preprocessed,
+        cron_schedule=cron_schedule,
     )
 
     scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=cooldown)

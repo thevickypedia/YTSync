@@ -18,7 +18,8 @@ LOGGER = logging.getLogger("ytsync")
 async def log_config() -> None:
     """Log all safe env configuration."""
     LOGGER.debug("***************************** CONFIGURATION START *****************************")
-    sensitive = ("log_config", "bot_token", "bot_secret", "apikey", "bot_users", "bot_chat_ids")
+    sensitive = ("log_config", "bot_token", "bot_secret", "profiles")
+    LOGGER.debug("Profile(s) allowed: %s", [profile.name for profile in config.env.profiles])
     for key, value in config.env.model_dump().items():
         if key in sensitive:
             continue
