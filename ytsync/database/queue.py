@@ -39,7 +39,7 @@ class QueueCount(BaseModel):
     pending: int
 
 
-async def count() -> QueueCount:
+async def count(profile_name: str) -> QueueCount:
     """Count the number of entries in the queue.
 
     Returns:
@@ -48,13 +48,19 @@ async def count() -> QueueCount:
     """
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
+        total = cursor.execute("SELECT COUNT(data) FROM queue WHERE profile_name = ?", (profile_name,)).fetchone()[0]
         now = datetime.now(tz=timezone.utc).timestamp()
-        pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
+        pending = cursor.execute(
+            "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp >= ?",
+            (
+                profile_name,
+                now,
+            ),
+        ).fetchone()[0]
         return QueueCount(total=total, pending=pending)
 
 
-async def get(include_past: bool = False) -> AsyncGenerator[Queue]:
+async def get(profile_name: str, include_past: bool = False) -> AsyncGenerator[Queue]:
     """Get queues stored in the database.
 
     Yields:
@@ -64,21 +70,34 @@ async def get(include_past: bool = False) -> AsyncGenerator[Queue]:
     async with config.db.connection as connection:
         cursor = connection.cursor()
         if include_past:
-            data = cursor.execute("SELECT data FROM queue").fetchall()
+            if profile_name == "*":
+                data = cursor.execute("SELECT data FROM queue").fetchall()
+            else:
+                data = cursor.execute("SELECT data FROM queue WHERE profile_name = ?", (profile_name,)).fetchall()
         else:
             # Floor to the start of the current minute so a row scheduled earlier in this
             # same minute isn't excluded just because the tick ran a few milliseconds late
             now = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0).timestamp()
-            data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
+            if profile_name == "*":
+                data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
+            else:
+                data = cursor.execute(
+                    "SELECT data FROM queue WHERE profile_name = ? AND timestamp >= ?",
+                    (
+                        profile_name,
+                        now,
+                    ),
+                ).fetchall()
     for row in data:
         if row:
             yield Queue(**json.loads(row[0]))
 
 
-async def insert(queue: Queue) -> None:
+async def insert(profile_name: str, queue: Queue) -> None:
     """Handles tracker for a playlist URL.
 
     Args:
+        profile_name: Takes a profile name as an argument.
         queue: Takes a Queue object as an argument.
     """
     timestamp = datetime.fromisoformat(queue.scheduled_time).timestamp()
@@ -86,8 +105,9 @@ async def insert(queue: Queue) -> None:
     async with config.db.connection as connection:
         cursor = connection.cursor()
         cursor.execute(
-            "INSERT OR REPLACE INTO queue (timestamp, data) VALUES (?,?);",
+            "INSERT OR REPLACE INTO queue (profile_name, timestamp, data) VALUES (?,?,?);",
             (
+                profile_name,
                 timestamp,
                 data,
             ),
@@ -95,10 +115,11 @@ async def insert(queue: Queue) -> None:
         connection.commit()
 
 
-async def delete(scheduled_time: str) -> bool:
+async def delete(profile_name: str, scheduled_time: str) -> bool:
     """Delete a queue entry by its scheduled time.
 
     Args:
+        profile_name: Takes a profile name as an argument.
         scheduled_time: ISO-8601 scheduled time of the queue entry to remove.
 
     Returns:
@@ -108,17 +129,37 @@ async def delete(scheduled_time: str) -> bool:
     timestamp = datetime.fromisoformat(scheduled_time).timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp = ?", (timestamp,))
+        cursor.execute(
+            "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp = ?",
+            (
+                profile_name,
+                timestamp,
+            ),
+        )
         if cursor.fetchone()[0] == 0:
-            LOGGER.warning("No queue entry found for scheduled_time: %s with timestamp: %s", scheduled_time, timestamp)
+            LOGGER.warning(
+                "No queue entry found for %s at scheduled_time: %s with timestamp: %s",
+                profile_name,
+                scheduled_time,
+                timestamp,
+            )
             return False
-        cursor.execute("DELETE FROM queue WHERE timestamp = ?", (timestamp,))
+        cursor.execute(
+            "DELETE FROM queue WHERE profile_name = ? AND timestamp = ?",
+            (
+                profile_name,
+                timestamp,
+            ),
+        )
         connection.commit()
         return True
 
 
-async def latest_timestamp() -> Queue:
+async def latest_timestamp(profile_name: str) -> Queue:
     """Get the latest Queue based on the timestamp in the table.
+
+    Args:
+        profile_name: Takes a profile name as an argument.
 
     Returns:
         Queue:
@@ -126,11 +167,14 @@ async def latest_timestamp() -> Queue:
     """
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        latest_data = cursor.execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()[0]
+        latest_data = cursor.execute(
+            "SELECT data FROM queue WHERE profile_name = ? ORDER BY timestamp DESC LIMIT 1", (profile_name,)
+        ).fetchone()[0]
         return Queue(**json.loads(latest_data))
 
 
 async def submit(
+    profile_name: str,
     name: str,
     checkpoint_stats: checkpoint.Checkpoint,
     preprocessor_stats: squire.PreProcessor,
@@ -146,6 +190,7 @@ async def submit(
         - In tester mode, submissions always run immediately.
 
     Args:
+        profile_name: Takes a profile name as an argument.
         name: Name of the task being submitted. Used for logging only.
         checkpoint_stats: Checkpoint statistics associated with the queued task.
         preprocessor_stats: Preprocessor statistics associated with the queued task.
@@ -155,7 +200,7 @@ async def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
-    q_count = await count()
+    q_count = await count(profile_name)
     now = datetime.now(timezone.utc)
 
     if config.env.download_tester:
@@ -177,7 +222,7 @@ async def submit(
             scheduled_time = now + timedelta(seconds=config.env.next_buffer)
             LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     else:
-        last_queue = await latest_timestamp()
+        last_queue = await latest_timestamp(profile_name)
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
         elapsed = (now - last_scheduled_time).total_seconds()
         if elapsed >= config.env.cooldown_interval:
@@ -219,11 +264,12 @@ async def submit(
     cooldown = max(0, (scheduled_time - now).total_seconds())
     LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
     await insert(
+        profile_name,
         Queue(
             scheduled_time=scheduled_time.isoformat(),
             checkpoint=checkpoint_stats,
             preprocessor=preprocessor_stats,
             cron_schedule=cron_schedule,
-        )
+        ),
     )
     return cooldown

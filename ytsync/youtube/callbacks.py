@@ -7,10 +7,11 @@ import time
 from datetime import datetime
 from typing import Dict, List
 
+from ytsync.database import queue
 from ytsync.modules import config
 from ytsync.remote import transfer
 from ytsync.telegram import bot
-from ytsync.youtube import checkpoint, queue, squire
+from ytsync.youtube import checkpoint, squire
 
 LOGGER = logging.getLogger("ytsync")
 
