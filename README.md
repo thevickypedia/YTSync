@@ -31,19 +31,20 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 * **tz**: IANA time zone identifier. _Defaults to server's local timezone_
 * **log_config**: Dict config or filepath for log configuration. _Defaults to `logging.basicConfig`_
 
+###### Profile Settings
+* **name**: Name of the profile.
+* **apikey**: Key to access via API. _Required for API access_
+* **bot_chat_id**: List of bot ids to allow. _Required for telegram access_
+* **bot_username**: List of bot usernames to allow. _Required for telegram access_
+
 ###### Telegram Settings
 * **bot_token**: Telegram bot token. _Required for telegram access_
-* **bot_chat_ids**: List of bot ids to allow. _Required for telegram access_
-* **bot_users**: List of bot usernames to allow. _Required for telegram access_
 * **poll_interval**: Number of seconds between each request to poll. Defaults to `2`
 * **bot_webhook**: Telegram bot webhook URL. [Optional]
 * **bot_webhook_ip**: Webhook IP address. [Optional]
 * **bot_endpoint**: API endpoint to serve the webhook. _Defaults to `/telegram-webhook`_
 * **bot_secret**: Secret key to verify webhook requests. [Optional]
 * **bot_certificate**: Certificate filepath for webhook server (in case of self-signed certificate) [Optional]
-
-###### API Settings
-* **apikey**: Key to access via API. _Required for API access; defaults to `bot_token`_
 
 ###### yt-dlp Settings [Optional]
 * **cookie_file**: Path to the cookie file.
