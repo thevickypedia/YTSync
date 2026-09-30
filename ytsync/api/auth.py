@@ -11,15 +11,28 @@ from ytsync.modules import config
 LOGGER = logging.getLogger("ytsync")
 
 
-async def validate(apikey: HTTPAuthorizationCredentials, bot_request: bool) -> None:
+async def validate_bot_request(bot_token: HTTPAuthorizationCredentials) -> None:
+    """Function to authenticate inbound requests.
+
+    Args:
+        bot_token: Bot token to validate an ingress request for webhook operations.
+    """
+    if not secrets.compare_digest(bot_token.credentials, config.env.bot_token):
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED.real,
+        )
+
+
+async def validate_api_request(apikey: HTTPAuthorizationCredentials) -> config.Profile:
     """Function to authenticate inbound requests.
 
     Args:
         apikey: API key to validate an ingress request.
-        bot_request: Boolean flag to indicate bot operation.
     """
-    secret = config.env.bot_token if bot_request else config.env.apikey
-    if not secrets.compare_digest(apikey.credentials, secret):
+    for profile in config.env.profiles:
+        if secrets.compare_digest(apikey.credentials, profile.apikey):
+            return profile
+    else:
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED.real,
         )
