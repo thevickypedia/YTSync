@@ -15,20 +15,22 @@ LOGGER = logging.getLogger("ytsync")
 
 
 class DBSchema(BaseModel):
+    # noinspection GrazieInspection
     """Schema for all DB interactions.
 
     >>> DBSchema
 
-    Must follow the insertion order: "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);"
+    Must follow the order: "INSERT INTO ytsync (profile_name, url, name, schedule, chat_id) VALUES (?,?,?,?,?);"
     """
 
+    profile_name: str
     url: HttpUrl
     name: str
     schedule: config.AllowedCronSchedule
     chat_id: int | None = None
 
 
-def row_to_schema(row: Tuple[str, str, str, str]) -> DBSchema:
+def row_to_schema(row: Tuple[str, str, str, str, str]) -> DBSchema:
     """Convert a row of tuple into a DBSchema object.
 
     Args:
@@ -44,8 +46,11 @@ def row_to_schema(row: Tuple[str, str, str, str]) -> DBSchema:
     return DBSchema(**wrapped)
 
 
-async def get() -> AsyncGenerator[DBSchema]:
+async def get(profile_name: str) -> AsyncGenerator[DBSchema]:
     """Get trackers stored in the database.
+
+    Args:
+        profile_name: Name of the profile. Accepts a wildcard "*" to get all profiles.
 
     Yields:
         DBSchema:
@@ -53,18 +58,26 @@ async def get() -> AsyncGenerator[DBSchema]:
     """
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        data = cursor.execute("SELECT * FROM ytsync").fetchall()
+        if profile_name == "*":
+            data = cursor.execute("SELECT * FROM ytsync").fetchall()
+        else:
+            data = cursor.execute("SELECT * FROM ytsync WHERE profile_name = ?", (profile_name,)).fetchall()
 
     for row in data:
         yield row_to_schema(row)
 
 
 async def insert(
-    playlist_url: HttpUrl, schedule: config.AllowedCronSchedule, chat_id: int, raise_for_exception: bool = False
+    profile_name: str,
+    playlist_url: HttpUrl,
+    schedule: config.AllowedCronSchedule,
+    chat_id: int,
+    raise_for_exception: bool = False,
 ) -> str | int:
     """Handles tracker for a playlist URL.
 
     Args:
+        profile_name: Name of the profile to sync on schedule.
         playlist_url: URL to sync on schedule.
         schedule: Schedule to follow for tracking the given playlist.
         chat_id: Chat ID to notify when the scheduled run has completed/failed.
@@ -81,8 +94,9 @@ async def insert(
         # However, selecting with 'chat_id' means the API should also pass the original 'chat_id',
         # when an entry is made via Telegram but updated through the API; 'GET /get-trackers' will give the 'chat_id'
         cursor.execute(
-            "SELECT * FROM ytsync WHERE url = ? AND chat_id = ? LIMIT 1;",
+            "SELECT * FROM ytsync WHERE profile_name = ? AND url = ? AND chat_id = ? LIMIT 1;",
             (
+                profile_name,
                 playlist_url,
                 chat_id,
             ),
@@ -107,12 +121,12 @@ async def insert(
         if needs_delete:
             # Since there is no primary key, 'INSERT OR REPLACE' will NOT prevent duplicates
             cursor.execute(
-                "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
-                (playlist_url, chat_id),
+                "DELETE FROM ytsync WHERE profile_name = ? AND url = ? AND chat_id = ?;",
+                (profile_name, playlist_url, chat_id),
             )
         cursor.execute(
-            "INSERT INTO ytsync (url, name, schedule, chat_id) VALUES (?,?,?,?);",
-            (playlist_url, title, schedule.name, chat_id),
+            "INSERT INTO ytsync (profile_name, url, name, schedule, chat_id) VALUES (?,?,?,?,?);",
+            (profile_name, playlist_url, title, schedule.name, chat_id),
         )
         connection.commit()
     if raise_for_exception:
@@ -120,10 +134,11 @@ async def insert(
     return f"✅ *Sync scheduled*\n\n" f"*{title}* will be synced {schedule.name.lower()}"
 
 
-async def stringified_get(trackers: List[DBSchema] | None = None) -> str:
+async def stringified_get(profile_name: str | None = None, trackers: List[DBSchema] | None = None) -> str:
     """Get trackers in a markdown-friendly format.
 
     Args:
+        profile_name: Profile name.
         trackers: List of trackers to be stringified.
 
     Returns:
@@ -132,7 +147,10 @@ async def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     """
     txt = ""
     if trackers is None:
-        trackers = [item async for item in get()]
+        if profile_name:
+            trackers = [item async for item in get(profile_name)]
+        else:
+            raise ValueError("Either profile_name or trackers must be provided.")
     if trackers:
         txt += "\n\n*Trackers:*\n"
         for tracked in trackers:
@@ -144,10 +162,11 @@ async def stringified_get(trackers: List[DBSchema] | None = None) -> str:
     return txt
 
 
-async def sync(chat: models.Chat, name: str | None = None, url: str | None = None) -> str:
+async def sync(profile_name: str, chat: models.Chat, name: str | None = None, url: str | None = None) -> str:
     """Syncs a tracker (on-demand) by its 1-based status index.
 
     Args:
+        profile_name: Name of the profile.
         name: Name of the playlist.
         url: URL for the playlist.
         chat: Chat object to send a notification as a callback.
@@ -156,8 +175,7 @@ async def sync(chat: models.Chat, name: str | None = None, url: str | None = Non
         str:
         Returns the response string for Telegram.
     """
-    trackers = [item async for item in get()]
-    source_system = checkpoint.SourceSystem(telegram=chat)
+    trackers = [item async for item in get(profile_name)]
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
@@ -166,7 +184,7 @@ async def sync(chat: models.Chat, name: str | None = None, url: str | None = Non
         return await asyncio.wait_for(
             youtube.queue_download(
                 url=tracker.url,
-                source_system=source_system,
+                source_system=checkpoint.SourceSystem(profile_name=profile_name, telegram=chat),
             ),
             timeout=config.env.response_timeout,
         )
@@ -181,17 +199,18 @@ async def sync(chat: models.Chat, name: str | None = None, url: str | None = Non
         return await asyncio.wait_for(
             youtube.queue_download(
                 url=tracker.url,
-                source_system=source_system,
+                source_system=checkpoint.SourceSystem(profile_name=tracker.profile_name, telegram=chat),
             ),
             timeout=config.env.response_timeout,
         )
     elif trackers:
-        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers)}"
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers=trackers)}"
     else:
         return "⚠️ *Warning*\n\nNo trackers found on the server."
 
 
 async def delete(
+    profile_name: str,
     name: str | None = None,
     url: str | None = None,
     chat_id: int | None = None,
@@ -200,6 +219,7 @@ async def delete(
     """Delete a tracker by its 1-based status index.
 
     Args:
+        profile_name: Name of the profile.
         name: Name of the playlist.
         url: URL for the playlist.
         chat_id: Telegram chat ID.
@@ -209,7 +229,7 @@ async def delete(
         str:
         Returns the response string for Telegram and HTTP code for API calls.
     """
-    trackers = [item async for item in get()]
+    trackers = [item async for item in get(profile_name)]
     if name and (tracker := [tracker for tracker in trackers if tracker.name == name]):
         if len(tracker) > 1:
             return f"⚠️ *Warning*\n\n{len(tracker)} playlists found with the same name, please specify the URL"
@@ -223,7 +243,7 @@ async def delete(
                 status_code=HTTPStatus.BAD_REQUEST.real,
                 detail=f"Invalid tracker received: {name or url!r}. Select one from {trackers}",
             )
-        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers)}"
+        return f"❌ *Error*\n\nInvalid tracker received: {name or url!r}{await stringified_get(trackers=trackers)}"
     else:
         if raise_for_exception:
             raise HTTPException(status_code=HTTPStatus.NOT_FOUND.real, detail="No trackers found on the server")
@@ -236,8 +256,9 @@ async def delete(
         # However, deleting with 'chat_id' means the API should also pass the original 'chat_id',
         # when an entry is made via Telegram but deleted through the API; 'GET /get-trackers' will give the 'chat_id'
         cursor.execute(
-            "DELETE FROM ytsync WHERE url = ? AND chat_id = ?;",
+            "DELETE FROM ytsync WHERE profile_name = ? AND url = ? AND chat_id = ?;",
             (
+                profile_name,
                 url,
                 chat_id or 0,
             ),
