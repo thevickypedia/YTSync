@@ -131,6 +131,8 @@ async def download_alt(
         Returns an awaitable task if there is an async task to gather.
     """
     task = None
+    # MARK: Edge case where a parent directory can be missing when downloading the filepath
+    filepath.parent.mkdir(exist_ok=True, parents=True)
     # MARK: If the file already exists [OR] download tester is enabled, skip the download and initiate rsync if enabled
     # A filepath can exist and be present in the url_file_map, if the file is available locally, but missing in remote
     # Partially downloaded files WILL NEVER have the same file extension as the final file, so '> 0' check is sufficient
