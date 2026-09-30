@@ -195,8 +195,8 @@ env.data_dir.mkdir(exist_ok=True, parents=True)
 env.audio_dir.mkdir(exist_ok=True, parents=True)
 env.video_dir.mkdir(exist_ok=True, parents=True)
 db = database.Database(database=env.data_dir.joinpath("database.db"))
-db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
-db.create_table(table_name="queue", columns=["timestamp", "data"], primary_key="timestamp")
+db.create_table(table_name="ytsync", columns=["profile_name", "url", "name", "schedule", "chat_id"])
+db.create_table(table_name="queue", columns=["profile_name", "timestamp", "data"], primary_key="timestamp")
 checkpoints_dir = env.data_dir / "checkpoints"
 checkpoints_dir.mkdir(exist_ok=True, parents=True)
 checkpoint_dir_format = "%b_%d_%Y"

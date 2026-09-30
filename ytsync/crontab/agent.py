@@ -125,6 +125,8 @@ async def cleanup_checkpoint() -> None:
     cutoff = today - timedelta(days=retention_days)
     cutoff_date = cutoff.strftime(config.checkpoint_dir_format)
     for profile in config.env.profiles:
+        if not (config.checkpoints_dir / profile.name).exists():
+            continue
         LOGGER.info(
             "Today [%s]: Scanning checkpoints for '%s' older than '%s' [%d days]",
             today.strftime(config.checkpoint_dir_format),
