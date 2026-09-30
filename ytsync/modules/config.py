@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 from pydantic import (
+    BaseModel,
     DirectoryPath,
     Field,
     FilePath,
@@ -52,6 +53,30 @@ class AllowedCronSchedule(StrEnum):
     MONTHLY = "@monthly"
 
 
+class Profile(BaseModel):
+    """Use profile information.
+
+    >>> Profile
+
+    """
+
+    name: str
+    # API access
+    apikey: str
+    # Telegram bot
+    bot_username: str
+    bot_chat_id: int
+
+
+def get_profile_by_bot_user(username: str) -> Profile:
+    """Get profile by username."""
+    for profile in env.profiles:
+        if profile.bot_username == username:
+            return profile
+    else:
+        raise ValueError(f"Profile for username {username!r} not found")
+
+
 class EnvConfig(pydantic_config.PydanticEnvConfig):
     """Configuration values for the project.
 
@@ -65,10 +90,11 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     tz: ZoneInfo | tzinfo | None = datetime.now().astimezone().tzinfo
     log_config: FilePath | Dict[str, Any] | None = None
 
+    # Profiles
+    profiles: List[Profile]
+
     # Telegram config
     bot_token: str
-    bot_chat_ids: List[int]
-    bot_users: List[str]
     poll_interval: PositiveInt = Field(2, le=10, ge=1)
 
     bot_webhook: HttpUrl | None = None
@@ -76,9 +102,6 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     bot_endpoint: str = Field("/telegram-webhook", pattern=r"^\/")
     bot_secret: str | None = Field(None, pattern="^[A-Za-z0-9_-]{1,256}$")
     bot_certificate: FilePath | None = None
-
-    # API config
-    apikey: str | None = None
 
     # yt-dlp config
     download_tester: bool = False
@@ -174,9 +197,8 @@ env.video_dir.mkdir(exist_ok=True, parents=True)
 db = database.Database(database=env.data_dir.joinpath("database.db"))
 db.create_table(table_name="ytsync", columns=["url", "name", "schedule", "chat_id"])
 db.create_table(table_name="queue", columns=["timestamp", "data"], primary_key="timestamp")
-if not env.apikey:
-    env.apikey = env.bot_token
 checkpoints_dir = env.data_dir / "checkpoints"
+checkpoints_dir.mkdir(exist_ok=True, parents=True)
 checkpoint_dir_format = "%b_%d_%Y"
 # Raise a warning if download tester is enabled
 if env.download_tester:
