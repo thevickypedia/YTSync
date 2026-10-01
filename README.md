@@ -47,6 +47,7 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 * **bot_certificate**: Certificate filepath for webhook server (in case of self-signed certificate) [Optional]
 
 ###### yt-dlp Settings [Optional]
+* **download_tester**: Boolean flag to skip download, and create placeholder files for testing. _Defaults to `False`_
 * **cookie_file**: Path to the cookie file.
 * **source_address**: IP address for the requesting source.
 * **proxy_url**: URL of the proxy server.
@@ -61,6 +62,7 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 ###### Concurrency & Tolerance Settings
 * **max_transfers**: Maximum number of concurrent transfers to perform. _Defaults to the number of CPU cores_
 * **max_retries**: Maximum number of retries for rsync and telegram polling. _Defaults to `10`_
+* **max_timeout**: Maximum number of seconds to wait before timing out the CLI download and rsync transfer. _Defaults to `60`_
 * **backoff_factor**: Back off factor between each retry attempt. _Defaults to `3`_
 * **max_error_threshold**: Percentage of individual URLs to verify before downloading the entire playlist. _Defaults to `30`_
 * **response_timeout**: Maximum number of seconds to wait before timing out the client request. _Defaults to `30`_
@@ -70,11 +72,20 @@ YTSync is a lightweight API, equipped with Telegram Bot to download a playlist a
 * **next_buffer**: Number of seconds to simulate time taken for a download. _Defaults to `60`_
 * **cooldown_interval**: Number of seconds to wait before processing next in queue. _Defaults to `300`_
 
+###### Analytics Settings [Optional]
+* **checkpoint_retention**: Number of days/weeks/months to retain the checkpoint data. _Defaults to `3d`_
+
 ###### Remote Settings [Optional]
 * **remote_host**: Hostname [OR] IP address of the remote server.
 * **remote_user**: Username to connect to the remote server.
 * **remote_path**: Directory path on the remote server, to transfer downloaded files to.
 * **delete_after_sync**: Boolean flag to delete local files after transferring to the remote server.
+
+#### Limitations
+* Environment variables can be read from a `.env` or `.json` file, but docker context only supports `.env` files.
+* Profiles will be created by default within the chosen `audio_dir` and `video_dir` directories.
+* YTSync does not support threaded downloads, and will download sequentially to avoid being throttled/blocked by the source server.
+* YTSync runs on a single process, and will not spawn threads. However, downloads/transfers are asynchronous; transfers are submitted immediately after a download is complete.
 
 ### SSH setup
 
