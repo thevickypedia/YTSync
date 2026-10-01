@@ -257,7 +257,7 @@ async def download(
             LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
             playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
     checkpoint_stats.playlist_id = playlist_id
-    checkpoint_stats.runtime = time.time() - start
+    checkpoint_stats.runtime = float(round(time.time() - start, 2))
     return checkpoint_stats
 
 
