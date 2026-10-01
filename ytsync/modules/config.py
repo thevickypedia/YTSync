@@ -121,7 +121,7 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
     # Applies to rsync and telegram polling
     max_retries: PositiveInt = Field(10, le=30, ge=1)
-    max_timeout: PositiveInt = Field(30, le=60, ge=1)
+    max_timeout: PositiveInt = Field(60, le=300, ge=5)
     backoff_factor: PositiveInt | PositiveFloat = Field(3, le=10, ge=1)
     # Percentage of errors YTSync needs to tolerate before trying to download the base url
     max_error_threshold: PositiveInt = Field(30, le=100, ge=10)
