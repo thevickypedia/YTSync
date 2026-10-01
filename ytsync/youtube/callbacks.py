@@ -110,7 +110,11 @@ def save_checkpoint(final_checkpoint: checkpoint.Checkpoint) -> None:
         final_checkpoint: Final checkpoint object.
     """
     LOGGER.debug(final_checkpoint)
-    checkpoint_dir = config.checkpoints_dir / datetime.now(config.env.tz).strftime(config.checkpoint_dir_format)
+    checkpoint_dir = (
+        config.checkpoints_dir
+        / final_checkpoint.source_system.profile_name
+        / datetime.now(config.env.tz).strftime(config.checkpoint_dir_format)
+    )
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_path = checkpoint_dir / f"checkpoint_{int(time.time())}.json"
     with open(checkpoint_path, "w") as file:
