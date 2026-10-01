@@ -252,7 +252,7 @@ async def download(
             playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
     else:
         try:
-            playlist_id = create_local_playlist(destination, extension) if checkpoint_stats.is_playlist else None
+            playlist_id = await create_local_playlist(destination, extension) if checkpoint_stats.is_playlist else None
         except Exception as error:
             LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
             playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
@@ -261,11 +261,13 @@ async def download(
     return checkpoint_stats
 
 
-def create_local_playlist(destination: pathlib.Path, extension: str) -> str | None:
+async def create_local_playlist(destination: pathlib.Path, extension: str) -> str | None:
     """Create a .m3u file on the local machine."""
+    destination = destination.resolve()
     destination.mkdir(parents=True, exist_ok=True)
     filepath = destination / f"{destination.name}.m3u"
     if files := [file.name for file in destination.glob(f"*{extension}")]:
+        LOGGER.info("Creating local playlist: %s with %d files", filepath, len(files))
         with filepath.open("w", encoding="utf-8") as playlist_file:
             playlist_file.write("\n".join(files) + "\n")
         return str(filepath)

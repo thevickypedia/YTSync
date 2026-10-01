@@ -9,7 +9,7 @@ from pydantic import HttpUrl
 from ytsync.database import queue
 from ytsync.modules import config
 from ytsync.remote import transfer
-from ytsync.youtube import checkpoint, squire
+from ytsync.youtube import checkpoint, downloader, squire
 
 LOGGER = logging.getLogger("ytsync")
 
@@ -34,10 +34,17 @@ async def queue_download(
     destination.mkdir(exist_ok=True, parents=True)
 
     preprocessed = await squire.get_missing_entries(url, ydl, info, destination, source_system)
+    is_playlist = len(preprocessed.url_file_map) > 1
     intended_path = posixpath.join(transfer.rsync.remote_path, subdir) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
         if not preprocessed.preflight:
             raise ValueError("Something went wrong! Neither URLs, nor preflight status were received!")
+        if transfer.rsync.is_enabled:
+            await transfer.rsync.create_playlist(name=name, extension=".mp3" if source_system.audio_only else ".mp4")
+        else:
+            await downloader.create_local_playlist(
+                destination=destination, extension=".mp3" if source_system.audio_only else ".mp4"
+            )
         if source_system.api:
             return f"{name!r} with {preprocessed.preflight.total} file(s) is already available at: {intended_path}"
         return (
@@ -50,7 +57,7 @@ async def queue_download(
         source_system=source_system,
         input_url=url,
         resolved_urls=list(map(HttpUrl, preprocessed.url_file_map.keys())),
-        is_playlist=len(preprocessed.url_file_map) > 1,
+        is_playlist=is_playlist,
         initial_destination=destination,
         final_destination=pathlib.Path(intended_path),
         name=name,

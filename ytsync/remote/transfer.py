@@ -206,6 +206,7 @@ class Rsync:
             raise
         if proc.returncode != 0:
             raise RuntimeError(f"Failed to create playlist for {name}: {stderr.decode()}")
+        LOGGER.info("Playlist created for %s at %s", name, filepath)
         return filepath
 
 
