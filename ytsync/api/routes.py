@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 from http import HTTPStatus
 from json.decoder import JSONDecodeError
@@ -15,7 +16,9 @@ from yt_dlp.utils import DownloadError
 from ytsync.api import auth, models
 from ytsync.database import queue, tracker
 from ytsync.modules import config
-from ytsync.telegram import bot, webhook
+from ytsync.telegram import bot
+from ytsync.telegram import models as telegram_models
+from ytsync.telegram import webhook
 from ytsync.youtube import checkpoint, youtube
 
 LOGGER = logging.getLogger("ytsync")
@@ -206,6 +209,26 @@ async def api_delete_trackers(
     )
 
 
+async def telegram_source(chat_id: int, profile_name: str) -> telegram_models.Chat:
+    """Creates a Telegram Chat object for the given chat_id.
+
+    Args:
+        chat_id: Chat ID of the user to send the notification to.
+        profile_name: Name of the profile associated with the request.
+
+    Returns:
+        telegram_models.Chat:
+        A Chat object with the provided chat_id and profile_name.
+    """
+    return telegram_models.Chat(
+        message_id=0,  # API trigger will not have an actual 'message_id' to respond to
+        date=int(time.time()),
+        id=chat_id,  # Assuming user's input is a valid chat_id
+        username=profile_name,  # Placeholder
+        is_bot=False,
+    )
+
+
 async def download(
     request: Request,
     body: models.Download,
@@ -225,17 +248,23 @@ async def download(
     """
     profile = await auth.validate_api_request(apikey)
     try:
-        api_source = checkpoint.APISource(
-            host=request.client.host,
-            host_header=request.headers.get("host"),
-        )
-        response = await asyncio.wait_for(
-            youtube.queue_download(
-                url=body.url,
-                source_system=checkpoint.SourceSystem(
-                    profile_name=profile.name, api=api_source, audio_only=body.audio_only
+        if body.chat_id:
+            source = checkpoint.SourceSystem(
+                profile_name=profile.name,
+                telegram=await telegram_source(body.chat_id, profile.name),
+                audio_only=body.audio_only,
+            )
+        else:
+            source = checkpoint.SourceSystem(
+                profile_name=profile.name,
+                api=checkpoint.APISource(
+                    host=request.client.host,
+                    host_header=request.headers.get("host"),
                 ),
-            ),
+                audio_only=body.audio_only,
+            )
+        response = await asyncio.wait_for(
+            youtube.queue_download(url=body.url, source_system=source),
             timeout=config.env.response_timeout,
         )
         raise HTTPException(status_code=HTTPStatus.OK.real, detail=response)

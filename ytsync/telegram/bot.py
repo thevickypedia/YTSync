@@ -309,7 +309,7 @@ async def authenticate(chat: models.Chat) -> bool:
         LOGGER.error("Bot request from %s", chat.username)
         await send_message(
             chat_id=chat.id,
-            response=f"Sorry {chat.first_name}! I can't process requests from bots.",
+            response=f"Sorry {chat.first_name or 'bot'}! I can't process your request.",
         )
         return False
     for profile in config.env.profiles:

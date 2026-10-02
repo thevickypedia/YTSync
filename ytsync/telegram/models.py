@@ -10,13 +10,13 @@ class Chat(BaseModel):
     message_type: str | None = None
     date: int
 
-    first_name: str
-    last_name: str
+    first_name: str | None = None
+    last_name: str | None = None
     id: int
-    type: str
+    type: str | None = None
     username: str
     is_bot: bool
-    language_code: str
+    language_code: str | None = None
 
 
 # Below are the DataClass objects
