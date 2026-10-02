@@ -96,8 +96,7 @@ def process_callback(
             joined = "\n".join(f"• {item}" for item in result.transfer_failed)
             response += "\n\nTransfer Failed: " + f"\n{joined}"
     result.download_end = config.now()
-    final_checkpoint = result.model_dump(mode="json")
-    save_checkpoint(final_checkpoint)
+    save_checkpoint(result)
     LOGGER.info(response)
     if chat_id:
         asyncio.create_task(bot.reply_to(chat_id=chat_id, message_id=message_id, response=response))
@@ -109,15 +108,18 @@ def save_checkpoint(final_checkpoint: checkpoint.Checkpoint) -> None:
     Args:
         final_checkpoint: Final checkpoint object.
     """
-    LOGGER.debug(final_checkpoint)
     checkpoint_dir = (
         config.checkpoints_dir
         / final_checkpoint.source_system.profile_name
         / datetime.now(config.env.tz).strftime(config.checkpoint_dir_format)
     )
+    result = final_checkpoint.model_dump(mode="json")
+    LOGGER.debug(result)
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
     checkpoint_path = checkpoint_dir / f"checkpoint_{int(time.time())}.json"
     with open(checkpoint_path, "w") as file:
-        json.dump(final_checkpoint, file, indent=2)
+        json.dump(result, file, indent=2)
         file.flush()
-    LOGGER.info("Checkpoint saved to: %s", checkpoint_path)
+    LOGGER.info(
+        "Checkpoint for profile '%s' saved to: %s", final_checkpoint.source_system.profile_name, checkpoint_path
+    )
