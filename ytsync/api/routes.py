@@ -249,12 +249,21 @@ async def download(
     profile = await auth.validate_api_request(apikey)
     try:
         if body.chat_id:
+            # Priority 1: If the request body has a chat_id, use it to create a Telegram source system
             source = checkpoint.SourceSystem(
                 profile_name=profile.name,
                 telegram=await telegram_source(body.chat_id, profile.name),
                 audio_only=body.audio_only,
             )
+        elif profile.bot_chat_id:
+            # Priority 2: If the profile has a bot_chat_id, use it to create a Telegram source system
+            source = checkpoint.SourceSystem(
+                profile_name=profile.name,
+                telegram=await telegram_source(profile.bot_chat_id, profile.bot_username or profile.name),
+                audio_only=body.audio_only,
+            )
         else:
+            # Fallback: Use the request's client host and headers to create an API source system
             source = checkpoint.SourceSystem(
                 profile_name=profile.name,
                 api=checkpoint.APISource(
