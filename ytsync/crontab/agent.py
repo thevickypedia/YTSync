@@ -158,7 +158,7 @@ async def cleanup_per_profile(profile_name: str, today: date, cutoff: date, cuto
                 (today - checkpoint_date).days,
             )
             LOGGER.debug("%s -> %s", datestamp, timestamps)
-            directory = config.checkpoints_dir / datestamp
+            directory = config.checkpoints_dir / profile_name / datestamp
             try:
                 shutil.rmtree(directory)
             except (FileNotFoundError, PermissionError, OSError) as error:
