@@ -10,6 +10,7 @@ from ytsync.youtube import checkpoint, squire
 
 LOGGER = logging.getLogger("ytsync")
 QUEUE_SOURCE = config.env.data_dir / "queue.json"
+now_utc = lambda: datetime.now(timezone.utc)  # noqa: E731
 
 
 class Queue(BaseModel):
@@ -46,10 +47,13 @@ async def count(profile_name: str) -> QueueCount:
         QueueCount:
         Get the Queue count of total and pending items.
     """
-    now = datetime.now(tz=timezone.utc).timestamp()
+    now = now_utc().timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
         if profile_name == "*":
+            total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
+            pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
+        else:
             total = cursor.execute(
                 "SELECT COUNT(data) FROM queue WHERE profile_name = ?",
                 (profile_name,),
@@ -61,9 +65,6 @@ async def count(profile_name: str) -> QueueCount:
                     now,
                 ),
             ).fetchone()[0]
-        else:
-            total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
-            pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
         return QueueCount(total=total, pending=pending)
 
 
@@ -84,7 +85,7 @@ async def get(profile_name: str, include_past: bool = False) -> AsyncGenerator[Q
         else:
             # Floor to the start of the current minute so a row scheduled earlier in this
             # same minute isn't excluded just because the tick ran a few milliseconds late
-            now = datetime.now(tz=timezone.utc).replace(second=0, microsecond=0).timestamp()
+            now = now_utc().replace(second=0, microsecond=0).timestamp()
             if profile_name == "*":
                 data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
             else:
@@ -175,11 +176,10 @@ async def latest_timestamp() -> int:
         return int(latest_queue[0])
 
 
-async def render_scheduled_time(now: datetime, name: str, pending: int, last_ran: int, cp: bool = False) -> datetime:
+async def render_scheduled_time(name: str, pending: int, last_ran: int, cp: bool = False) -> datetime:
     """Get the scheduled time for the next queue entry.
 
     Args:
-        now: Current datetime in UTC.
         name: Name of the file/playlist being submitted.
         pending: Number of pending queue entries.
         last_ran: Timestamp of the last queue entry.
@@ -195,10 +195,10 @@ async def render_scheduled_time(now: datetime, name: str, pending: int, last_ran
         Returns the scheduled time for the next queue entry.
     """
     item = "checkpoint" if cp else "queue"
-    elapsed = now.timestamp() - last_ran
+    elapsed = now_utc().timestamp() - last_ran
     if elapsed >= config.env.cooldown_interval:
         # The previous cooldown has completely elapsed.
-        scheduled_time = now + timedelta(seconds=config.env.next_buffer)
+        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
         LOGGER.info(
             "Previous %s was scheduled %s ago; cooldown has elapsed. Scheduling %s at %s",
             item,
@@ -209,7 +209,7 @@ async def render_scheduled_time(now: datetime, name: str, pending: int, last_ran
     elif elapsed >= 0:
         # The previous cooldown is partially elapsed.
         remaining = config.env.cooldown_interval - elapsed
-        scheduled_time = now + timedelta(seconds=remaining + ((pending + 1) * config.env.next_buffer))
+        scheduled_time = now_utc() + timedelta(seconds=remaining + ((pending + 1) * config.env.next_buffer))
         LOGGER.info(
             "Previous %s was scheduled %s ago; %s of cooldown remains. Scheduling %s at %s",
             item,
@@ -250,12 +250,11 @@ async def get_scheduled_time_by_checkpoint() -> int | None:
     return most_recent_timestamp
 
 
-async def get_scheduled_time(name: str, now: datetime) -> datetime:
+async def get_scheduled_time(name: str) -> datetime:
     """Get the scheduled time for the next queue entry based on the last checkpoint.
 
     Args:
         name: Name of the file/playlist being submitted.
-        now: Current datetime in UTC.
 
     Returns:
         datetime:
@@ -264,21 +263,21 @@ async def get_scheduled_time(name: str, now: datetime) -> datetime:
     q_count = await count("*")
     if q_count.total:
         scheduled_time = await render_scheduled_time(
-            now=now, name=name, pending=q_count.pending, last_ran=await latest_timestamp()
+            name=name, pending=q_count.pending, last_ran=await latest_timestamp()
         )
     elif recent_checkpoint := await get_scheduled_time_by_checkpoint():
         # If no queue entries exist, use the last checkpoint to determine the next scheduled time.
-        scheduled_time = await render_scheduled_time(now=now, name=name, pending=0, last_ran=recent_checkpoint, cp=True)
+        scheduled_time = await render_scheduled_time(name=name, pending=0, last_ran=recent_checkpoint, cp=True)
     else:
         if config.env.delayed_start:
-            scheduled_time = now + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
+            scheduled_time = now_utc() + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
             LOGGER.info(
                 "Submitting %s at: %s",
                 name,
                 scheduled_time.astimezone(tz=config.env.tz).isoformat(),
             )
         else:
-            scheduled_time = now + timedelta(seconds=config.env.next_buffer)
+            scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
     LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     return scheduled_time
 
@@ -310,18 +309,16 @@ async def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
-    now = datetime.now(timezone.utc)
-
     if config.env.download_tester:
-        scheduled_time = now + timedelta(seconds=config.env.next_buffer)
+        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
         LOGGER.info(
             "Submitting %s at %s; running in tester mode",
             name,
             scheduled_time.astimezone(tz=config.env.tz).isoformat(),
         )
     else:
-        scheduled_time = await get_scheduled_time(name=name, now=now)
-    cooldown = max(0, (scheduled_time - now).total_seconds())
+        scheduled_time = await get_scheduled_time(name=name)
+    cooldown = max(0, (scheduled_time - now_utc()).total_seconds())
     LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
     await insert(
         profile_name,
