@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+v2.0.2 (10/03/2026)
+-------------------
+- `639f41f <https://github.com/thevickypedia/YTSync/commit/639f41f41494e40cb2ef9fec328840befaf630be>`_ chore: Release ``v2.0.2``
+- `b77e9bf <https://github.com/thevickypedia/YTSync/commit/b77e9bfc3aed780a12e32d30e91f0e3c07156957>`_ perf: Add a safety net to ensure checkpoint exists for a profile before looping
+- `cf67d4a <https://github.com/thevickypedia/YTSync/commit/cf67d4aac079e2ad8dc911feb5becf7e90702d35>`_ fix: Update logger for heartbeat callback to use datetime in the configured timezone
+- `39a9231 <https://github.com/thevickypedia/YTSync/commit/39a9231c47e19e77caa2e7b04c71b0d7b13b22a6>`_ chore: Update release notes for v2.0.1
+
 v2.0.1 (10/03/2026)
 -------------------
 - `64e62df <https://github.com/thevickypedia/YTSync/commit/64e62df05a456889539954447a8fd9ae8528171e>`_ chore: Release ``v2.0.1``
