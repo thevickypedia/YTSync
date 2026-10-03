@@ -277,9 +277,12 @@ async def download(
             timeout=config.env.response_timeout,
         )
         raise HTTPException(status_code=HTTPStatus.OK.real, detail=response)
-    except (ValueError, AssertionError, DownloadError) as error:
+    except (ValueError, AssertionError) as error:
         LOGGER.exception(error)
         raise HTTPException(status_code=HTTPStatus.INTERNAL_SERVER_ERROR.real, detail=str(error))
+    except DownloadError as error:
+        LOGGER.exception(error)
+        raise HTTPException(status_code=HTTPStatus.EXPECTATION_FAILED.real, detail=str(error))
 
 
 async def list_checkpoints(
