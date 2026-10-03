@@ -89,6 +89,8 @@ async def ls(profile_name: str) -> AsyncGenerator[Tuple[str, List[int]]]:
         Dict[str, List[int]]:
         A dictionary with datestamps as keys and timestamps as values.
     """
+    if not (config.checkpoints_dir / profile_name).exists():
+        return
     async for parent in anyio.Path(config.checkpoints_dir / profile_name).iterdir():
         if not await parent.is_dir() or not config.is_valid_checkpoint_dir(parent.name):
             continue

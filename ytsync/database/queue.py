@@ -60,10 +60,7 @@ async def count(profile_name: str) -> QueueCount:
             ).fetchone()[0]
             pending = cursor.execute(
                 "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp >= ?",
-                (
-                    profile_name,
-                    now,
-                ),
+                (profile_name, now),
             ).fetchone()[0]
         return QueueCount(total=total, pending=pending)
 
