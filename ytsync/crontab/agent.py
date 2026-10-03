@@ -15,7 +15,6 @@ from ytsync.youtube import callbacks, checkpoint, downloader, youtube
 LOGGER = logging.getLogger("ytsync")
 LAST_CHECK: datetime | None = None
 LAST_CLEANUP: date | None = None
-BG_INTERVAL: int = 5
 
 
 def heartbeat_callback(task: asyncio.Task) -> None:
@@ -210,7 +209,7 @@ async def executor() -> None:
     """Executes in a loop to read the database and execute the YouTube sync for the requested URL."""
     create_task(handler.init(), name="poll_init")
     while True:
-        await asyncio.sleep(BG_INTERVAL)
+        await asyncio.sleep(config.env.poll_interval)
         try:
             await single_task()
         except Exception as error:
