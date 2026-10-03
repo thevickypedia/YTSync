@@ -6,6 +6,19 @@ from fastapi import FastAPI
 from ytsync.api import models, serve
 from ytsync.modules import config
 
+
+class HealthCheckFilter(logging.Filter):
+    """Custom logging filter to exclude health check logs from the output."""
+
+    def filter(self, record):
+        """Filter out logs related to health checks."""
+        # 'record.getMessage()' contains the log text
+        # Skip logs containing 'GET /health' (from curl)
+        return "/health" not in record.getMessage()
+
+
+logging.getLogger("uvicorn.access").addFilter(HealthCheckFilter())
+
 LOGGER = logging.getLogger("ytsync")
 
 app = FastAPI(

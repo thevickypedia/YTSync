@@ -196,7 +196,6 @@ async def single_task() -> None:
     # MARK: Runs every minute
     if now != LAST_CHECK:
         LAST_CHECK = now
-        LOGGER.debug("Heart beat for background task: %s", now.astimezone(config.env.tz).strftime("%Y-%m-%d %H:%M"))
         await run_tracker()
         await run_queued(now)
 
