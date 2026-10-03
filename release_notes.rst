@@ -1,6 +1,33 @@
 Release Notes
 =============
 
+v2.0.0 (10/03/2026)
+-------------------
+- `f05decf <https://github.com/thevickypedia/YTSync/commit/f05decf28fa3d88999b12b9603171c43ee8c88a7>`_ chore: Release ``v2.0.0``
+- `4dc9da7 <https://github.com/thevickypedia/YTSync/commit/4dc9da75311d4b8302c6dedb6fd10638a75a1f43>`_ fix: Avoid raising internal server error for download failures
+- `e441422 <https://github.com/thevickypedia/YTSync/commit/e4414229da12f011cebded1eb66fc6b23cc42a80>`_ fix: Invalid check for profile name filter in queue count; avoid reusing now utc
+- `4fc42fd <https://github.com/thevickypedia/YTSync/commit/4fc42fdbe32121e172eb60a0b13901566157c23e>`_ perf: Get ``scheduled_time`` based on checkpoints if queue stats are unavailable
+- `2823eac <https://github.com/thevickypedia/YTSync/commit/2823eac52e2c587bbd1ab6d81b083d4493a26d72>`_ fix: Get latest queue timestamp in a profile agnostic way; add logger for callback notification
+- `d827442 <https://github.com/thevickypedia/YTSync/commit/d8274425c542013843c87481e088923eefee99c3>`_ perf: Set up a priority logic to construct telegram source for API requests
+- `3b78645 <https://github.com/thevickypedia/YTSync/commit/3b78645362397f7a9779be0c515619548a0a7f22>`_ feat: Retain ``chat_id`` through API requests for callback notifications
+- `2f6a102 <https://github.com/thevickypedia/YTSync/commit/2f6a102293728009e47a20e632e759f67b7cd760>`_ fix: Invalid profile name when saving checkpoints
+- `5d69a4c <https://github.com/thevickypedia/YTSync/commit/5d69a4c72324fbe6d139b4f785ebbcd117a8b9c9>`_ perf: Make playlist creation asynchronous; create/update playlists even when all files exist already
+- `8bfd83e <https://github.com/thevickypedia/YTSync/commit/8bfd83e29e54e4af65c4f91553bb24d3487c45c7>`_ fix: Limit decimal places for runtime in checkpoint stats
+- `a9dd5b9 <https://github.com/thevickypedia/YTSync/commit/a9dd5b9ffc2aae810d47dece14738d3ec4b59cd6>`_ fix: Add missing profile name when saving checkpoints
+- `fecd1f5 <https://github.com/thevickypedia/YTSync/commit/fecd1f56f6283efe646cd2cecbe8a67d1328ba31>`_ docs: Update README.md
+- `6a22ac1 <https://github.com/thevickypedia/YTSync/commit/6a22ac14b1a6babe3865dedfe1795ffee96ea8d2>`_ perf: Increase default ``max_timeout``; remove TODO
+- `c64f7f4 <https://github.com/thevickypedia/YTSync/commit/c64f7f4c83276a72bd6b0af6d0857483e5cfe843>`_ fix: Fix startup errors caused by missing profile directories and DB columns
+- `a7f1f35 <https://github.com/thevickypedia/YTSync/commit/a7f1f35c8eda30defb81dd4ace66c9e365937329>`_ feat: Implement profile-based restrictions across the board
+- `557f2fc <https://github.com/thevickypedia/YTSync/commit/557f2fc953b09bcacef4f6874c86efc25b6cc21f>`_ perf: Handle an edge case where parent directory can be missing during file download
+- `9d6a657 <https://github.com/thevickypedia/YTSync/commit/9d6a657ec6852aad35a0764ba2fb977a856e3060>`_ perf: Handle profiles in queue and move module from youtube to database
+- `34b45b8 <https://github.com/thevickypedia/YTSync/commit/34b45b8316ba20fc25f9fd8bdd87cffd1fa54bd5>`_ perf: Handle profiles in checkpoints
+- `5451f61 <https://github.com/thevickypedia/YTSync/commit/5451f617cf33e1f2d4a766e60b2203f58851cdec>`_ perf: Handle profiles in trackers
+- `87c1c51 <https://github.com/thevickypedia/YTSync/commit/87c1c517da65291e567566df0b824a75a9c136b8>`_ feat: Update auth handlers to handle profiles
+- `877a1d9 <https://github.com/thevickypedia/YTSync/commit/877a1d9019aae9f9de698368fcbd0c231839d5db>`_ chore: Update README.md to include profile settings
+- `bdc6b7e <https://github.com/thevickypedia/YTSync/commit/bdc6b7e239703e24ff15ce83fa0f2de310b9dc66>`_ feat: Introduce the concept of profiles with dedicated ``apikey``, ``bot_chat_id``, and ``bot_username``
+- `2055ac1 <https://github.com/thevickypedia/YTSync/commit/2055ac13ffe78a0badff8cf576d30221fdd853ce>`_ feat: Support JSON/YAML files for env configuration
+- `7774933 <https://github.com/thevickypedia/YTSync/commit/7774933d799edb636906c0a567af395e2b64e14a>`_ chore: Update release notes for v1.2.0
+
 v1.2.0 (09/28/2026)
 -------------------
 - `30d2c85 <https://github.com/thevickypedia/YTSync/commit/30d2c8521cc06b03aadd46b26f54413130523a07>`_ chore: Release ``v1.2.0``
