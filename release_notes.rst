@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+v2.0.1 (10/03/2026)
+-------------------
+- `64e62df <https://github.com/thevickypedia/YTSync/commit/64e62df05a456889539954447a8fd9ae8528171e>`_ chore: Release ``v2.0.1``
+- `e3579a3 <https://github.com/thevickypedia/YTSync/commit/e3579a3315b8c489114a28bedf1ac4f1d20492c9>`_ fix: Checkpoint retention cleanup never actually deletes anything
+- `3daa581 <https://github.com/thevickypedia/YTSync/commit/3daa5814cb22af3717d785443e225ec39df7ea7b>`_ fix: Tracker deletion silently no-ops when called without an explicit ``chat_id`` - but still reports success
+- `1f18fd2 <https://github.com/thevickypedia/YTSync/commit/1f18fd2bea3b299fa5e164ef7ed5ba5af1a75af9>`_ chore: Update release notes for v2.0.0
+
 v2.0.0 (10/03/2026)
 -------------------
 - `f05decf <https://github.com/thevickypedia/YTSync/commit/f05decf28fa3d88999b12b9603171c43ee8c88a7>`_ chore: Release ``v2.0.0``
