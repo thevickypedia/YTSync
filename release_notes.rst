@@ -1,6 +1,13 @@
 Release Notes
 =============
 
+v2.1.0 (10/03/2026)
+-------------------
+- `d33cccc <https://github.com/thevickypedia/YTSync/commit/d33ccccbbdcd90f80896299b26dce794fd97cc4a>`_ chore: Release ``v2.1.0``
+- `e02f72f <https://github.com/thevickypedia/YTSync/commit/e02f72ffd55c38ff8c49d86106bc2e38e28a0d6d>`_ perf: Re-architecture version and app information
+- `692773d <https://github.com/thevickypedia/YTSync/commit/692773d10ed64d641f1c38f26107aec4b46d21c1>`_ feat: Remote servers now support profile, audio and video destinations
+- `6241539 <https://github.com/thevickypedia/YTSync/commit/6241539531cdc992e47b01d9948f8e0299d0150d>`_ chore: Update release notes for v2.0.2
+
 v2.0.2 (10/03/2026)
 -------------------
 - `639f41f <https://github.com/thevickypedia/YTSync/commit/639f41f41494e40cb2ef9fec328840befaf630be>`_ chore: Release ``v2.0.2``
