@@ -39,8 +39,8 @@ def heartbeat_callback(task: asyncio.Task) -> None:
     if log:
         start_time = int(start_time)
         end_time = int(time.time())
-        approx_start = datetime.fromtimestamp(start_time).strftime("%a %b %d %H:%M %Y %Z")
-        approx_end = datetime.fromtimestamp(end_time).strftime("%a %b %d %H:%M %Y %Z")
+        approx_start = datetime.fromtimestamp(start_time, tz=config.env.tz).strftime("%a %b %d %H:%M %Y %Z")
+        approx_end = datetime.fromtimestamp(end_time, tz=config.env.tz).strftime("%a %b %d %H:%M %Y %Z")
         LOGGER.info("Task [%s] running since: %s, completed at: [%s]", name, approx_start, approx_end)
     try:
         result = task.result()
