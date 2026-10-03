@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import pathlib
 import posixpath
 import shlex
@@ -65,22 +64,28 @@ class Rsync:
         self.is_enabled = all((self.remote_host, self.remote_user, self.remote_path, shutil.which("rsync") is not None))
 
     def get_remote_path(self, local_path: pathlib.Path) -> str:
-        """Use the existing local filepath to derive the filepath in the remote server.
+        """Mirror a local audio/video path onto the remote host.
 
-        Args:
-            local_path: Local filepath.
+        See Also:
+            - | local_path is resolved against config.env.audio_dir / config.env.video_dir — whichever
+              | one it actually lives under — so the remote layout is:
+            - | remote_path / <audio_dir.name or video_dir.name> / profile_name / ... / filename
+              | exactly matching the local:
+              | audio_dir / profile_name / ... / filename
 
         Returns:
             str:
-            Filepath in the remote server.
+            The remote path corresponding to the local path.
         """
-        # 'local_path' is the filepath, which is within 'audio' or 'video' directory; hence the '.parent.parent'
-        root_path = local_path.parent.parent.resolve()
-        relative_path = os.path.relpath(local_path, str(root_path))
-        return posixpath.join(
-            self.remote_path,
-            pathlib.Path(relative_path).as_posix(),
-        )
+        local_path = local_path.resolve()
+        for root in (config.env.audio_dir, config.env.video_dir):
+            root = root.resolve()
+            try:
+                relative_path = local_path.relative_to(root)
+            except ValueError:
+                continue
+            return posixpath.join(self.remote_path, root.name, relative_path.as_posix())
+        raise ValueError(f"{local_path!r} is not under {config.env.audio_dir!r} or {config.env.video_dir!r}")
 
     async def exist_check(self, checks: str, local_paths: List[pathlib.Path]) -> Set[str]:
         """Checks if a list of files exists on the remote server and returns the existing ones."""
@@ -176,10 +181,10 @@ class Rsync:
             raise_error=True,
         )
 
-    async def create_playlist(self, name: str, extension: str) -> str:
-        """Create a .m3u file on the remote machine."""
-        remote_loc = posixpath.join(self.remote_path, name)
-        filepath = posixpath.join(self.remote_path, name, f"{name}.m3u")
+    async def create_playlist(self, destination: pathlib.Path, extension: str) -> str:
+        """Create a .m3u file on the remote machine, mirroring the local playlist directory."""
+        remote_loc = self.get_remote_path(destination)
+        filepath = posixpath.join(remote_loc, f"{destination.name}.m3u")
         LOGGER.debug("Remote location: %s", remote_loc)
         LOGGER.info("Playlist file: %s", filepath)
         cmd = [
@@ -205,8 +210,8 @@ class Rsync:
             await proc.wait()
             raise
         if proc.returncode != 0:
-            raise RuntimeError(f"Failed to create playlist for {name}: {stderr.decode()}")
-        LOGGER.info("Playlist created for %s at %s", name, filepath)
+            raise RuntimeError(f"Failed to create playlist for {destination.name}: {stderr.decode()}")
+        LOGGER.info("Playlist created for %s at %s", destination.name, filepath)
         return filepath
 
 

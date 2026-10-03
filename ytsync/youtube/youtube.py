@@ -1,6 +1,5 @@
 import logging
 import pathlib
-import posixpath
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -35,12 +34,14 @@ async def queue_download(
 
     preprocessed = await squire.get_missing_entries(url, ydl, info, destination, source_system)
     is_playlist = len(preprocessed.url_file_map) > 1
-    intended_path = posixpath.join(transfer.rsync.remote_path, subdir) if transfer.rsync.is_enabled else destination
+    intended_path = transfer.rsync.get_remote_path(destination) if transfer.rsync.is_enabled else destination
     if not preprocessed.url_file_map:
         if not preprocessed.preflight:
             raise ValueError("Something went wrong! Neither URLs, nor preflight status were received!")
         if transfer.rsync.is_enabled:
-            await transfer.rsync.create_playlist(name=name, extension=".mp3" if source_system.audio_only else ".mp4")
+            await transfer.rsync.create_playlist(
+                destination=destination, extension=".mp3" if source_system.audio_only else ".mp4"
+            )
         else:
             await downloader.create_local_playlist(
                 destination=destination, extension=".mp3" if source_system.audio_only else ".mp4"

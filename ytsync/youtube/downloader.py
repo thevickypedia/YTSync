@@ -245,11 +245,11 @@ async def download(
         LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
         try:
             playlist_id = (
-                await transfer.rsync.create_playlist(name, extension) if checkpoint_stats.is_playlist else None
+                await transfer.rsync.create_playlist(destination, extension) if checkpoint_stats.is_playlist else None
             )
         except Exception as error:
-            LOGGER.exception("Failed to create local playlist for %s: %s", name, error)
-            playlist_id = "Failed to create playlist for {!r}: {}".format(name, error)
+            LOGGER.exception("Failed to create remote playlist for %s: %s", name, error)
+            playlist_id = "Failed to create remote playlist for {!r}: {}".format(name, error)
     else:
         try:
             playlist_id = await create_local_playlist(destination, extension) if checkpoint_stats.is_playlist else None
