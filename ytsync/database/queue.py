@@ -46,17 +46,24 @@ async def count(profile_name: str) -> QueueCount:
         QueueCount:
         Get the Queue count of total and pending items.
     """
+    now = datetime.now(tz=timezone.utc).timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        total = cursor.execute("SELECT COUNT(data) FROM queue WHERE profile_name = ?", (profile_name,)).fetchone()[0]
-        now = datetime.now(tz=timezone.utc).timestamp()
-        pending = cursor.execute(
-            "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp >= ?",
-            (
-                profile_name,
-                now,
-            ),
-        ).fetchone()[0]
+        if profile_name == "*":
+            total = cursor.execute(
+                "SELECT COUNT(data) FROM queue WHERE profile_name = ?",
+                (profile_name,),
+            ).fetchone()[0]
+            pending = cursor.execute(
+                "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp >= ?",
+                (
+                    profile_name,
+                    now,
+                ),
+            ).fetchone()[0]
+        else:
+            total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
+            pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
         return QueueCount(total=total, pending=pending)
 
 
@@ -155,11 +162,8 @@ async def delete(profile_name: str, scheduled_time: str) -> bool:
         return True
 
 
-async def latest_timestamp(profile_name: str) -> Queue:
-    """Get the latest Queue based on the timestamp in the table.
-
-    Args:
-        profile_name: Takes a profile name as an argument.
+async def latest_timestamp() -> Queue:
+    """Get the most recent profile agnostic Queue based on the timestamp in the table.
 
     Returns:
         Queue:
@@ -167,9 +171,7 @@ async def latest_timestamp(profile_name: str) -> Queue:
     """
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        latest_data = cursor.execute(
-            "SELECT data FROM queue WHERE profile_name = ? ORDER BY timestamp DESC LIMIT 1", (profile_name,)
-        ).fetchone()[0]
+        latest_data = cursor.execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()[0]
         return Queue(**json.loads(latest_data))
 
 
@@ -200,7 +202,7 @@ async def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
-    q_count = await count(profile_name)
+    q_count = await count("*")
     now = datetime.now(timezone.utc)
 
     if config.env.download_tester:
@@ -222,7 +224,7 @@ async def submit(
             scheduled_time = now + timedelta(seconds=config.env.next_buffer)
             LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     else:
-        last_queue = await latest_timestamp(profile_name)
+        last_queue = await latest_timestamp()
         last_scheduled_time = datetime.fromisoformat(last_queue.scheduled_time)
         elapsed = (now - last_scheduled_time).total_seconds()
         if elapsed >= config.env.cooldown_interval:

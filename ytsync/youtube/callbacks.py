@@ -99,6 +99,7 @@ def process_callback(
     save_checkpoint(result)
     LOGGER.info(response)
     if chat_id:
+        LOGGER.info("Sending Telegram message to chat_id=%s, message_id=%s", chat_id, message_id or "null")
         asyncio.create_task(bot.reply_to(chat_id=chat_id, message_id=message_id, response=response))
 
 
