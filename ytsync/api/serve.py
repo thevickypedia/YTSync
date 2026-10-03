@@ -48,7 +48,7 @@ def bg_task_callback(task: asyncio.Task) -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    """Simple startup function to add anything that has to be triggered when Jarvis API starts up."""
+    """Startup and shutdown events for the FastAPI application."""
     # noinspection HttpUrlsUsage
     if LOGGER.isEnabledFor(logging.DEBUG):
         await log_config()
@@ -78,7 +78,7 @@ async def health() -> Dict[str, str]:
 
 async def version() -> str:
     """Version endpoint."""
-    return config.API_VERSION
+    return config.API.version
 
 
 api_routes = [

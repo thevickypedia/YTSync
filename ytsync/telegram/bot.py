@@ -460,13 +460,13 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
         final = (
             f"🕐 *Server Timestamp:* `{config.now()}`\n\n"
-            f"⚙️ *Server Version:* `{config.API_VERSION}`\n\n"
+            f"⚙️ *Server Version:* `{config.API.version}`\n\n"
             f"{txt}\n\n{await get_queue_status(profile.name)}"
         )
         await reply_to(chat.id, chat.message_id, final)
         return
     if data_class.text == Commands.version:
-        await reply_to(chat.id, chat.message_id, f"```\n{config.API_VERSION}\n```")
+        await send_message(chat.id, f"\n[v{config.API.version}]({config.API.version_link})\n")
         return
     try:
         await executor(profile, data_class.text, chat)

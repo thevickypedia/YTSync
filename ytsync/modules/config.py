@@ -26,7 +26,8 @@ from pydantic import (
 from pydantic_core import InitErrorDetails
 
 from ytsync.database import database
-from ytsync.modules import pydantic_config, releases, settings
+from ytsync.modules import pydantic_config, settings
+from ytsync.version import __version__
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 CONFIG_PATH = os.environ.get("CONFIG_PATH") or os.environ.get("config_path") or ".env.json"
@@ -35,13 +36,19 @@ PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 ASYNC_CLIENT: httpx.AsyncClient
 MAIN_EVENT_LOOP: asyncio.AbstractEventLoop
-try:
-    API_VERSION = asyncio.run(releases.github.resolve_api_version())
-except RuntimeError:
-    API_VERSION = releases.__version__
 
 
 telegram_beat = settings.TelegramBeat()
+
+
+class API(StrEnum):
+    """API information."""
+
+    name = "YTSync"
+    version = __version__
+    repo_name = "thevickypedia/YTSync"
+    repo_link = "https://github.com/thevickypedia/YTSync"
+    version_link = f"{repo_link}/releases/tag/v{version}"
 
 
 class AllowedCronSchedule(StrEnum):
