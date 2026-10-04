@@ -364,17 +364,11 @@ async def delete_checkpoint(
 
 async def get_queue(
     response: Response,
-    include_history: bool = False,
     apikey: HTTPAuthorizationCredentials = Depends(SECURITY),
 ) -> List[queue.Queue]:
-    """**API endpoint to get the current queue.**
-
-    **Args**
-
-        ‣‣ include_history: Boolean flag to include past queue objects.
-    """
+    """**API endpoint to get the current queue.**"""
     profile = await auth.validate_api_request(apikey)
-    queued_items = [item async for item in queue.get(profile.name, include_history)]
+    queued_items = [item async for item in queue.get(profile.name)]
     response.headers["total-count"] = str(len(queued_items))
     return queued_items
 

@@ -65,7 +65,7 @@ async def count(profile_name: str) -> QueueCount:
         return QueueCount(total=total, pending=pending)
 
 
-async def get(profile_name: str, include_past: bool = False) -> AsyncGenerator[Queue]:
+async def get(profile_name: str) -> AsyncGenerator[Queue]:
     """Get queues stored in the database.
 
     Yields:
@@ -74,25 +74,10 @@ async def get(profile_name: str, include_past: bool = False) -> AsyncGenerator[Q
     """
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        if include_past:
-            if profile_name == "*":
-                data = cursor.execute("SELECT data FROM queue").fetchall()
-            else:
-                data = cursor.execute("SELECT data FROM queue WHERE profile_name = ?", (profile_name,)).fetchall()
+        if profile_name == "*":
+            data = cursor.execute("SELECT data FROM queue").fetchall()
         else:
-            # Floor to the start of the current minute so a row scheduled earlier in this
-            # same minute isn't excluded just because the tick ran a few milliseconds late
-            now = now_utc().replace(second=0, microsecond=0).timestamp()
-            if profile_name == "*":
-                data = cursor.execute("SELECT data FROM queue WHERE timestamp >= ?", (now,)).fetchall()
-            else:
-                data = cursor.execute(
-                    "SELECT data FROM queue WHERE profile_name = ? AND timestamp >= ?",
-                    (
-                        profile_name,
-                        now,
-                    ),
-                ).fetchall()
+            data = cursor.execute("SELECT data FROM queue WHERE profile_name = ?", (profile_name,)).fetchall()
     for row in data:
         if row:
             yield Queue(**json.loads(row[0]))
