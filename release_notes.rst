@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+v2.1.1 (10/03/2026)
+-------------------
+- `b37c5dd <https://github.com/thevickypedia/YTSync/commit/b37c5dd0b80a1b4a371f4b57cb933b07c9b9aa84>`_ chore: Release ``v2.1.1``
+- `27db7e4 <https://github.com/thevickypedia/YTSync/commit/27db7e479986448b4f8dcebe2316adf943d8f6be>`_ perf: Replace hardcoded ``BG_INTERVAL`` with configurable ``poll_interval``
+- `44d6098 <https://github.com/thevickypedia/YTSync/commit/44d60984bc6cebd4e92d026f5ccb9e3eb456845c>`_ chore: Add a log filter for ``/health`` endpoint; remove logging for heartbeat
+- `832a0ef <https://github.com/thevickypedia/YTSync/commit/832a0ef69bed9b11f21ccb6d1d4c1dcdc8a3fc58>`_ docs: Update README.md
+- `26594cf <https://github.com/thevickypedia/YTSync/commit/26594cf3b5c31c06048e43938cb1bf3bfef9938c>`_ chore: Update release notes for v2.1.0
+
 v2.1.0 (10/03/2026)
 -------------------
 - `d33cccc <https://github.com/thevickypedia/YTSync/commit/d33ccccbbdcd90f80896299b26dce794fd97cc4a>`_ chore: Release ``v2.1.0``
