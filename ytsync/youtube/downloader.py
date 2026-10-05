@@ -242,7 +242,7 @@ async def download(
         if not transferred and transfer_failed:
             joined = "\n".join(f"• {item}" for item in stats["transfer_failed"])
             raise RuntimeError(f"All transfers failed for {name!r}\n{joined}")
-        LOGGER.info("All transfers completed for %s " "(successful=%d, failed=%d)", name, transferred, transfer_failed)
+        LOGGER.info("All transfers completed for %s (successful=%d, failed=%d)", name, transferred, transfer_failed)
         try:
             playlist_id = (
                 await transfer.rsync.create_playlist(destination, extension) if checkpoint_stats.is_playlist else None

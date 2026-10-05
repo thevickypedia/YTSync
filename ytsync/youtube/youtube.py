@@ -89,7 +89,7 @@ async def queue_download(
         if source_system.api:
             txt = f"{name!r}{parsed_len}will be queued for download at {t_string!r}"
         else:
-            txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}" f"will be queued for download at {t_string}"
+            txt = f"✅ *Download queued*\n\n*{name}*{parsed_len}will be queued for download at {t_string}"
 
     # Add a text block about callback notification when 'source_system' is 'telegram'
     if source_system.telegram:

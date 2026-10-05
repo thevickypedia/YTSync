@@ -73,7 +73,7 @@ def process_callback(
             f"Process completed in `{result.runtime:.2f}s`."
         )
     else:
-        response = f"✅ *Download completed for {result.name!r}*\n\n" f"Process completed in `{result.runtime:.2f}s`."
+        response = f"✅ *Download completed for {result.name!r}*\n\nProcess completed in `{result.runtime:.2f}s`."
     if result.is_playlist:
         # preflight only applies for playlists; and set it 0s as default if there is an error
         if any(

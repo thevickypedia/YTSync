@@ -345,7 +345,7 @@ async def verify_timeout(chat: models.Chat) -> bool:
     await reply_to(
         chat.id,
         chat.message_id,
-        f"Request timed out\nRequested: {request_time}\n" f"Processed: {processed_time}",
+        f"Request timed out\nRequested: {request_time}\nProcessed: {processed_time}",
     )
     return False
 
@@ -451,7 +451,7 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
         if pending := await queue.count(profile.name):
             txt += f"\n\nPending downloads: {pending}\n"
-        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n" f"⚙️ *Server Version:* `{config.API.version}`\n\n{txt}"
+        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n⚙️ *Server Version:* `{config.API.version}`\n\n{txt}"
         await reply_to(chat.id, chat.message_id, final)
         return
     if data_class.text == Commands.version:
@@ -543,7 +543,7 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
     else:
         await send_message(
             chat_id=chat.id,
-            response=f"❌ *Invalid command*\n\n" f"Received: `{command}`\n\n" f"{get_help(False)}",
+            response=f"❌ *Invalid command*\n\nReceived: `{command}`\n\n{get_help(False)}",
         )
         return
     await reply_to(chat.id, chat.message_id, response)

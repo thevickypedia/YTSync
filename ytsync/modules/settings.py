@@ -38,7 +38,7 @@ def duration_to_days(value: str) -> Tuple[int, str]:
             return amount * 7, f"{value.replace('w', ' weeks')} [{amount * 7} days]"
         if unit == "m":
             return amount * 30, f"{value.replace('m', ' months')} [{amount * 30} days]"
-    raise ValueError("Duration must be in the format <number><unit>, " "where unit is d, w, or m")
+    raise ValueError("Duration must be in the format <number><unit>, where unit is d, w, or m")
 
 
 def validate_retention_period(value: str) -> str:

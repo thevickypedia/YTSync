@@ -49,9 +49,7 @@ async def retry(
             if attempt < max_retries:
                 # Calculate exponential backoff: 3s, 6s, 12s, 24s...
                 delay = backoff_factor * (2 ** (attempt - 1))
-                LOGGER.warning(
-                    f"Error occurred on {name!r} (Attempt {attempt}/{max_retries}). " f"Retrying in {delay}s..."
-                )
+                LOGGER.warning(f"Error occurred on {name!r} (Attempt {attempt}/{max_retries}). Retrying in {delay}s...")
                 LOGGER.warning(f"Error: {error}")
                 await asyncio.sleep(delay)
             else:
