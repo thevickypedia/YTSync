@@ -29,44 +29,33 @@ class Queue(BaseModel):
     cron_schedule: config.AllowedCronSchedule | None
 
 
-class QueueCount(BaseModel):
-    """Queue model with checkpoint and preprocessor objects.
-
-    >>> QueueCount
-
-    """
-
-    total: int
-    pending: int
-
-
-async def count(profile_name: str) -> QueueCount:
+async def count(profile_name: str) -> int:
     """Count the number of entries in the queue.
 
+    Args:
+        profile_name: Takes a profile name as an argument. Use "*" to get all profiles.
+
     Returns:
-        QueueCount:
-        Get the Queue count of total and pending items.
+        int:
+        Get the Queue count of total items.
     """
-    now = now_utc().timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
         if profile_name == "*":
             total = cursor.execute("SELECT COUNT(data) FROM queue").fetchone()[0]
-            pending = cursor.execute("SELECT COUNT(data) FROM queue WHERE timestamp >= ?", (now,)).fetchone()[0]
         else:
             total = cursor.execute(
                 "SELECT COUNT(data) FROM queue WHERE profile_name = ?",
                 (profile_name,),
             ).fetchone()[0]
-            pending = cursor.execute(
-                "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp >= ?",
-                (profile_name, now),
-            ).fetchone()[0]
-        return QueueCount(total=total, pending=pending)
+        return total
 
 
 async def get(profile_name: str) -> AsyncGenerator[Queue]:
     """Get queues stored in the database.
+
+    Args:
+        profile_name: Takes a profile name as an argument. Use "*" to get all profiles.
 
     Yields:
         Queue:
@@ -242,11 +231,10 @@ async def get_scheduled_time(name: str) -> datetime:
         datetime:
         Returns the scheduled time for the next queue entry.
     """
-    q_count = await count("*")
-    if q_count.total:
-        scheduled_time = await render_scheduled_time(
-            name=name, pending=q_count.pending, last_ran=await latest_timestamp()
-        )
+    # All queued items are pending to be executed in the future
+    if q_count := await count("*"):
+        scheduled_time = await render_scheduled_time(name=name, pending=q_count, last_ran=await latest_timestamp())
+    # All checkpoints are past items that were already executed
     elif recent_checkpoint := await get_scheduled_time_by_checkpoint():
         # If no queue entries exist, use the last checkpoint to determine the next scheduled time.
         scheduled_time = await render_scheduled_time(name=name, pending=0, last_ran=recent_checkpoint, cp=True)

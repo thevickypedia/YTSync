@@ -412,15 +412,6 @@ async def process_document(chat: models.Chat, data_class: models.Document | mode
     await reply_to(chat.id, chat.message_id, "Document inputs are not supported at the moment. Please try text input.")
 
 
-async def get_queue_status(profile_name: str) -> str:
-    """Get the status text for the queued system."""
-    status = await queue.count(profile_name)
-    txt = f"Total downloads submitted: {status.total}"
-    if status.pending:
-        txt += f"\nPending downloads: {status.pending}"
-    return txt
-
-
 def get_channel() -> str:
     """Get the channel text for telegram interactions."""
     if config.telegram_beat.poll_for_messages:
@@ -458,11 +449,9 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
         except Exception as error:
             LOGGER.exception(error)
             txt += "\n\n*Trackers:* Failed to get trackers.\n"
-        final = (
-            f"🕐 *Server Timestamp:* `{config.now()}`\n\n"
-            f"⚙️ *Server Version:* `{config.API.version}`\n\n"
-            f"{txt}\n\n{await get_queue_status(profile.name)}"
-        )
+        if pending := await queue.count(profile.name):
+            txt += f"\n\nPending downloads: {pending}\n"
+        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n" f"⚙️ *Server Version:* `{config.API.version}`\n\n{txt}"
         await reply_to(chat.id, chat.message_id, final)
         return
     if data_class.text == Commands.version:
