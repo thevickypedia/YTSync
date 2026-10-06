@@ -414,14 +414,15 @@ async def process_document(chat: models.Chat, data_class: models.Document | mode
 
 def get_channel() -> str:
     """Get the channel text for telegram interactions."""
+    txt = "🌐 *Channel:* "
     if config.telegram_beat.poll_for_messages:
-        txt = "Channel: Polling"
+        txt += "Polling"
     elif config.env.bot_webhook:
-        txt = f"Channel: Webhook via {config.env.bot_webhook}"
+        txt += f"Webhook via {str(config.env.bot_webhook).strip(config.env.bot_webhook.path)}"
         if config.env.bot_webhook_ip:
             txt += f" - [{config.env.bot_webhook_ip}]"
     else:
-        txt = "Channel: Unknown"
+        txt += "Unknown"
     return txt
 
 
@@ -448,10 +449,12 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
             txt += await tracker.stringified_get(profile_name=profile.name)
         except Exception as error:
             LOGGER.exception(error)
-            txt += "\n\n*Trackers:* Failed to get trackers.\n"
+            txt += "\n\n🕰️ *Trackers:* Failed to get trackers."
         if pending := await queue.count(profile.name):
-            txt += f"\n\nPending downloads: {pending}\n"
-        final = f"🕐 *Server Timestamp:* `{config.now()}`\n\n⚙️ *Server Version:* `{config.API.version}`\n\n{txt}"
+            txt += f"\n\n⏳ *Pending downloads:* {pending}"
+        final = (
+            f"🕐 *Server Timestamp:* `{config.now()}`\n\n⚙️ *Server Version:* `{config.API.version}`\n\n{txt.strip()}"
+        )
         await reply_to(chat.id, chat.message_id, final)
         return
     if data_class.text == Commands.version:

@@ -152,12 +152,12 @@ async def stringified_get(profile_name: str | None = None, trackers: List[DBSche
         else:
             raise ValueError("Either profile_name or trackers must be provided.")
     if trackers:
-        txt += "\n\n*Trackers:*\n"
+        txt += "\n\n🕰️ *Trackers:*\n"
         for tracked in trackers:
             # icon = random.choice(("🎵", "📁", "📻", "🎶", "🎼", "🔊"))
             txt += f"🎶 *{tracked.name}* — *{tracked.schedule.name.capitalize()}*\n"
     else:
-        txt += "\n\n*Trackers:* No trackers found.\n"
+        txt += "\n\n🕰️ *Trackers:* No trackers found."
         LOGGER.info("No trackers found.")
     return txt
 
