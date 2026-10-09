@@ -250,7 +250,8 @@ async def delete(
         return "⚠️ No trackers found!"
     tracker = tracker[0]
     url = str(tracker.url)
-    if chat_id and tracker.chat_id and chat_id != tracker.chat_id:
+    if (chat_id or 0) != (tracker.chat_id or 0):
+        LOGGER.warning("Chat ID mismatch - %s [received] != %s [stored]", chat_id or 0, tracker.chat_id or 0)
         if raise_for_exception:
             raise HTTPException(
                 status_code=HTTPStatus.FORBIDDEN.real, detail="chat_id does not match the tracker owner"
@@ -263,7 +264,7 @@ async def delete(
         # when an entry is made via Telegram but deleted through the API; 'GET /get-trackers' will give the 'chat_id'
         cursor.execute(
             "DELETE FROM ytsync WHERE profile_name = ? AND url = ? AND chat_id = ?;",
-            (profile_name, url, tracker.chat_id or 0),
+            (profile_name, url, str(chat_id or 0)),
         )
         connection.commit()
     if raise_for_exception:

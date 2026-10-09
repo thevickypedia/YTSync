@@ -538,9 +538,9 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
-                response = str(await tracker.delete(profile_name=profile.name, url=identifier))
+                response = str(await tracker.delete(profile_name=profile.name, url=identifier, chat_id=chat.id))
             else:
-                response = str(await tracker.delete(profile_name=profile.name, name=identifier))
+                response = str(await tracker.delete(profile_name=profile.name, name=identifier, chat_id=chat.id))
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.delete}`."
     else:
