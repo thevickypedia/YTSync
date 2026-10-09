@@ -1,6 +1,18 @@
 Release Notes
 =============
 
+v2.2.0 (10/08/2026)
+-------------------
+- `a63244d <https://github.com/thevickypedia/YTSync/commit/a63244d0ae1905d5e2b7bf16a3c1477fb19d7cd0>`_ chore: Release ``v2.2.0``
+- `0aed635 <https://github.com/thevickypedia/YTSync/commit/0aed6351f67f7193f432d13243200e955a635581>`_ fix: Failed tracker deletion
+- `f60eb97 <https://github.com/thevickypedia/YTSync/commit/f60eb977109564ad1788cd1e2282411911cf0827>`_ refactor: Remove unused ``max_transfers``
+- `98cc3bb <https://github.com/thevickypedia/YTSync/commit/98cc3bbea865db475bbd65be173930a8afd8ea0f>`_ refactor: Reduce code redundancy
+- `3567cbd <https://github.com/thevickypedia/YTSync/commit/3567cbda50b2966b8db443e3c0089ded7116b5d7>`_ refactor: Update outgoing telegram messages
+- `c9905ad <https://github.com/thevickypedia/YTSync/commit/c9905ad5abf28fd417c66fde70b8d21217de2c91>`_ fix: Remove all mis-represented quotes
+- `863d5f9 <https://github.com/thevickypedia/YTSync/commit/863d5f90dcab4d742efec21bc6104fec8536a4ef>`_ perf: Remove ``QueueCount`` and classify all queued items as "pending"
+- `ff69f3c <https://github.com/thevickypedia/YTSync/commit/ff69f3c854217348effb22fa1ebca80e70ef408b>`_ fix: Remove the ``include_history`` parameter that was resulting in a silent ``DLQ`` dead-letter queue scenario
+- `6fda416 <https://github.com/thevickypedia/YTSync/commit/6fda416868367809f46a5e986dc494eb5df0c3d0>`_ chore: Update release notes for v2.1.1
+
 v2.1.1 (10/03/2026)
 -------------------
 - `b37c5dd <https://github.com/thevickypedia/YTSync/commit/b37c5dd0b80a1b4a371f4b57cb933b07c9b9aa84>`_ chore: Release ``v2.1.1``
