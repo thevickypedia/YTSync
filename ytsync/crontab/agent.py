@@ -74,6 +74,7 @@ async def run_tracker() -> None:
             cron_expr = expression.CronExpression(track.schedule.value)
         except exceptions.InvalidArgument as error:
             LOGGER.error("Invalid cron expression for '%s': %s", track.name, error)
+            # MARK: Delete the tracker if the cron expression is invalid
             await tracker.delete(
                 profile_name=track.profile_name,
                 name=track.name,
@@ -91,7 +92,6 @@ async def run_tracker() -> None:
                 youtube.queue_download(
                     url=track.url,
                     source_system=checkpoint.SourceSystem(profile_name=track.profile_name, scheduled=track.schedule),
-                    cron_schedule=track.schedule,
                 ),
                 name=track.name,
             )

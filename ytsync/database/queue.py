@@ -26,7 +26,6 @@ class Queue(BaseModel):
     scheduled_time: str
     checkpoint: checkpoint.Checkpoint
     preprocessor: squire.PreProcessor
-    cron_schedule: config.AllowedCronSchedule | None
 
 
 async def count(profile_name: str) -> int:
@@ -257,7 +256,6 @@ async def submit(
     name: str,
     checkpoint_stats: checkpoint.Checkpoint,
     preprocessor_stats: squire.PreProcessor,
-    cron_schedule: config.AllowedCronSchedule | None = None,
 ) -> int | float:
     """Submit a new queue entry.
 
@@ -273,7 +271,6 @@ async def submit(
         name: Name of the task being submitted. Used for logging only.
         checkpoint_stats: Checkpoint statistics associated with the queued task.
         preprocessor_stats: Preprocessor statistics associated with the queued task.
-        cron_schedule: Cron schedule, if it is a scheduled run.
 
     Returns:
         int:
@@ -296,7 +293,6 @@ async def submit(
             scheduled_time=scheduled_time.isoformat(),
             checkpoint=checkpoint_stats,
             preprocessor=preprocessor_stats,
-            cron_schedule=cron_schedule,
         ),
     )
     return cooldown

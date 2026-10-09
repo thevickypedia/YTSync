@@ -52,10 +52,13 @@ def process_callback(
         message_id = tele.message_id
     else:
         chat_id = message_id = None
-    schedule = payload.cron_schedule
 
-    if schedule:
+    # MARK: checkpoint.source_system gets created before queue is called; making source_system available even if task fails
+    if schedule := payload.checkpoint.source_system.scheduled:
         schedule = schedule.value.lstrip("@").capitalize()
+    else:
+        schedule = None
+
     if error := task.exception():
         if chat_id:
             if schedule:
@@ -66,6 +69,7 @@ def process_callback(
         LOGGER.error("Process failed for %s", name)
         return
 
+    # MARK: Download/transfer results in the checkpoint gets created only after the task is completed
     result: checkpoint.Checkpoint = task.result()
     if schedule:
         response = (

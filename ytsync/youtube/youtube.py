@@ -16,7 +16,6 @@ LOGGER = logging.getLogger("ytsync")
 async def queue_download(
     url: HttpUrl,
     source_system: checkpoint.SourceSystem,
-    cron_schedule: config.AllowedCronSchedule | None = None,
 ) -> str:
     """Queue an input url to download per the next available time."""
     LOGGER.debug("Input URL: %s", url)
@@ -70,7 +69,6 @@ async def queue_download(
         name=name,
         checkpoint_stats=checkpoint_stats,
         preprocessor_stats=preprocessed,
-        cron_schedule=cron_schedule,
     )
 
     scheduled_time = datetime.now(timezone.utc) + timedelta(seconds=cooldown)
