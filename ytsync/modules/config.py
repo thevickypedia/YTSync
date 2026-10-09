@@ -31,8 +31,6 @@ from ytsync.version import __version__
 
 SECRETS_PATH = os.environ.get("SECRETS_PATH") or os.environ.get("secrets_path") or ".env"
 CONFIG_PATH = os.environ.get("CONFIG_PATH") or os.environ.get("config_path") or ".env.json"
-LOGICAL_CORES = os.cpu_count() or 2
-PHYSICAL_CORES = math.ceil(LOGICAL_CORES / 2)
 YT_FILENAME_TEMPLATE = "%(title)s.%(ext)s"
 ASYNC_CLIENT: httpx.AsyncClient
 MAIN_EVENT_LOOP: asyncio.AbstractEventLoop
@@ -124,8 +122,6 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     audio_dir: NewPath | DirectoryPath = pathlib.Path("audio")
     video_dir: NewPath | DirectoryPath = pathlib.Path("video")
 
-    # Maximum number of parallel transfers to remote server
-    max_transfers: PositiveInt = Field(PHYSICAL_CORES, le=LOGICAL_CORES, ge=1)
     # Applies to rsync and telegram polling
     max_retries: PositiveInt = Field(10, le=30, ge=1)
     max_timeout: PositiveInt = Field(60, le=300, ge=5)

@@ -66,7 +66,6 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 > For example, if the profile name is `profile1`, audio files are stored in `audio/profile1` and video files are stored in `video/profile1`
 
 ###### Concurrency & Tolerance Settings
-* **max_transfers**: Maximum number of concurrent transfers to perform. _Defaults to approximately half the available CPU cores_
 * **max_retries**: Maximum number of retries for rsync and telegram polling. _Defaults to `10`_
 * **max_timeout**: Maximum number of seconds to wait before timing out CLI downloads, rsync transfers, and other remote SSH operations. _Defaults to `60`_
 * **backoff_factor**: Back off factor between each retry attempt. _Defaults to `3`_
