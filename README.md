@@ -93,6 +93,8 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 * Profiles are created by default within the chosen `audio_dir` and `video_dir` directories.
 * YTSync does not support concurrent downloads, and will download sequentially to avoid being throttled/blocked by the source server.
 * YTSync runs on a single process with a single event loop. Blocking operations (metadata lookups, downloads, database I/O) are offloaded to a thread pool via `asyncio.to_thread` so the server stays responsive, but downloads themselves are still processed one at a time, in order; transfers are submitted as soon as each file finishes downloading.
+* YTSync does not support file deletion by design. When a file is removed from a previously synced YouTube playlist, it remains on disk. The only way to remove it is to delete the file(s) manually or delete the entire playlist and sync again.
+  * > Note that playlist files (`.m3u`) are re-created on every `/sync` request with the file list on disk as source of truth.
 
 ### SSH setup
 

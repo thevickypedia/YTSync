@@ -477,7 +477,6 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
     """
     LOGGER.info("Request: %s", command)
     # TODO: Write unit tests and code coverage pipeline in GHA
-    #   Include a feature to clean up removed files from a playlist (preferably with a remote-user input)
     if command.startswith((Commands.audio, Commands.video)):
         if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
             try:
