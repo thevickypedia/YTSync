@@ -93,7 +93,7 @@ async def run_tracker() -> None:
             create_task(
                 youtube.queue_download(
                     url=track.url,
-                    source_system=checkpoint.SourceSystem(profile_name=track.profile_name, scheduled=track.schedule),
+                    source_system=checkpoint.SourceSystem(profile_name=track.profile_name, schedule=track.schedule),
                 ),
                 name=track.name,
             )

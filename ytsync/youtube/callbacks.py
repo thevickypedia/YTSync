@@ -54,7 +54,7 @@ def process_callback(
         chat_id = message_id = None
 
     # MARK: checkpoint.source_system gets created before queue is called; source_system is available even if task fails
-    if schedule := payload.checkpoint.source_system.scheduled:
+    if schedule := payload.checkpoint.source_system.schedule:
         schedule = schedule.value.lstrip("@").capitalize()
     else:
         schedule = None

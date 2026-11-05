@@ -34,7 +34,7 @@ class SourceSystem(BaseModel):
     profile_name: str
     api: APISource | None = None
     telegram: models.Chat | None = None
-    scheduled: config.AllowedCronSchedule | None = None
+    schedule: config.AllowedCronSchedule | None = None
     audio_only: bool = True
 
 
