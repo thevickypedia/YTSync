@@ -1,6 +1,15 @@
 Release Notes
 =============
 
+v2.3.0 (11/05/2026)
+-------------------
+- `18889a4 <https://github.com/thevickypedia/YTSync/commit/18889a40163f3b8be974cef6a1c28a50a5dc13a2>`_ chore: Release ``v2.3.0``
+- `4a619ca <https://github.com/thevickypedia/YTSync/commit/4a619ca11f5b8ad4015ff0e9dcbb2226fe166d51>`_ docs: Update limitations in README.md
+- `4bb9514 <https://github.com/thevickypedia/YTSync/commit/4bb9514023b368880b00e2568690c6e567d2d013>`_ refactor: Rename ``scheduled`` to ``schedule`` in ``SourceSystem`` object
+- `551c893 <https://github.com/thevickypedia/YTSync/commit/551c8937f4480163c0739190ea4fbfe5c315e856>`_ perf: Make ``@unscheduled`` the default schedule option for API and telegram inputs
+- `f992f65 <https://github.com/thevickypedia/YTSync/commit/f992f65851174b39bdc3fefd9ac479a64921b95d>`_ feat: Add a new ``@unscheduled`` option for trackers
+- `8858aa5 <https://github.com/thevickypedia/YTSync/commit/8858aa5919aa2e54fb230040297b0201805d68d0>`_ chore: Update release notes for v2.2.0
+
 v2.2.0 (10/08/2026)
 -------------------
 - `a63244d <https://github.com/thevickypedia/YTSync/commit/a63244d0ae1905d5e2b7bf16a3c1477fb19d7cd0>`_ chore: Release ``v2.2.0``
