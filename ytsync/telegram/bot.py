@@ -477,6 +477,7 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
     """
     LOGGER.info("Request: %s", command)
     # TODO: Write unit tests and code coverage pipeline in GHA
+    #   Include a feature to clean up removed files from a playlist (preferably with a remote-user input)
     if command.startswith((Commands.audio, Commands.video)):
         if url := command.replace(Commands.audio, "").replace(Commands.video, "").strip():
             try:
@@ -514,7 +515,7 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
             try:
                 if len(payload) == 1:
                     url = HttpUrl(payload[0])
-                    schedule = config.AllowedCronSchedule.DAILY
+                    schedule = config.AllowedCronSchedule.UNSCHEDULED
                     response = str(await tracker.insert(profile.name, url, schedule, chat.id))
                 elif len(payload) == 2:
                     url = HttpUrl(payload[0])

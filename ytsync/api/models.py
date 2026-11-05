@@ -26,7 +26,7 @@ class Trackers(BaseModel):
     """
 
     url: HttpUrl
-    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.DAILY
+    schedule: config.AllowedCronSchedule = config.AllowedCronSchedule.UNSCHEDULED
     chat_id: int = 0
 
 
