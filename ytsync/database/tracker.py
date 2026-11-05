@@ -129,9 +129,14 @@ async def insert(
             (profile_name, playlist_url, title, schedule.name, chat_id),
         )
         connection.commit()
+    stat = (
+        "has been added to trackers"
+        if schedule == config.AllowedCronSchedule.UNSCHEDULED
+        else f"will be synced {schedule.name.lower()}"
+    )
     if raise_for_exception:
-        raise HTTPException(status_code=HTTPStatus.OK.real, detail=f"{title!r} will be synced {schedule.name.lower()}")
-    return f"✅ *Sync scheduled*\n\n*{title}* will be synced {schedule.name.lower()}"
+        raise HTTPException(status_code=HTTPStatus.OK.real, detail=f"{title!r} {stat}")
+    return f"✅ *Sync scheduled*\n\n*{title}* {stat}"
 
 
 async def stringified_get(profile_name: str | None = None, trackers: List[DBSchema] | None = None) -> str:

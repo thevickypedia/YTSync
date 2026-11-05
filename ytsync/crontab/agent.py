@@ -70,6 +70,8 @@ def create_task(coro: Coroutine, name: str) -> asyncio.Task:
 async def run_tracker() -> None:
     """Run all the trackers, per the schedule."""
     async for track in tracker.get("*"):
+        if track.schedule == config.AllowedCronSchedule.UNSCHEDULED:
+            continue
         try:
             cron_expr = expression.CronExpression(track.schedule.value)
         except exceptions.InvalidArgument as error:

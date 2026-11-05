@@ -168,7 +168,7 @@ async def api_add_trackers(
 
         ‣‣ Body must be a list of dict - with url, schedule, and chat id (optional) as key-value pairs.
         ‣‣ 'url' can be any YouTube domain URL, as long as there is an audio to extract.
-        ‣‣ 'schedule' must be @hourly, @daily, @weekly, or @monthly as a string.
+        ‣‣ 'schedule' must be @hourly, @daily, @weekly, @monthly or @unscheduled as a string.
         ‣‣ 'chat_id' is optional to send a telegram notification everytime the scheduled run completes/fails.
     """
     profile = await auth.validate_api_request(apikey)

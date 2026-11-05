@@ -55,6 +55,7 @@ class AllowedCronSchedule(StrEnum):
     DAILY = "@daily"
     WEEKLY = "@weekly"
     MONTHLY = "@monthly"
+    UNSCHEDULED = "@unscheduled"
 
 
 class Profile(BaseModel):
