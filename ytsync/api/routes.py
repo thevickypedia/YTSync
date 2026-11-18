@@ -283,6 +283,9 @@ async def download(
     except DownloadError as error:
         LOGGER.exception(error)
         raise HTTPException(status_code=HTTPStatus.EXPECTATION_FAILED.real, detail=str(error))
+    except asyncio.TimeoutError as error:
+        LOGGER.exception(error)
+        raise HTTPException(status_code=HTTPStatus.REQUEST_TIMEOUT.real, detail=str(error))
 
 
 async def list_checkpoints(

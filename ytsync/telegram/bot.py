@@ -547,7 +547,10 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
         if ran:
             return
         else:
-            response = f"❌ *Expectation failed*\n\nNo trackers found to resync. Use `{Commands.sync}` to track a playlist first."
+            response = (
+                "❌ *Expectation failed*\n\nNo trackers found to resync. "
+                f"Use `{Commands.sync}` to track a playlist first."
+            )
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):

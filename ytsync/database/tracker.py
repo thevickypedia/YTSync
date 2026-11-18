@@ -226,7 +226,6 @@ async def sync_all(profile_name: str, chat: models.Chat) -> AsyncGenerator[Tuple
         Yields a tuple of tracker name and the response after sync.
     """
     async for track in get(profile_name=profile_name):
-        # TODO: Handle potential timeouts (check other spots as well)
         yield (
             track.name,
             await asyncio.wait_for(
