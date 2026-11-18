@@ -539,10 +539,15 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`."
     elif command.startswith(Commands.resync):
-        response = ""
+        ran = False
+        # MARK: Respond for each iteration so the user doesn't have to wait for all the playlists to be visited
         async for sync_status in tracker.sync_all(profile_name=profile.name, chat=chat):
-            response += f"🚀 **{sync_status[0]}** - {sync_status[1]}\n\n"
-        # TODO: Handle no trackers found
+            await send_message(chat.id, f"🚀 **{sync_status[0]}** - {sync_status[1]}\n\n")
+            ran = True
+        if ran:
+            return
+        else:
+            response = f"❌ *Expectation failed*\n\nNo trackers found to resync. Use `{Commands.sync}` to track a playlist first."
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):
