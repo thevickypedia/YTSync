@@ -52,6 +52,7 @@ class Commands(StrEnum):
     video = "/video"
     track = "/track"
     sync = "/sync"
+    resync = "/resync"
     delete = "/delete"
 
 
@@ -75,8 +76,10 @@ def get_help(start: bool):
         "    Download content from any YT url.\n\n"
         f"⏱️ *{Commands.track}* `<URL>` `{' | '.join(config.AllowedCronSchedule.__members__)}`\n"
         "    Track a URL on a recurring schedule.\n\n"
-        f"🔄 *{Commands.sync}* `<NAME>` [OR] `<URL>`\n"
+        f"🚀 *{Commands.sync}* `<NAME>` [OR] `<URL>`\n"
         "    Ad-hoc sync an existing tracker by name or URL.\n\n"
+        f"🔄 *{Commands.resync}*\n"
+        "    Resync all available trackers.\n\n"
         f"🗑️ *{Commands.delete}* `<NAME>` [OR] `<URL>`\n"
         "    Delete an existing tracker by name or URL.\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -535,6 +538,11 @@ async def executor(profile: config.Profile, command: str, chat: models.Chat) -> 
                 response = await tracker.sync(profile_name=profile.name, chat=chat, name=identifier)
         else:
             response = f"❌ *Invalid entry*\n\nPlaylist name [OR] url is required, followed by `{Commands.sync}`."
+    elif command.startswith(Commands.resync):
+        response = ""
+        async for sync_status in tracker.sync_all(profile_name=profile.name, chat=chat):
+            response += f"🚀 **{sync_status[0]}** - {sync_status[1]}\n\n"
+        # TODO: Handle no trackers found
     elif command.startswith(Commands.delete):
         if identifier := command.replace(Commands.delete, "").strip():
             if identifier.startswith("http"):

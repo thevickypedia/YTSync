@@ -214,6 +214,31 @@ async def sync(profile_name: str, chat: models.Chat, name: str | None = None, ur
         return "⚠️ *Warning*\n\nNo trackers found on the server."
 
 
+async def sync_all(profile_name: str, chat: models.Chat) -> AsyncGenerator[Tuple[str, str]]:
+    """Syncs all available trackers.
+
+    Args:
+        profile_name: Name of the profile.
+        chat: Chat object to send a notification as a callback.
+
+    Yields:
+        Tuple[str, str]:
+        Yields a tuple of tracker name and the response after sync.
+    """
+    async for track in get(profile_name=profile_name):
+        # TODO: Handle potential timeouts (check other spots as well)
+        yield (
+            track.name,
+            await asyncio.wait_for(
+                youtube.queue_download(
+                    url=track.url,
+                    source_system=checkpoint.SourceSystem(profile_name=track.profile_name, telegram=chat),
+                ),
+                timeout=config.env.response_timeout,
+            ),
+        )
+
+
 async def delete(
     profile_name: str,
     name: str | None = None,
