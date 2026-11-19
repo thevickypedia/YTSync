@@ -1,6 +1,14 @@
 Release Notes
 =============
 
+v2.4.0 (11/19/2026)
+-------------------
+- `3dd732d <https://github.com/thevickypedia/YTSync/commit/3dd732d3ca10c76f94d9ac78938e04954e074790>`_ chore: Release ``v2.4.0``
+- `4a9a982 <https://github.com/thevickypedia/YTSync/commit/4a9a98283c600462850a804f05d97d0d7f04410a>`_ perf: Handle async timeout for the API endpoint ``POST /download``
+- `73315f8 <https://github.com/thevickypedia/YTSync/commit/73315f8cde38a9aabae97038e16cbeda0780b949>`_ perf: For ``/resync``, respond after each playlist has been queued for sync
+- `42f5487 <https://github.com/thevickypedia/YTSync/commit/42f5487f8e72ab92f5e6c888b30c7d0f34622cc6>`_ feat: Include a ``/resync`` command that syncs all available trackers
+- `b16e867 <https://github.com/thevickypedia/YTSync/commit/b16e867bbaebf56e8065cc0fcb7e90d44d3a3849>`_ chore: Update release notes for v2.3.0
+
 v2.3.0 (11/05/2026)
 -------------------
 - `18889a4 <https://github.com/thevickypedia/YTSync/commit/18889a40163f3b8be974cef6a1c28a50a5dc13a2>`_ chore: Release ``v2.3.0``
