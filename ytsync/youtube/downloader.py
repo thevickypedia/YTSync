@@ -72,6 +72,20 @@ def generate_params(audio_only: bool, destination: pathlib.Path, stats: Dict[str
     return squire.add_optional_params(options)
 
 
+def _batched(items: List[Tuple[str, pathlib.Path]], size: int) -> List[List[Tuple[str, pathlib.Path]]]:
+    """Split a list of (url, filepath) pairs into chunks of at most 'size' items.
+
+    Args:
+        items: List of (url, filepath) pairs to split.
+        size: Maximum number of items per chunk.
+
+    Returns:
+        List[List[Tuple[str, pathlib.Path]]]:
+        A list of chunks, each with at most 'size' items.
+    """
+    return [items[index : index + size] for index in range(0, len(items), size)]  # noqa: E203
+
+
 async def download_ydl(
     ydl: yt_dlp.YoutubeDL, url: str, filepath: pathlib.Path, stats: Dict[str, List[str]], audio_only: bool
 ) -> None:
@@ -218,9 +232,24 @@ async def download(
     with yt_dlp.YoutubeDL(options) as ydl:
         # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
         # This monotonic loop is to properly capture individual errors and attach custom handlers
-        for url, filepath in url_file_map.items():
-            if task := await download_alt(ydl, url, filepath, stats, audio_only, destination):
-                transfer_pool.append(task)
+        # MARK: Files are processed in 'max_concurrency' sized batches, paced by 'next_buffer' seconds
+        # between batches, so a large playlist doesn't hammer the source with hundreds of back-to-back
+        # requests, while a small request isn't held up by work that belongs to a different job entirely.
+        batches = _batched(list(url_file_map.items()), config.env.max_concurrency)
+        for batch_index, batch in enumerate(batches):
+            if batch_index and not config.env.download_tester:
+                LOGGER.info(
+                    "Cooling down for %ds before batch %d/%d (%d files) for %r",
+                    config.env.next_buffer,
+                    batch_index + 1,
+                    len(batches),
+                    len(batch),
+                    name,
+                )
+                await asyncio.sleep(config.env.next_buffer)
+            for url, filepath in batch:
+                if task := await download_alt(ydl, url, filepath, stats, audio_only, destination):
+                    transfer_pool.append(task)
 
     if len(stats["download_failed"]) == len(url_file_map):
         if total_files is None:

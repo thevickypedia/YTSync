@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
 
@@ -9,7 +10,6 @@ from ytsync.modules import config
 from ytsync.youtube import checkpoint, squire
 
 LOGGER = logging.getLogger("ytsync")
-QUEUE_SOURCE = config.env.data_dir / "queue.json"
 now_utc = lambda: datetime.now(timezone.utc)  # noqa: E731
 
 
@@ -48,6 +48,43 @@ async def count(profile_name: str) -> int:
                 (profile_name,),
             ).fetchone()[0]
         return total
+
+
+async def count_files(profile_name: str) -> int:
+    """Count the total number of files across all pending queue entries.
+
+    See Also:
+        - A single queue entry can represent anywhere from one file to an entire
+          large playlist, so entry count alone says nothing about real backlog size.
+        - This walks every pending row and sums 'preprocessor.url_file_map', which is
+          the authoritative list of files that entry still has left to download.
+
+    Args:
+        profile_name: Takes a profile name as an argument. Use "*" to get all profiles.
+
+    Returns:
+        int:
+        Total number of files across all matching, pending queue entries.
+    """
+    total = 0
+    async for q in get(profile_name):
+        total += len(q.preprocessor.url_file_map)
+    return total
+
+
+def batches_for(file_count: int) -> int:
+    """Number of 'max_concurrency' sized batches needed to process the given file count.
+
+    Args:
+        file_count: Number of files to process.
+
+    Returns:
+        int:
+        Number of batches, rounded up. Returns 0 for a non-positive file count.
+    """
+    if file_count <= 0:
+        return 0
+    return math.ceil(file_count / config.env.max_concurrency)
 
 
 async def get(profile_name: str) -> AsyncGenerator[Queue]:
@@ -146,19 +183,22 @@ async def latest_timestamp() -> int:
         return int(latest_queue[0])
 
 
-async def render_scheduled_time(name: str, pending: int, last_ran: int, cp: bool = False) -> datetime:
+async def render_scheduled_time(name: str, pending: int, file_count: int, last_ran: int, cp: bool = False) -> datetime:
     """Get the scheduled time for the next queue entry.
 
     Args:
         name: Name of the file/playlist being submitted.
-        pending: Number of pending queue entries.
-        last_ran: Timestamp of the last queue entry.
+        pending: Number of files already pending across all queue entries (0 for checkpoint-based scheduling).
+        file_count: Number of files in the request currently being submitted.
+        last_ran: Timestamp of the last queue entry, or the last checkpoint.
         cp: Boolean indicating if the scheduling is based on a checkpoint (True) or queue (False).
 
     See Also:
         - This is a reusable function for both queue and checkpoint based scheduling.
         - Queue scheduling is based on the last queue entry in the database table 'queue'.
         - Checkpoint scheduling is based on the last checkpoint timestamp stored in the 'checkpoints' directory.
+        - Pending/new work is converted into 'max_concurrency' sized batches, each assumed to take
+          'next_buffer' seconds, so the wait scales with actual file count instead of entry count.
 
     Returns:
         datetime:
@@ -179,12 +219,20 @@ async def render_scheduled_time(name: str, pending: int, last_ran: int, cp: bool
     elif elapsed >= 0:
         # The previous cooldown is partially elapsed.
         remaining = config.env.cooldown_interval - elapsed
-        scheduled_time = now_utc() + timedelta(seconds=remaining + ((pending + 1) * config.env.next_buffer))
+        total_files = pending + file_count
+        extra_batches = batches_for(total_files)
+        scheduled_time = now_utc() + timedelta(seconds=remaining + (extra_batches * config.env.next_buffer))
         LOGGER.info(
-            "Previous %s was scheduled %s ago; %s of cooldown remains. Scheduling %s at %s",
+            "Previous %s was scheduled %s ago; %s of cooldown remains. "
+            "%d file(s) [%d pending + %d new] across %d batch(es) of up to %d. Scheduling %s at %s",
             item,
             str(timedelta(seconds=int(elapsed))),
             str(timedelta(seconds=int(remaining))),
+            total_files,
+            pending,
+            file_count,
+            extra_batches,
+            config.env.max_concurrency,
             name,
             scheduled_time.astimezone(tz=config.env.tz).isoformat(),
         )
@@ -220,23 +268,28 @@ async def get_scheduled_time_by_checkpoint() -> int | None:
     return most_recent_timestamp
 
 
-async def get_scheduled_time(name: str) -> datetime:
-    """Get the scheduled time for the next queue entry based on the last checkpoint.
+async def get_scheduled_time(name: str, file_count: int) -> datetime:
+    """Get the scheduled time for the next queue entry based on pending files or the last checkpoint.
 
     Args:
         name: Name of the file/playlist being submitted.
+        file_count: Number of files in the request being submitted.
 
     Returns:
         datetime:
         Returns the scheduled time for the next queue entry.
     """
     # All queued items are pending to be executed in the future
-    if q_count := await count("*"):
-        scheduled_time = await render_scheduled_time(name=name, pending=q_count, last_ran=await latest_timestamp())
+    if pending_files := await count_files("*"):
+        scheduled_time = await render_scheduled_time(
+            name=name, pending=pending_files, file_count=file_count, last_ran=await latest_timestamp()
+        )
     # All checkpoints are past items that were already executed
     elif recent_checkpoint := await get_scheduled_time_by_checkpoint():
         # If no queue entries exist, use the last checkpoint to determine the next scheduled time.
-        scheduled_time = await render_scheduled_time(name=name, pending=0, last_ran=recent_checkpoint, cp=True)
+        scheduled_time = await render_scheduled_time(
+            name=name, pending=0, file_count=file_count, last_ran=recent_checkpoint, cp=True
+        )
     else:
         if config.env.delayed_start:
             scheduled_time = now_utc() + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
@@ -260,9 +313,9 @@ async def submit(
     """Submit a new queue entry.
 
     See Also:
-        - | Each submission reserves the next available slot
-          | by adding the configured cooldown interval and buffer to the
-          | previously scheduled slot.
+        - | Each submission reserves the next available slot by converting pending + new
+          | files into 'max_concurrency' sized batches, and adding the configured buffer
+          | per batch to the previously scheduled slot.
         - The first submission runs immediately unless delayed_start is enabled.
         - In tester mode, submissions always run immediately.
 
@@ -276,6 +329,7 @@ async def submit(
         int:
         Number of seconds from now until the newly submitted task is scheduled to run.
     """
+    file_count = len(preprocessor_stats.url_file_map)
     if config.env.download_tester:
         scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
         LOGGER.info(
@@ -284,7 +338,7 @@ async def submit(
             scheduled_time.astimezone(tz=config.env.tz).isoformat(),
         )
     else:
-        scheduled_time = await get_scheduled_time(name=name)
+        scheduled_time = await get_scheduled_time(name=name, file_count=file_count)
     cooldown = max(0, (scheduled_time - now_utc()).total_seconds())
     LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
     await insert(

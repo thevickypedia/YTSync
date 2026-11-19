@@ -131,6 +131,11 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     response_timeout: PositiveInt = Field(30, ge=10, le=60)
 
     # Sequential download factors
+    # Max concurrency will normalize a large playlist burst and a small playlist overpaying
+    # Examples below would render 'cooldown_interval' meaningless without 'max_concurrency'
+    # Large: If a playlist with 1000 files is requested, it will hit the rate limiter with just one request
+    # Small: If a playlists with 2/3 files each are requested for a download; it doesn't make sense to wait for cooldown
+    max_concurrency: PositiveInt = Field(10, ge=3, le=30)
     delayed_start: bool = False
     # Next available time cannot be accurately determined before it begins
     # 'next_buffer' with # of seconds is used to simulate an actual download duration
