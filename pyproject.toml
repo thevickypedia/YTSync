@@ -26,7 +26,7 @@ dependencies = { file = ["requirements.txt"] }
 dev = ["pre-commit"]
 
 [build-system]
-requires      = ["setuptools==76.1.0", "wheel"]
+requires      = ["setuptools==84.1.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.urls]
