@@ -1,8 +1,10 @@
+import asyncio
 import json
 import logging
 import math
 from collections.abc import AsyncGenerator
 from datetime import datetime, timedelta, timezone
+from typing import Tuple
 
 from pydantic import BaseModel
 
@@ -12,12 +14,16 @@ from ytsync.youtube import checkpoint, squire
 LOGGER = logging.getLogger("ytsync")
 now_utc = lambda: datetime.now(timezone.utc)  # noqa: E731
 
+# Rate limit state: files reserved in the open window, and when the most recent batch kicks off.
+# Held in memory (single worker); rebuilt from the database after a restart.
+_lock = asyncio.Lock()
+_state: Tuple[int, datetime] | None = None
+
 
 class Queue(BaseModel):
     """Queue model with checkpoint and preprocessor objects.
 
-    The 'scheduled_time' is stored as an ISO-8601 UTC timestamp so that the
-    queue contains enough information to reconstruct the scheduling state.
+    The 'scheduled_time' is stored as an ISO-8601 UTC timestamp, which is also the primary key of the table.
 
     >>> Queue
 
@@ -50,43 +56,6 @@ async def count(profile_name: str) -> int:
         return total
 
 
-async def count_files(profile_name: str) -> int:
-    """Count the total number of files across all pending queue entries.
-
-    See Also:
-        - A single queue entry can represent anywhere from one file to an entire
-          large playlist, so entry count alone says nothing about real backlog size.
-        - This walks every pending row and sums 'preprocessor.url_file_map', which is
-          the authoritative list of files that entry still has left to download.
-
-    Args:
-        profile_name: Takes a profile name as an argument. Use "*" to get all profiles.
-
-    Returns:
-        int:
-        Total number of files across all matching, pending queue entries.
-    """
-    total = 0
-    async for q in get(profile_name):
-        total += len(q.preprocessor.url_file_map)
-    return total
-
-
-def batches_for(file_count: int) -> int:
-    """Number of 'max_concurrency' sized batches needed to process the given file count.
-
-    Args:
-        file_count: Number of files to process.
-
-    Returns:
-        int:
-        Number of batches, rounded up. Returns 0 for a non-positive file count.
-    """
-    if file_count <= 0:
-        return 0
-    return math.ceil(file_count / config.env.max_concurrency)
-
-
 async def get(profile_name: str) -> AsyncGenerator[Queue]:
     """Get queues stored in the database.
 
@@ -100,16 +69,18 @@ async def get(profile_name: str) -> AsyncGenerator[Queue]:
     async with config.db.connection as connection:
         cursor = connection.cursor()
         if profile_name == "*":
-            data = cursor.execute("SELECT data FROM queue").fetchall()
+            data = cursor.execute("SELECT data FROM queue ORDER BY timestamp").fetchall()
         else:
-            data = cursor.execute("SELECT data FROM queue WHERE profile_name = ?", (profile_name,)).fetchall()
+            data = cursor.execute(
+                "SELECT data FROM queue WHERE profile_name = ? ORDER BY timestamp", (profile_name,)
+            ).fetchall()
     for row in data:
         if row:
             yield Queue(**json.loads(row[0]))
 
 
 async def insert(profile_name: str, queue: Queue) -> None:
-    """Handles tracker for a playlist URL.
+    """Insert (or replace) a queue entry.
 
     Args:
         profile_name: Takes a profile name as an argument.
@@ -121,11 +92,7 @@ async def insert(profile_name: str, queue: Queue) -> None:
         cursor = connection.cursor()
         cursor.execute(
             "INSERT OR REPLACE INTO queue (profile_name, timestamp, data) VALUES (?,?,?);",
-            (
-                profile_name,
-                timestamp,
-                data,
-            ),
+            (profile_name, timestamp, data),
         )
         connection.commit()
 
@@ -144,114 +111,16 @@ async def delete(profile_name: str, scheduled_time: str) -> bool:
     timestamp = datetime.fromisoformat(scheduled_time).timestamp()
     async with config.db.connection as connection:
         cursor = connection.cursor()
-        cursor.execute(
-            "SELECT COUNT(data) FROM queue WHERE profile_name = ? AND timestamp = ?",
-            (
-                profile_name,
-                timestamp,
-            ),
-        )
-        if cursor.fetchone()[0] == 0:
-            LOGGER.warning(
-                "No queue entry found for %s at scheduled_time: %s with timestamp: %s",
-                profile_name,
-                scheduled_time,
-                timestamp,
-            )
-            return False
-        cursor.execute(
-            "DELETE FROM queue WHERE profile_name = ? AND timestamp = ?",
-            (
-                profile_name,
-                timestamp,
-            ),
-        )
+        cursor.execute("DELETE FROM queue WHERE profile_name = ? AND timestamp = ?", (profile_name, timestamp))
+        deleted = cursor.rowcount > 0
         connection.commit()
-        return True
-
-
-async def latest_timestamp() -> int:
-    """Get the most recent profile agnostic Queue based on the timestamp in the table.
-
-    Returns:
-        int | None:
-        Retrieves the most recent checkpoint timestamp if available, otherwise None.
-    """
-    async with config.db.connection as connection:
-        cursor = connection.cursor()
-        latest_queue = cursor.execute("SELECT timestamp FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()
-        return int(latest_queue[0])
-
-
-async def render_scheduled_time(name: str, pending: int, file_count: int, last_ran: int, cp: bool = False) -> datetime:
-    """Get the scheduled time for the next queue entry.
-
-    Args:
-        name: Name of the file/playlist being submitted.
-        pending: Number of files already pending across all queue entries (0 for checkpoint-based scheduling).
-        file_count: Number of files in the request currently being submitted.
-        last_ran: Timestamp of the last queue entry, or the last checkpoint.
-        cp: Boolean indicating if the scheduling is based on a checkpoint (True) or queue (False).
-
-    See Also:
-        - This is a reusable function for both queue and checkpoint based scheduling.
-        - Queue scheduling is based on the last queue entry in the database table 'queue'.
-        - Checkpoint scheduling is based on the last checkpoint timestamp stored in the 'checkpoints' directory.
-        - Pending/new work is converted into 'max_concurrency' sized batches, each assumed to take
-          'next_buffer' seconds, so the wait scales with actual file count instead of entry count.
-
-    Returns:
-        datetime:
-        Returns the scheduled time for the next queue entry.
-    """
-    item = "checkpoint" if cp else "queue"
-    elapsed = now_utc().timestamp() - last_ran
-    if elapsed >= config.env.cooldown_interval:
-        # The previous cooldown has completely elapsed.
-        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
-        LOGGER.info(
-            "Previous %s was scheduled %s ago; cooldown has elapsed. Scheduling %s at %s",
-            item,
-            str(timedelta(seconds=int(elapsed))),
-            name,
-            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
-        )
-    elif elapsed >= 0:
-        # The previous cooldown is partially elapsed.
-        remaining = config.env.cooldown_interval - elapsed
-        total_files = pending + file_count
-        extra_batches = batches_for(total_files)
-        scheduled_time = now_utc() + timedelta(seconds=remaining + (extra_batches * config.env.next_buffer))
-        LOGGER.info(
-            "Previous %s was scheduled %s ago; %s of cooldown remains. "
-            "%d file(s) [%d pending + %d new] across %d batch(es) of up to %d. Scheduling %s at %s",
-            item,
-            str(timedelta(seconds=int(elapsed))),
-            str(timedelta(seconds=int(remaining))),
-            total_files,
-            pending,
-            file_count,
-            extra_batches,
-            config.env.max_concurrency,
-            name,
-            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
-        )
-    else:
-        # The previous scheduled time is still in the future.
-        last_timestamp = datetime.fromtimestamp(last_ran, tz=timezone.utc)
-        scheduled_time = last_timestamp + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
-        LOGGER.info(
-            "Previous %s is scheduled for %s; adding cooldown and buffer. Scheduling %s at %s",
-            item,
-            last_timestamp.astimezone(tz=config.env.tz).isoformat(),
-            name,
-            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
-        )
-    return scheduled_time
+    if not deleted:
+        LOGGER.warning("No queue entry found for %s at scheduled_time: %s", profile_name, scheduled_time)
+    return deleted
 
 
 async def get_scheduled_time_by_checkpoint() -> int | None:
-    """Get the scheduled time for the next queue entry based on the last checkpoint.
+    """Get the timestamp of the most recent checkpoint across all profiles.
 
     Returns:
         int | None:
@@ -259,41 +128,54 @@ async def get_scheduled_time_by_checkpoint() -> int | None:
     """
     most_recent_timestamp = None
     for profile in config.env.profiles:
-        async for datestamp, timestamps in checkpoint.ls(profile_name=profile.name):
+        async for _, timestamps in checkpoint.ls(profile_name=profile.name):
             if timestamps:
-                most_recent_timestamp = max(
-                    most_recent_timestamp or 0,
-                    max(timestamps),
-                )
+                most_recent_timestamp = max(most_recent_timestamp or 0, max(timestamps))
     return most_recent_timestamp
 
 
-async def get_scheduled_time(name: str, file_count: int) -> datetime:
-    """Get the scheduled time for the next queue entry based on pending files or the last checkpoint.
+def plan(used: int, last_kick: datetime, files: int, now: datetime) -> Tuple[datetime, int, datetime]:
+    """Place a request of 'files' files into the rate limit window.
+
+    A window holds 'max_sequence' files. Once it is full (or the request can't fit in what is left),
+    the next request waits for 'cooldown_interval' since the last batch kicked off. A request larger than
+    the window starts on its own and is split by the downloader into batches, one cooldown apart.
 
     Args:
-        name: Name of the file/playlist being submitted.
-        file_count: Number of files in the request being submitted.
+        used: Files already reserved in the open window.
+        last_kick: When the most recent batch kicks off (or kicked off).
+        files: Number of files in the new request.
+        now: Current time.
 
     Returns:
-        datetime:
-        Returns the scheduled time for the next queue entry.
+        Tuple[datetime, int, datetime]:
+        Start time of the request, files used in the window after it, and the kick off time of its last batch.
     """
-    # All queued items are pending to be executed in the future
-    if pending_files := await count_files("*"):
-        scheduled_time = await render_scheduled_time(
-            name=name, pending=pending_files, file_count=file_count, last_ran=await latest_timestamp()
-        )
-    # All checkpoints are past items that were already executed
-    elif recent_checkpoint := await get_scheduled_time_by_checkpoint():
-        # If no queue entries exist, use the last checkpoint to determine the next scheduled time.
-        scheduled_time = await render_scheduled_time(
-            name=name, pending=0, file_count=file_count, last_ran=recent_checkpoint, cp=True
-        )
-    else:
-        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
-    LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
-    return scheduled_time
+    limit, cooldown = config.env.max_sequence, timedelta(seconds=config.env.cooldown_interval)
+    if now >= last_kick + cooldown:
+        used = 0  # Cooldown has fully elapsed, so the window starts over
+    start = max(now, last_kick)
+    if used and used + files > limit:
+        start, used = max(now, last_kick + cooldown), 0  # Window is full, wait for the cooldown
+    if used + files <= limit:
+        return start, used + files, start
+    batches = math.ceil(files / limit)  # Only reachable for a request larger than the window
+    return start, files - (batches - 1) * limit, start + (batches - 1) * cooldown
+
+
+async def load_state(now: datetime) -> Tuple[int, datetime]:
+    """Rebuild the rate limit state after a restart, assuming the window is full to be safe."""
+    limit, cooldown = config.env.max_sequence, timedelta(seconds=config.env.cooldown_interval)
+    async with config.db.connection as connection:
+        row = connection.cursor().execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()
+    if row:
+        tail = Queue(**json.loads(row[0]))
+        files = tail.preprocessor.total_files or len(tail.preprocessor.url_file_map)
+        batches = max(1, math.ceil(files / limit))
+        return limit, datetime.fromisoformat(tail.scheduled_time) + (batches - 1) * cooldown
+    if last_checkpoint := await get_scheduled_time_by_checkpoint():
+        return limit, datetime.fromtimestamp(last_checkpoint, tz=timezone.utc)
+    return 0, now
 
 
 async def submit(
@@ -304,13 +186,6 @@ async def submit(
 ) -> int | float:
     """Submit a new queue entry.
 
-    See Also:
-        - | Each submission reserves the next available slot by converting pending + new
-          | files into 'max_concurrency' sized batches, and adding the configured buffer
-          | per batch to the previously scheduled slot.
-        - The first submission runs immediately.
-        - In tester mode, submissions always run immediately.
-
     Args:
         profile_name: Takes a profile name as an argument.
         name: Name of the task being submitted. Used for logging only.
@@ -318,27 +193,30 @@ async def submit(
         preprocessor_stats: Preprocessor statistics associated with the queued task.
 
     Returns:
-        int:
-        Number of seconds from now until the newly submitted task is scheduled to run.
+        int | float:
+        Seconds the request has to wait because of the cooldown. Zero when it can start right away.
     """
-    file_count = len(preprocessor_stats.url_file_map)
-    if config.env.download_tester:
-        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
-        LOGGER.info(
-            "Submitting %s at %s; running in tester mode",
-            name,
-            scheduled_time.astimezone(tz=config.env.tz).isoformat(),
+    global _state
+    files = max(1, preprocessor_stats.total_files or len(preprocessor_stats.url_file_map))
+    async with _lock:
+        now = now_utc()
+        wait = 0.0
+        if config.env.download_tester:
+            start = now
+        else:
+            used, last_kick = _state or await load_state(now)
+            start, used, last_kick = plan(used, last_kick, files, now)
+            wait = max(0.0, (start - now).total_seconds())
+            # 'timestamp' is the primary key, so entries can never share a scheduled time
+            async with config.db.connection as connection:
+                cursor = connection.cursor()
+                while cursor.execute("SELECT 1 FROM queue WHERE timestamp = ?", (start.timestamp(),)).fetchone():
+                    start += timedelta(milliseconds=1)
+                    last_kick += timedelta(milliseconds=1)
+            _state = used, last_kick
+            LOGGER.info("Window: %d/%d file(s) after %s, starts in %.2fs", used, config.env.max_concurrency, name, wait)
+        await insert(
+            profile_name,
+            Queue(scheduled_time=start.isoformat(), checkpoint=checkpoint_stats, preprocessor=preprocessor_stats),
         )
-    else:
-        scheduled_time = await get_scheduled_time(name=name, file_count=file_count)
-    cooldown = max(0, (scheduled_time - now_utc()).total_seconds())
-    LOGGER.info("Final cooldown for %s: %.2fs", name, cooldown)
-    await insert(
-        profile_name,
-        Queue(
-            scheduled_time=scheduled_time.isoformat(),
-            checkpoint=checkpoint_stats,
-            preprocessor=preprocessor_stats,
-        ),
-    )
-    return cooldown
+    return wait
