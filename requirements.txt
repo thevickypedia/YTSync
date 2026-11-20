@@ -1,8 +1,8 @@
-anyio==4.15.*
-fastapi==0.141.*
+anyio==4.16.*
+fastapi==0.165.*
 httpx==0.28.*
-pydantic==2.13.*
-pydantic-settings==2.15.*
+pydantic==2.14.*
+pydantic-settings==2.16.*
 pyyaml==6.0.*
 uvicorn==0.54.*
 vaultAPI-client
