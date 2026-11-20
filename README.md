@@ -20,7 +20,6 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 * Multi-profile support — isolate API keys, Telegram bot credentials, and storage per profile
 * Recurring, schedule-based playlist tracking (hourly/daily/weekly/monthly) via Telegram or API
 * Sequential downloads (to prevent requests being throttled/blocked)
-* Cold start (delayed) for the first download with a custom cooldown interval
 * Built-in retry mechanism with an exponential backoff factor for remote transfers
 * Automatically deletes [Optional] local files after transferring to a remote server
 * Built-in support to check file presence on the remote server before requesting download/file-transfer
@@ -65,7 +64,7 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 > **Note**: `audio_dir` and `video_dir` are the base directories, under which each profile gets its own subdirectory<br>
 > For example, if the profile name is `profile1`, audio files are stored in `audio/profile1` and video files are stored in `video/profile1`
 
-###### Concurrency & Tolerance Settings
+###### Tolerance Settings
 * **max_retries**: Maximum number of retries for rsync and telegram polling. _Defaults to `10`_
 * **max_timeout**: Maximum number of seconds to wait before timing out CLI downloads, rsync transfers, and other remote SSH operations. _Defaults to `60`_
 * **backoff_factor**: Back off factor between each retry attempt. _Defaults to `3`_
@@ -73,7 +72,7 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 * **response_timeout**: Maximum number of seconds to wait before timing out the client request. _Defaults to `30`_
 
 ###### Queue Settings
-* **delayed_start**: Perform a cold start (delayed) for the first download. _Defaults to `False`_
+* **max_concurrency**: Number of items to download before injecting `cooldown_interval` delay. _Defaults to `10`_
 * **next_buffer**: Number of seconds to simulate time taken for a download. _Defaults to `60`_
 * **cooldown_interval**: Number of seconds to wait before processing next in queue. _Defaults to `300`_
 
