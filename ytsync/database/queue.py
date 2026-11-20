@@ -291,15 +291,7 @@ async def get_scheduled_time(name: str, file_count: int) -> datetime:
             name=name, pending=0, file_count=file_count, last_ran=recent_checkpoint, cp=True
         )
     else:
-        if config.env.delayed_start:
-            scheduled_time = now_utc() + timedelta(seconds=config.env.cooldown_interval + config.env.next_buffer)
-            LOGGER.info(
-                "Submitting %s at: %s",
-                name,
-                scheduled_time.astimezone(tz=config.env.tz).isoformat(),
-            )
-        else:
-            scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
+        scheduled_time = now_utc() + timedelta(seconds=config.env.next_buffer)
     LOGGER.info("Submitting %s at: %s", name, scheduled_time.astimezone(tz=config.env.tz).isoformat())
     return scheduled_time
 
@@ -316,7 +308,7 @@ async def submit(
         - | Each submission reserves the next available slot by converting pending + new
           | files into 'max_concurrency' sized batches, and adding the configured buffer
           | per batch to the previously scheduled slot.
-        - The first submission runs immediately unless delayed_start is enabled.
+        - The first submission runs immediately.
         - In tester mode, submissions always run immediately.
 
     Args:

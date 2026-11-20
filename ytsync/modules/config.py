@@ -136,7 +136,6 @@ class EnvConfig(pydantic_config.PydanticEnvConfig):
     # Large: If a playlist with 1000 files is requested, it will hit the rate limiter with just one request
     # Small: If a playlists with 2/3 files each are requested for a download; it doesn't make sense to wait for cooldown
     max_concurrency: PositiveInt = Field(10, ge=3, le=30)
-    delayed_start: bool = False
     # Next available time cannot be accurately determined before it begins
     # 'next_buffer' with # of seconds is used to simulate an actual download duration
     next_buffer: PositiveInt = Field(60, ge=30, le=300)  # 30s to 5m; default: 60s
