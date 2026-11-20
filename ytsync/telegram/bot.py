@@ -448,6 +448,8 @@ async def process_text(chat: models.Chat, data_class: models.Text) -> None:
     # "status", "stats", "test"
     if data_class.text == Commands.status:
         txt = get_channel()
+        if config.env.download_tester:
+            txt += "\n\n⚠️ *Download tester is enabled*"
         try:
             txt += await tracker.stringified_get(profile_name=profile.name)
         except Exception as error:
