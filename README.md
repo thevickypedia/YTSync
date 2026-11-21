@@ -72,7 +72,7 @@ YTSync is a lightweight API, equipped with a Telegram Bot, to download audio/vid
 * **response_timeout**: Maximum number of seconds to wait before timing out the client request. _Defaults to `30`_
 
 ###### Queue Settings
-* **max_concurrency**: Number of items to download before injecting `cooldown_interval` delay. _Defaults to `10`_
+* **max_sequence**: Number of items to download before injecting `cooldown_interval` delay. _Defaults to `10`_
 * **next_buffer**: Number of seconds to simulate time taken for a download. _Defaults to `60`_
 * **cooldown_interval**: Number of seconds to wait before processing next in queue. _Defaults to `300`_
 

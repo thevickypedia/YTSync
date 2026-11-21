@@ -214,7 +214,7 @@ async def submit(
                     start += timedelta(milliseconds=1)
                     last_kick += timedelta(milliseconds=1)
             _state = used, last_kick
-            LOGGER.info("Window: %d/%d file(s) after %s, starts in %.2fs", used, config.env.max_concurrency, name, wait)
+            LOGGER.info("Window: %d/%d file(s) after %s, starts in %.2fs", used, config.env.max_sequence, name, wait)
         await insert(
             profile_name,
             Queue(scheduled_time=start.isoformat(), checkpoint=checkpoint_stats, preprocessor=preprocessor_stats),
