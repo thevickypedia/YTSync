@@ -235,6 +235,7 @@ async def download(
         # MARK: Files are processed in 'max_sequence' sized batches, paced by 'next_buffer' seconds
         # between batches, so a large playlist doesn't hammer the source with hundreds of back-to-back
         # requests, while a small request isn't held up by work that belongs to a different job entirely.
+        # In addition to the cooldown interval, each url is also delayed by a 3s interval
         batches = _batched(list(url_file_map.items()), config.env.max_sequence)
         for batch_index, batch in enumerate(batches):
             if batch_index and not config.env.download_tester:
@@ -246,10 +247,11 @@ async def download(
                     len(batch),
                     name,
                 )
-                await asyncio.sleep(config.env.next_buffer)
+                await asyncio.sleep(config.env.cooldown_interval)
             for url, filepath in batch:
                 if task := await download_alt(ydl, url, filepath, stats, audio_only, destination):
                     transfer_pool.append(task)
+                await asyncio.sleep(3)
 
     if len(stats["download_failed"]) == len(url_file_map):
         if total_files is None:
