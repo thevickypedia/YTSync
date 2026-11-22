@@ -185,8 +185,6 @@ async def load_state(now: datetime, include_queue: bool = True) -> Tuple[int, da
             return limit, datetime.fromisoformat(tail.scheduled_time) + (batches - 1) * cooldown
     if last_checkpoint := await get_scheduled_time_by_checkpoint():
         return limit, datetime.fromtimestamp(last_checkpoint, tz=timezone.utc)
-    if config.env.delayed_start:
-        return limit, now
     return 0, now
 
 

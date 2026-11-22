@@ -232,7 +232,7 @@ async def download(
     with yt_dlp.YoutubeDL(options) as ydl:
         # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
         # This monotonic loop is to properly capture individual errors and attach custom handlers
-        # MARK: Files are processed in 'max_sequence' sized batches, paced by 'next_buffer' seconds
+        # MARK: Files are processed in 'max_sequence' sized batches, paced by 'cooldown_interval' seconds
         # between batches, so a large playlist doesn't hammer the source with hundreds of back-to-back
         # requests, while a small request isn't held up by work that belongs to a different job entirely.
         # In addition to the cooldown interval, each url is also delayed by a 3s interval
@@ -241,7 +241,7 @@ async def download(
             if batch_index and not config.env.download_tester:
                 LOGGER.info(
                     "Cooling down for %ds before batch %d/%d (%d files) for %r",
-                    config.env.next_buffer,
+                    config.env.cooldown_interval,
                     batch_index + 1,
                     len(batches),
                     len(batch),

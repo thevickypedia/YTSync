@@ -50,11 +50,13 @@ def bg_task_callback(task: asyncio.Task) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     """Startup and shutdown events for the FastAPI application."""
-    # noinspection HttpUrlsUsage
     if LOGGER.isEnabledFor(logging.DEBUG):
         await log_config()
     LOGGER.info("Initiating background tasks...")
-    await queue.replan()
+    try:
+        await queue.replan()
+    except Exception as error:
+        LOGGER.exception(error)
     bg_task = asyncio.create_task(agent.executor())
     bg_task.add_done_callback(bg_task_callback)
     async with httpx.AsyncClient() as client:
