@@ -1,6 +1,22 @@
 Release Notes
 =============
 
+v3.0.0 (11/22/2026)
+-------------------
+- `39f5b27 <https://github.com/thevickypedia/YTSync/commit/39f5b271617449ff5ce0eec7b48257b48f8111a6>`_ chore: Release ``v3.0.0``
+- `6fba78e <https://github.com/thevickypedia/YTSync/commit/6fba78e95e5f5624372f6d10ea057be1c2952499>`_ perf: Anchor the cooldown interval for batches during download, so start time for next in queue remains static
+- `2782224 <https://github.com/thevickypedia/YTSync/commit/278222460b45c28971f65039445baf805c208a21>`_ refactor: Remove dead-code references
+- `c5aa690 <https://github.com/thevickypedia/YTSync/commit/c5aa6900d49c4b7b0f606b111a7d45199e98cbe3>`_ perf: Avoid running backlog of queued items all at once after recovering from a downtime
+- `9948041 <https://github.com/thevickypedia/YTSync/commit/99480410fc025060fde08b9797a9f53d6dc2acef>`_ fix: Change left over ``max_concurrency`` variable; update docstrings and README.md
+- `2b81599 <https://github.com/thevickypedia/YTSync/commit/2b8159946222d6dfe33d7c662e12dd0358f27798>`_ perf: Add a ``3s`` interval for each file's download
+- `80729e2 <https://github.com/thevickypedia/YTSync/commit/80729e29110fd3810f356e6e213b4b3f77b979f1>`_ feat: Redesign queue logic to use sliding window-based internal rate limiting
+- `c2a747f <https://github.com/thevickypedia/YTSync/commit/c2a747f54d98a1d67cc996b62b6c86a16b40e32c>`_ feat: Include download tester state in ``/status`` response
+- `0b001f6 <https://github.com/thevickypedia/YTSync/commit/0b001f668d6d883a29d179543f24fa5093246fd9>`_ chore: Bump requirements
+- `8ddf694 <https://github.com/thevickypedia/YTSync/commit/8ddf694960060efc7e1b99b7d370c227c544f2e4>`_ docs: Update README.md
+- `0892153 <https://github.com/thevickypedia/YTSync/commit/08921533d9b8cec24d1305a2a4dd332f4a39e78d>`_ refactor: Deprecate ``delayed_start`` functionality
+- `8d745d5 <https://github.com/thevickypedia/YTSync/commit/8d745d5aebe1a4fde476d185d6303e7473046f20>`_ feat: Introduce ``max_concurrency`` to normalize playlist with large burst and small overpay
+- `c2341b7 <https://github.com/thevickypedia/YTSync/commit/c2341b7a117e140183c0e62948a6f43baab0b877>`_ chore: Update release notes for v2.4.0
+
 v2.4.0 (11/19/2026)
 -------------------
 - `3dd732d <https://github.com/thevickypedia/YTSync/commit/3dd732d3ca10c76f94d9ac78938e04954e074790>`_ chore: Release ``v2.4.0``
