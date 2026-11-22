@@ -232,26 +232,32 @@ async def download(
     with yt_dlp.YoutubeDL(options) as ydl:
         # yt_dlp is single threaded, but it will fail or skip based on 'ignoreerrors' flag
         # This monotonic loop is to properly capture individual errors and attach custom handlers
-        # MARK: Files are processed in 'max_sequence' sized batches, paced by 'cooldown_interval' seconds
-        # between batches, so a large playlist doesn't hammer the source with hundreds of back-to-back
-        # requests, while a small request isn't held up by work that belongs to a different job entirely.
-        # In addition to the cooldown interval, each url is also delayed by a 3s interval
-        batches = _batched(list(url_file_map.items()), config.env.max_sequence)
+        # MARK: Files are processed in 'max_sequence' sized batches. Each batch starts 'cooldown_interval' seconds
+        # after the previous batch STARTED (not after it finished), which matches the schedule planned in
+        # 'queue.plan'. If a batch overruns the cooldown, the next one starts after a minimum 3s pause.
+        # This keeps a large playlist from hammering the source with hundreds of back-to-back requests, while
+        # a small request isn't held up by work that belongs to a different job entirely.
+        # Within a batch, each url is also followed by a 1s pause for pacing.
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        batches = list(_batched(list(url_file_map.items()), config.env.max_sequence))
         for batch_index, batch in enumerate(batches):
             if batch_index and not config.env.download_tester:
+                # Anchor to the plan (start + index * cooldown), but always pause at least a few seconds
+                wait = max(3.0, started + batch_index * config.env.cooldown_interval - loop.time())
                 LOGGER.info(
                     "Cooling down for %ds before batch %d/%d (%d files) for %r",
-                    config.env.cooldown_interval,
+                    wait,
                     batch_index + 1,
                     len(batches),
                     len(batch),
                     name,
                 )
-                await asyncio.sleep(config.env.cooldown_interval)
+                await asyncio.sleep(wait)
             for url, filepath in batch:
                 if task := await download_alt(ydl, url, filepath, stats, audio_only, destination):
                     transfer_pool.append(task)
-                await asyncio.sleep(3)
+                await asyncio.sleep(1)
 
     if len(stats["download_failed"]) == len(url_file_map):
         if total_files is None:
