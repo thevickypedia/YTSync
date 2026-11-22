@@ -10,6 +10,7 @@ from fastapi.routing import APIRoute
 
 from ytsync.api import models, routes
 from ytsync.crontab import agent
+from ytsync.database import queue
 from ytsync.modules import config
 
 LOGGER = logging.getLogger("ytsync")
@@ -53,6 +54,7 @@ async def lifespan(_: FastAPI):
     if LOGGER.isEnabledFor(logging.DEBUG):
         await log_config()
     LOGGER.info("Initiating background tasks...")
+    await queue.replan()
     bg_task = asyncio.create_task(agent.executor())
     bg_task.add_done_callback(bg_task_callback)
     async with httpx.AsyncClient() as client:

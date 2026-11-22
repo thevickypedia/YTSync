@@ -163,19 +163,82 @@ def plan(used: int, last_kick: datetime, files: int, now: datetime) -> Tuple[dat
     return start, files - (batches - 1) * limit, start + (batches - 1) * cooldown
 
 
-async def load_state(now: datetime) -> Tuple[int, datetime]:
-    """Rebuild the rate limit state after a restart, assuming the window is full to be safe."""
+async def load_state(now: datetime, include_queue: bool = True) -> Tuple[int, datetime]:
+    """Rebuild the rate limit state after a restart, assuming the window is full to be safe.
+
+    Args:
+        now: Datetime object for the current time in UTC.
+        include_queue: Boolean flag to include the data from queue table.
+
+    Returns:
+        Tuple[int, datetime]:
+        A tuple of max sequence and the last ran datetime object.
+    """
     limit, cooldown = config.env.max_sequence, timedelta(seconds=config.env.cooldown_interval)
-    async with config.db.connection as connection:
-        row = connection.cursor().execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()
-    if row:
-        tail = Queue(**json.loads(row[0]))
-        files = tail.preprocessor.total_files or len(tail.preprocessor.url_file_map)
-        batches = max(1, math.ceil(files / limit))
-        return limit, datetime.fromisoformat(tail.scheduled_time) + (batches - 1) * cooldown
+    if include_queue:
+        async with config.db.connection as connection:
+            row = connection.cursor().execute("SELECT data FROM queue ORDER BY timestamp DESC LIMIT 1").fetchone()
+        if row:
+            tail = Queue(**json.loads(row[0]))
+            files = tail.preprocessor.total_files or len(tail.preprocessor.url_file_map)
+            batches = max(1, math.ceil(files / limit))
+            return limit, datetime.fromisoformat(tail.scheduled_time) + (batches - 1) * cooldown
     if last_checkpoint := await get_scheduled_time_by_checkpoint():
         return limit, datetime.fromtimestamp(last_checkpoint, tz=timezone.utc)
+    if config.env.delayed_start:
+        return limit, now
     return 0, now
+
+
+async def replan(grace: int = 60) -> int:
+    """Re-plan the pending queue after downtime, so a backlog doesn't run all at once.
+
+    Overdue entries run on the very first tick, regardless of the window they were planned in. When any entry is
+    overdue by more than 'grace' seconds, every pending entry is planned again, oldest first, from the current time.
+    Call this once at startup, before the executor starts dispatching.
+
+    Args:
+        grace: Seconds an entry may be overdue before it is considered a backlog.
+
+    Returns:
+        int:
+        Number of entries that were re-planned.
+    """
+    global _state
+    if config.env.download_tester:
+        return 0
+    async with _lock:
+        now = now_utc()
+        async with config.db.connection as connection:
+            cursor = connection.cursor()
+            rows = cursor.execute("SELECT profile_name, timestamp, data FROM queue ORDER BY timestamp").fetchall()
+        if not rows or rows[0][1] >= (now - timedelta(seconds=grace)).timestamp():
+            return 0
+        used, last_kick = await load_state(now, include_queue=False)
+        taken, planned = set(), []
+        for profile_name, _, data in rows:
+            item = Queue(**json.loads(data))
+            files = max(1, item.preprocessor.total_files or len(item.preprocessor.url_file_map))
+            start, used, last_kick = plan(used, last_kick, files, now)
+            while start.timestamp() in taken:
+                start += timedelta(milliseconds=1)
+                last_kick += timedelta(milliseconds=1)
+            taken.add(start.timestamp())
+            item.scheduled_time = start.isoformat()
+            planned.append((profile_name, start.timestamp(), item.model_dump_json()))
+        async with config.db.connection as connection:
+            cursor = connection.cursor()
+            # Single transaction: commits on exit, rolls back on error
+            cursor.executemany("DELETE FROM queue WHERE timestamp = ?", [(row[1],) for row in rows])
+            cursor.executemany("INSERT INTO queue (profile_name, timestamp, data) VALUES (?,?,?)", planned)
+        _state = used, last_kick
+        LOGGER.warning(
+            "Re-planned %d pending entries; windows now run %s to %s",
+            len(planned),
+            datetime.fromtimestamp(planned[0][1], tz=timezone.utc).astimezone(config.env.tz).isoformat(),
+            datetime.fromtimestamp(planned[-1][1], tz=timezone.utc).astimezone(config.env.tz).isoformat(),
+        )
+        return len(planned)
 
 
 async def submit(
